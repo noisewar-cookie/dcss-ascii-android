@@ -1,28 +1,61 @@
-allprojects {
-    repositories {
-        google()
-        jcenter()
-    }
-}
-buildscript {
-    repositories {
-        mavenCentral()
-        jcenter()
-        google()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:7.4.2'
-    }
-}
-apply plugin: 'com.android.application'
-
-dependencies {
-    implementation fileTree(dir: 'libs', include: '*.jar')
+plugins {
+    id 'com.android.application'
 }
 
 android {
-    // minSdk is specified in AndroidManifest.xml
-    compileSdkVersion 33
+    namespace 'com.crawlmb'
+    compileSdk 35
+    ndkVersion '30.0.14904198'
+
+    defaultConfig {
+        applicationId "com.dcssascii.android"
+        minSdkVersion 21
+        targetSdkVersion 35
+        versionCode 1
+        versionName "0.34.1"
+
+        externalNativeBuild {
+            ndkBuild {
+                arguments "-j4"
+            }
+        }
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a"
+        }
+    }
+
+    signingConfigs {
+        release {
+            // Configure via keystore.properties (gitignored)
+            def keystorePropertiesFile = rootProject.file("keystore.properties")
+            if (keystorePropertiesFile.exists()) {
+                def keystoreProperties = new Properties()
+                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+                storeFile file(keystoreProperties['storeFile'] ?: 'dummy.keystore')
+                storePassword keystoreProperties['storePassword'] ?: ''
+                keyAlias keystoreProperties['keyAlias'] ?: ''
+                keyPassword keystoreProperties['keyPassword'] ?: ''
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+            ndk {
+                debugSymbolLevel 'SYMBOL_TABLE'
+            }
+        }
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            path file('jni/Android.mk')
+        }
+    }
 
     sourceSets {
         main {
@@ -35,49 +68,21 @@ android {
             assets.srcDirs = ['assets']
             jniLibs.srcDirs = ['libs']
         }
-
-        // Move the tests to tests/java, tests/res, etc...
         androidTest.setRoot('tests')
-
-        // Move the build types to build-types/<type>
-        // For instance, build-types/debug/java, build-types/debug/AndroidManifest.xml, ...
-        // This moves them out of them default location under src/<type>/... which would
-        // conflict with src/ being used by the main source set.
-        // Adding new build types or product flavors should be accompanied
-        // by a similar customization.
         debug.setRoot('build-types/debug')
         release.setRoot('build-types/release')
     }
 
-    signingConfigs {
-        release {
-            v2SigningEnabled false
-        }
-    }
-    defaultConfig {
-        minSdkVersion 9
-        targetSdkVersion 33
-        externalNativeBuild {
-            ndkBuild {
-                cppFlags ''
-                arguments "-j4"
-            }
-        }
-    }
-    buildTypes {
-        debug {
-            debuggable true
-        }
-        release {
-            ndk {
-                debugSymbolLevel 'SYMBOL_TABLE'
-            }
-        }
-    }
-    externalNativeBuild {
-        ndkBuild {
-            path file('jni/Android.mk')
-        }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: '*.jar')
 }

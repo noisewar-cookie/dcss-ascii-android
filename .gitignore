@@ -11,5 +11,12 @@ release/
 *.swp
 .idea/
 local.properties
+keystore.properties
+*.keystore
+*.jks
 *.swp
 *.swo
+
+# Claude Code / local docs
+CLAUDE.md
+progress.md

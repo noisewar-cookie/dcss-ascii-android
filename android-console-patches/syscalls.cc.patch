@@ -1,0 +1,103 @@
+diff --git a/crawl-ref/source/syscalls.cc b/crawl-ref/source/syscalls.cc
+index 9ca68c4d9d..2e59448260 100644
+--- a/crawl-ref/source/syscalls.cc
++++ b/crawl-ref/source/syscalls.cc
+@@ -35,14 +35,14 @@
+ #include <android/asset_manager_jni.h>
+ #include <jni.h>
+ 
++AAssetManager *_android_asset_manager = nullptr;
++
++#ifdef USE_TILE_LOCAL
+ extern "C"
+ {
+-    extern JNIEnv *Android_JNI_GetEnv(); // sigh
++    extern JNIEnv *Android_JNI_GetEnv();
+ }
+ 
+-AAssetManager *_android_asset_manager = nullptr; // XXX
+-
+-// Used to save the game on SDLActivity.onPause
+ extern "C" JNIEXPORT void JNICALL
+ Java_org_libsdl_app_SDLActivity_nativeSaveGame(
+     JNIEnv* env, jclass thiz)
+@@ -80,6 +80,17 @@ bool jni_keyboard_control(int action)
+ 
+     return shown;
+ }
++#else
++int jni_ref_display_size()
++{
++    return 0;
++}
++
++bool jni_keyboard_control(int action)
++{
++    return false;
++}
++#endif
+ #endif
+ 
+ bool lock_file(int fd, bool write, bool wait)
+@@ -290,6 +301,8 @@ void usleep(unsigned long time)
+ #endif
+ 
+ #ifdef __ANDROID__
++#ifdef USE_TILE_LOCAL
++extern JNIEnv *Android_JNI_GetEnv();
+ AAssetManager *_android_get_asset_manager()
+ {
+     JNIEnv *env = Android_JNI_GetEnv();
+@@ -315,6 +328,12 @@ AAssetManager *_android_get_asset_manager()
+ 
+     return AAssetManager_fromJava(env, assets);
+ }
++#else
++AAssetManager *_android_get_asset_manager()
++{
++    return nullptr;
++}
++#endif
+ #endif
+ 
+ bool file_exists(const string &name)
+@@ -330,7 +349,8 @@ bool file_exists(const string &name)
+         if (!_android_asset_manager)
+             _android_asset_manager = _android_get_asset_manager();
+ 
+-        ASSERT(_android_asset_manager);
++        if (!_android_asset_manager)
++            return false;
+ 
+         AAsset* asset = AAssetManager_open(_android_asset_manager,
+                                            name.substr(strlen(ANDROID_ASSETS)
+@@ -380,7 +400,8 @@ bool dir_exists(const string &dir)
+         if (!_android_asset_manager)
+             _android_asset_manager = _android_get_asset_manager();
+ 
+-        ASSERT(_android_asset_manager);
++        if (!_android_asset_manager)
++            return false;
+ 
+         AAssetDir* adir = AAssetManager_openDir(_android_asset_manager,
+                                                 _android_strip_dir_slash(dir)
+@@ -442,7 +463,8 @@ vector<string> get_dir_files(const string &dirname)
+         if (!_android_asset_manager)
+             _android_asset_manager = _android_get_asset_manager();
+ 
+-        ASSERT(_android_asset_manager);
++        if (!_android_asset_manager)
++            return files;
+ 
+         AAssetDir* adir =
+             AAssetManager_openDir(_android_asset_manager,
+@@ -539,7 +561,8 @@ FILE *fopen_u(const char *path, const char *mode)
+         if (!_android_asset_manager)
+             _android_asset_manager = _android_get_asset_manager();
+ 
+-        ASSERT(_android_asset_manager);
++        if (!_android_asset_manager)
++            return nullptr;
+ 
+         AAsset* asset = AAssetManager_open(_android_asset_manager,
+                                            path + strlen(ANDROID_ASSETS) + 1,

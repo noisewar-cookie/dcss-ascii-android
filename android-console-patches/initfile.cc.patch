@@ -1,0 +1,22 @@
+diff --git a/crawl-ref/source/initfile.cc b/crawl-ref/source/initfile.cc
+index 246325a755..dc2048f324 100644
+--- a/crawl-ref/source/initfile.cc
++++ b/crawl-ref/source/initfile.cc
+@@ -96,7 +96,7 @@ extern char **NXArgv;
+ #include <unistd.h>
+ #endif
+ 
+-#ifdef __ANDROID__
++#if defined(__ANDROID__) && defined(USE_TILE_LOCAL)
+ #include "SDL_system.h"
+ #endif
+ 
+@@ -4715,7 +4715,7 @@ void get_system_environment()
+         SysEnv.crawl_dir = SAVE_DIR_PATH;
+ #endif
+ 
+-#ifdef __ANDROID__
++#if defined(__ANDROID__) && defined(USE_TILE_LOCAL)
+     if (SysEnv.crawl_dir.empty())
+     {
+         SysEnv.crawl_dir = SDL_AndroidGetExternalStoragePath();

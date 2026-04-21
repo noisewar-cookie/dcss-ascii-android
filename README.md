@@ -1,15 +1,60 @@
-# Dungeon Crawl: Stone Soup for Android (console version)
+# Dungeon Crawl: Stone Soup for Android (Console/ASCII)
 
-This is an unofficial port of Dungeon Crawl:Stone Soup for Android. The aim is to make it look and feel similar to the Angband and Nethack ports. 
+An unofficial console (ASCII) port of [Dungeon Crawl Stone Soup](https://crawl.develz.org/) for Android.
 
-This is the unofficial console version. The official tiles version for Android can be downloaded <a href="https://crawl.develz.org/wordpress/downloads">here</a>.
+This is a fork of [michaelbarlow7/dungeon-crawl-android](https://github.com/michaelbarlow7/dungeon-crawl-android), updated from DCSS 0.29.1 to **0.34.1**. Full credit to Michael Barlow for the original Android console port and JNI adapter architecture.
 
-The latest release can be downloaded from <a href="https://play.google.com/store/apps/details?id=com.crawlmb">Google Play</a> or <a href="https://f-droid.org/packages/com.crawlmb/">F-Droid</a>. You can also download the latest and previous releases via the <a href="https://github.com/michaelbarlow7/dungeon-crawl-android/releases">Releases</a> part of this Github.
+## Status
 
-The project uses a clone of the main Crawl project as a submodule. This is hosted <a href="https://github.com/michaelbarlow7/crawl">Here</a>.
+- **DCSS version:** 0.34.1
+- **Build:** Debug APK working, tested on Android emulator (API 37, arm64-v8a)
+- **Play Store:** Not yet published
 
-<a href="http://s152.photobucket.com/albums/s197/marzzbar/?action=view&amp;current=Screenshot-220712-174829-1.png" target="_blank"><img src="http://i152.photobucket.com/albums/s197/marzzbar/Screenshot-220712-174829-1.png" border="0" alt="Photobucket"/>
+## Architecture
 
-<a href="http://s152.photobucket.com/albums/s197/marzzbar/?action=view&amp;current=screenshot-1343916929231-1.png" target="_blank"><img src="http://i152.photobucket.com/albums/s197/marzzbar/screenshot-1343916929231-1.png" border="0" alt="Photobucket">
+This is an **ASCII/console** port — no tiles, no SDL2, no OpenGL. The game renders via Android's built-in terminal text rendering.
 
-<a href="http://s152.photobucket.com/albums/s197/marzzbar/?action=view&amp;current=screenshot-1342506311600-1.png" target="_blank"><img src="http://i152.photobucket.com/albums/s197/marzzbar/screenshot-1342506311600-1.png" border="0" alt="Photobucket"/>
+- `android-crawl-console/` — Git submodule pointing to [crawl/crawl](https://github.com/crawl/crawl) at tag 0.34.1 (unmodified upstream)
+- `android-console-patches/` — Custom files and patches applied on top of the submodule at build time:
+  - `libandroid.cc` — JNI console adapter implementing `libconsole.h`
+  - `Android.mk` / `Application.mk` — NDK build files
+  - `*.patch` — Minimal diffs to upstream files (`initfile.cc`, `main.cc`, `syscalls.cc`)
+  - `setup.sh` — Copies custom files, applies patches, generates headers
+- `src/com/crawlmb/` — Java/Android UI layer (keyboard, preferences, game activity)
+- `assets/` — Bundled crawl data files (dat/, docs/, settings/)
+
+## Building
+
+### Prerequisites
+
+- Android SDK with NDK 30.x
+- Java 21 (Android Studio JBR recommended)
+- Perl (Strawberry Perl on Windows)
+- Python 3 with PyYAML
+- g++ (for building tilegen — Strawberry Perl MinGW on Windows)
+
+### Setup
+
+```bash
+# Initialize the crawl submodule
+git submodule update --init
+
+# Run setup (from android-console-patches/)
+cd android-console-patches
+bash setup.sh
+
+# Build debug APK (from project root)
+cd ..
+./gradlew assembleDebug
+```
+
+The debug APK will be at `build/outputs/apk/debug/dcss-ascii-android-debug.apk`.
+
+## License
+
+This project is licensed under the [GNU General Public License v2.0](LICENSE) (or later), the same license as Dungeon Crawl Stone Soup.
+
+## Credits
+
+- [Dungeon Crawl Stone Soup](https://github.com/crawl/crawl) — Linley Henzell, the dev team, and contributors
+- [dungeon-crawl-android](https://github.com/michaelbarlow7/dungeon-crawl-android) — Michael Barlow (original Android console port)

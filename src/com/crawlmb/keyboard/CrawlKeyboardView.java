@@ -305,40 +305,28 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
         for (int i = 0; i < n; i++) {
             int attr = a.getIndex(i);
 
-            switch (attr) {
-            case R.styleable.CrawlKeyboardView_keyBackground:
+            if (attr == R.styleable.CrawlKeyboardView_keyBackground) {
                 mKeyBackground = a.getDrawable(attr);
-                break;
-            case R.styleable.CrawlKeyboardView_verticalCorrection:
+            } else if (attr == R.styleable.CrawlKeyboardView_verticalCorrection) {
                 mVerticalCorrection = a.getDimensionPixelOffset(attr, 0);
-                break;
-            case R.styleable.CrawlKeyboardView_keyPreviewLayout:
+            } else if (attr == R.styleable.CrawlKeyboardView_keyPreviewLayout) {
                 previewLayout = a.getResourceId(attr, 0);
-                break;
-            case R.styleable.CrawlKeyboardView_keyPreviewOffset:
+            } else if (attr == R.styleable.CrawlKeyboardView_keyPreviewOffset) {
                 mPreviewOffset = a.getDimensionPixelOffset(attr, 0);
-                break;
-            case R.styleable.CrawlKeyboardView_keyPreviewHeight:
+            } else if (attr == R.styleable.CrawlKeyboardView_keyPreviewHeight) {
                 mPreviewHeight = a.getDimensionPixelSize(attr, 80);
-                break;
-            case R.styleable.CrawlKeyboardView_keyTextSize:
+            } else if (attr == R.styleable.CrawlKeyboardView_keyTextSize) {
                 mKeyTextSize = a.getDimensionPixelSize(attr, 18);
-                break;
-            case R.styleable.CrawlKeyboardView_keyTextColor:
+            } else if (attr == R.styleable.CrawlKeyboardView_keyTextColor) {
                 mKeyTextColor = a.getColor(attr, 0xFF000000);
-                break;
-            case R.styleable.CrawlKeyboardView_labelTextSize:
+            } else if (attr == R.styleable.CrawlKeyboardView_labelTextSize) {
                 mLabelTextSize = a.getDimensionPixelSize(attr, 14);
-                break;
-            case R.styleable.CrawlKeyboardView_popupLayout:
+            } else if (attr == R.styleable.CrawlKeyboardView_popupLayout) {
                 mPopupLayout = a.getResourceId(attr, 0);
-                break;
-            case R.styleable.CrawlKeyboardView_shadowColor:
+            } else if (attr == R.styleable.CrawlKeyboardView_shadowColor) {
                 mShadowColor = a.getColor(attr, 0);
-                break;
-            case R.styleable.CrawlKeyboardView_shadowRadius:
+            } else if (attr == R.styleable.CrawlKeyboardView_shadowRadius) {
                 mShadowRadius = a.getFloat(attr, 0f);
-                break;
             }
         }
         

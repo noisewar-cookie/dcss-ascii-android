@@ -1,0 +1,16 @@
+diff --git a/crawl-ref/source/main.cc b/crawl-ref/source/main.cc
+index 6ecd2665af..a5e81542b9 100644
+--- a/crawl-ref/source/main.cc
++++ b/crawl-ref/source/main.cc
+@@ -2478,9 +2478,11 @@ void process_command(command_type cmd, command_type prev_cmd)
+         break;
+ 
+ #ifdef __ANDROID__
++#ifdef USE_TILE_LOCAL
+     case CMD_TOGGLE_TAB_ICONS:
+         tiles.toggle_tab_icons();
+         break;
++#endif
+ 
+     case CMD_TOGGLE_KEYBOARD:
+         jni_keyboard_control(2);
