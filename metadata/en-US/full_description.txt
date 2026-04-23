@@ -1,4 +1,5 @@
-An unofficial port of the classic roguelike Dungeon Crawl: Stone Soup for Android. This is the ASCII version. 
+A fork of Michael Barlow's unofficial port of the classic roguelike Dungeon Crawl: Stone Soup for Android. This is the ASCII version.
+
 Can you retrieve the Orb of Zot? Probably not!
 
 ------------------------------------------------

@@ -1,6 +1,6 @@
-# Dungeon Crawl: Stone Soup for Android (Console/ASCII)
+# Dungeon Crawl: Stone Soup (ASCII)
 
-An unofficial console (ASCII) port of [Dungeon Crawl Stone Soup](https://crawl.develz.org/) for Android.
+An unofficial ASCII port of [Dungeon Crawl Stone Soup](https://crawl.develz.org/) for Android.
 
 This is a fork of [michaelbarlow7/dungeon-crawl-android](https://github.com/michaelbarlow7/dungeon-crawl-android), updated from DCSS 0.29.1 to **0.34.1**. Full credit to Michael Barlow for the original Android console port and JNI adapter architecture.
 

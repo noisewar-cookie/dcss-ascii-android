@@ -38,6 +38,10 @@ import android.os.Message;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+
 import com.crawlmb.CrawlDialog;
 import com.crawlmb.keylistener.GameKeyListener;
 import com.crawlmb.keyboard.CrawlKeyboardWrapper;
@@ -181,6 +185,51 @@ public class GameActivity extends Activity
 			if (screenLayout != null)
 				screenLayout.removeAllViews();
 			screenLayout = new RelativeLayout(this);
+
+			ViewCompat.setOnApplyWindowInsetsListener(screenLayout, (v, windowInsets) -> {
+				Insets base = windowInsets.getInsets(
+						WindowInsetsCompat.Type.systemBars()
+						| WindowInsetsCompat.Type.displayCutout());
+				int left = base.left;
+				int top = base.top;
+				int right = base.right;
+				int bottom = base.bottom;
+
+				android.view.WindowInsets platform = windowInsets.toWindowInsets();
+				if (platform != null)
+				{
+					// Waterfall insets for curved-edge displays (API 30+)
+					if (VERSION.SDK_INT >= VERSION_CODES.R)
+					{
+						android.view.DisplayCutout cutout = platform.getDisplayCutout();
+						if (cutout != null)
+						{
+							android.graphics.Insets wf = cutout.getWaterfallInsets();
+							left = Math.max(left, wf.left);
+							top = Math.max(top, wf.top);
+							right = Math.max(right, wf.right);
+							bottom = Math.max(bottom, wf.bottom);
+						}
+					}
+
+					// Rounded corner safe area (API 31+)
+					if (VERSION.SDK_INT >= VERSION_CODES.S)
+					{
+						int tl = cornerRadius(platform, android.view.RoundedCorner.POSITION_TOP_LEFT);
+						int tr = cornerRadius(platform, android.view.RoundedCorner.POSITION_TOP_RIGHT);
+						int bl = cornerRadius(platform, android.view.RoundedCorner.POSITION_BOTTOM_LEFT);
+						int br = cornerRadius(platform, android.view.RoundedCorner.POSITION_BOTTOM_RIGHT);
+						double f = 1.0 - Math.sqrt(2.0) / 2.0;
+						top = Math.max(top, (int) Math.ceil(Math.max(tl, tr) * f));
+						bottom = Math.max(bottom, (int) Math.ceil(Math.max(bl, br) * f));
+						left = Math.max(left, (int) Math.ceil(Math.max(tl, bl) * f));
+						right = Math.max(right, (int) Math.ceil(Math.max(tr, br) * f));
+					}
+				}
+
+				v.setPadding(left, top, right, bottom);
+				return WindowInsetsCompat.CONSUMED;
+			});
 
 			term = new TermView(this, gameKeyListener);
 			RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(
@@ -343,6 +392,11 @@ public class GameActivity extends Activity
 
 	public Handler getHandler() {
 		return handler;
+	}
+
+	private static int cornerRadius(android.view.WindowInsets insets, int position) {
+		android.view.RoundedCorner c = insets.getRoundedCorner(position);
+		return c != null ? c.getRadius() : 0;
 	}
 
 	private static class GameHandler extends Handler {

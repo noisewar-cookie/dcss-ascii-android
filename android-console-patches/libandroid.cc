@@ -9,7 +9,7 @@
  * Originally based off of libunix.cc
 
    Aug 2012 Michael Barlow <michaelbarlow7@gmail.com>
-   Updated for 0.34.1 compatibility                                    */
+   Updated by noisewar for 0.34.1 compatibility                                    */
 
 #include "AppHdr.h"
 
