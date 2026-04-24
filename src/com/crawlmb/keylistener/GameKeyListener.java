@@ -7,7 +7,7 @@ import android.view.KeyEvent;
 import com.crawlmb.GameThread;
 import com.crawlmb.KeyBuffer;
 import com.crawlmb.NativeWrapper;
-import com.crawlmb.view.TermView;
+import com.crawlmb.view.TerminalRenderer;
 
 public class GameKeyListener implements KeyListener
 {
@@ -50,10 +50,10 @@ public class GameKeyListener implements KeyListener
 		keyBuffer = new KeyBuffer(this);
 	}
 
-	public void link(TermView t, Handler h)
+	public void link(TerminalRenderer r, Handler h)
 	{
 		handler = h;
-		nativew.link(t);
+		nativew.link(r);
 	}
 
 	public String getFatalError()

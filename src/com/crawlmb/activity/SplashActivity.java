@@ -246,7 +246,7 @@ public class SplashActivity extends Activity {
             runOnUiThread(new StartGameRunnable());
             return;
         }
-        // Wait 1.5 seconds, then start game
+        // Brief pause on splash, then start game
         Timer timer = new Timer();
         TimerTask gameStartTask = new TimerTask() {
             @Override
@@ -254,7 +254,7 @@ public class SplashActivity extends Activity {
                 runOnUiThread(new StartGameRunnable());
             }
         };
-        timer.schedule(gameStartTask, 1500);
+        timer.schedule(gameStartTask, 800);
     }
 
     private final class StartGameRunnable implements Runnable {
@@ -304,11 +304,13 @@ public class SplashActivity extends Activity {
 
             delete(new File(getFilesDir() + "/dat"));
             copyFileOrDir("dat");
-            // Only copy the settings folder if it doesn't already exist
-            // Otherwise we might overwrite the user's settings
+            // Create settings folder if needed, but always refresh init.txt
+            // (other files like macro.txt are preserved)
             File settingsFolder = new File(getFilesDir() + "/settings");
             if (!settingsFolder.exists()) {
                 copyFileOrDir("settings");
+            } else {
+                copyFile("settings/init.txt");
             }
             copyFileOrDir("docs");
             writeVersionFile();
@@ -377,9 +379,10 @@ public class SplashActivity extends Activity {
                 newasset.createNewFile();
                 BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(newasset, false));
                 BufferedInputStream in = new BufferedInputStream(assetManager.open(fileName));
-                int b;
-                while ((b = in.read()) != -1) {
-                    out.write(b);
+                byte[] buf = new byte[8192];
+                int len;
+                while ((len = in.read(buf)) != -1) {
+                    out.write(buf, 0, len);
                 }
                 out.flush();
                 out.close();

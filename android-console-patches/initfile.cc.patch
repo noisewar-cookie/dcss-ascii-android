@@ -5,16 +5,24 @@ index 246325a755..dc2048f324 100644
 @@ -96,7 +96,7 @@ extern char **NXArgv;
  #include <unistd.h>
  #endif
- 
+
 -#ifdef __ANDROID__
 +#if defined(__ANDROID__) && defined(USE_TILE_LOCAL)
  #include "SDL_system.h"
  #endif
- 
-@@ -4715,7 +4715,7 @@ void get_system_environment()
+
+@@ -660,6 +660,7 @@ static const vector<GameOption*> general_options =
+         new IntGameOption(SIMPLE_NAME(msg_max_height), max(10, MSG_MIN_HEIGHT),
+                           MSG_MIN_HEIGHT),
+         new IntGameOption(SIMPLE_NAME(msg_webtiles_height), -1),
++        new IntGameOption(SIMPLE_NAME(msg_max_width), 0, 0),
+         new IntGameOption(SIMPLE_NAME(rest_wait_percent), 100, 0, 100),
+         new IntGameOption(SIMPLE_NAME(pickup_menu_limit), 1),
+         new IntGameOption(SIMPLE_NAME(view_delay), DEFAULT_VIEW_DELAY, 0),
+@@ -4715,7 +4716,7 @@ void get_system_environment()
          SysEnv.crawl_dir = SAVE_DIR_PATH;
  #endif
- 
+
 -#ifdef __ANDROID__
 +#if defined(__ANDROID__) && defined(USE_TILE_LOCAL)
      if (SysEnv.crawl_dir.empty())

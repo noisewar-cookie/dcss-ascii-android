@@ -53,7 +53,7 @@ import com.crawlmb.keylistener.KeyListener;
 
 import java.util.Hashtable;
 
-public class TermView extends View implements GestureDetector.OnGestureListener, ScaleGestureDetector.OnScaleGestureListener, PassThroughListener
+public class TermView extends View implements GestureDetector.OnGestureListener, ScaleGestureDetector.OnScaleGestureListener, PassThroughListener, TerminalRenderer
 {
 
 	private static final String LOCK_POSITIONING_PREFERENCE = "lockPositioningPreference";
@@ -77,6 +77,7 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 	private int char_height = 0;
 	private int char_width = 0;
 	private int font_text_size = 0;
+	private float fontScaleMultiplier = 1.0f;
 
 	private Handler handler = null;
 	private KeyListener keyListener = null;
@@ -202,7 +203,9 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 			} while (char_height * Preferences.rows <= maxHeight && font_text_size < MAX_FONT_SIZE);
 
 			font_text_size -= 1;
-			setFontSize(font_text_size);
+			int scaledSize = Math.round(font_text_size * fontScaleMultiplier);
+			scaledSize = Math.max(MIN_FONT_SIZE, Math.min(scaledSize, MAX_FONT_SIZE));
+			setFontSize(scaledSize, false);
 		}
 		// Log.d("Crawl","autoSizeFontHeight "+font_text_size);
 	}
@@ -228,7 +231,9 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 			} while (char_width * Preferences.cols <= maxWidth && font_text_size < MAX_FONT_SIZE);
 
 			font_text_size -= 1;
-			setFontSize(font_text_size);
+			int scaledSize = Math.round(font_text_size * fontScaleMultiplier);
+			scaledSize = Math.max(MIN_FONT_SIZE, Math.min(scaledSize, MAX_FONT_SIZE));
+			setFontSize(scaledSize, false);
 		}
 		// Log.d("Crawl","autoSizeFontWidth "+font_text_size+","+maxWidth);
 	}
@@ -286,6 +291,11 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 			}
 			return cache.get(assetPath);
 		}
+	}
+
+	public void setFontScaleMultiplier(float multiplier)
+	{
+		this.fontScaleMultiplier = multiplier;
 	}
 
 	public void increaseFontSize()

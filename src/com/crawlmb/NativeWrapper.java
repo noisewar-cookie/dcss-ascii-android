@@ -3,7 +3,7 @@ package com.crawlmb;
 import android.graphics.Color;
 
 import com.crawlmb.keylistener.GameKeyListener;
-import com.crawlmb.view.TermView;
+import com.crawlmb.view.TerminalRenderer;
 
 public class NativeWrapper
 {
@@ -13,7 +13,7 @@ public class NativeWrapper
 		System.loadLibrary("crawl");
 	}
 
-	private TermView term = null;
+	private TerminalRenderer renderer = null;
 	private GameKeyListener keyListener = null;
 
 	private final String display_lock = "lock";
@@ -21,21 +21,21 @@ public class NativeWrapper
 
 	public void gameStart()
 	{
-		initGame(term.getContext().getFilesDir().getPath());
+		initGame(renderer.getContext().getFilesDir().getPath());
 	}
 
 	private void showLoadingMessage()
 	{
 		synchronized (display_lock)
 		{
-            String[] loadingMessageArray = term.getResources().getStringArray(R.array.loading_message_array);
+            String[] loadingMessageArray = renderer.getResources().getStringArray(R.array.loading_message_array);
             for (int i = 0; i < loadingMessageArray.length; i++){
             	String loadingMessageLine = loadingMessageArray[i];
 				for (int j = 0; j < loadingMessageLine.length(); j++){
-					term.drawPoint(i, j, loadingMessageLine.charAt(j), Color.WHITE, Color.BLACK, false);
+					renderer.drawPoint(i, j, loadingMessageLine.charAt(j), Color.WHITE, Color.BLACK, false);
 				}
 			}
-			term.invalidate();
+			renderer.postInvalidate();
 		}
 	}
 
@@ -67,7 +67,7 @@ public class NativeWrapper
 		// Log.d(TAG, "onGameStart()");
 		synchronized (display_lock)
 		{
-			boolean result = term.onGameStart();
+			boolean result = renderer.onGameStart();
 			showLoadingMessage();
 			return result;
 		}
@@ -78,16 +78,16 @@ public class NativeWrapper
 		// Log.d(TAG, "increaseFontSzie()");
 		synchronized (display_lock)
 		{
-			term.increaseFontSize();
+			renderer.increaseFontSize();
 			resize();
 		}
 	}
 
-	public void link(TermView t)
+	public void link(TerminalRenderer r)
 	{
 		synchronized (display_lock)
 		{
-			term = t;
+			renderer = r;
 		}
 	}
 
@@ -96,7 +96,7 @@ public class NativeWrapper
 		// Log.d(TAG, "decreaseFontSize()");
 		synchronized (display_lock)
 		{
-			term.decreaseFontSize();
+			renderer.decreaseFontSize();
 			resize();
 		}
 	}
@@ -118,7 +118,7 @@ public class NativeWrapper
 		// Log.d(TAG, "resize()");
 		synchronized (display_lock)
 		{
-			term.onGameStart(); // recalcs TermView canvas dimension
+			renderer.onGameStart();
 			refreshTerminal();
 		}
 	}
@@ -127,11 +127,7 @@ public class NativeWrapper
 	{
 		synchronized (display_lock)
 		{
-			// Formatter fmt = new Formatter();
-			// fmt.format("fgcolor:%x bgcolor:%x ", fgcolor, bgcolor);
-			// Log.d("Crawl","printingTerminalChar, y is: " + y + ", x is: " + x
-			// + ", character is: " + c + ", " + fmt);
-			term.drawPoint(y, x, c, fgcolor, bgcolor, false);
+			renderer.drawPoint(y, x, c, fgcolor, bgcolor, false);
 		}
 	}
 
@@ -139,7 +135,7 @@ public class NativeWrapper
 	{
 		synchronized (display_lock)
 		{
-			term.postInvalidate();
+			renderer.postInvalidate();
 		}
 	}
 

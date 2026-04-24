@@ -1,0 +1,12 @@
+diff --git a/crawl-ref/source/options.h b/crawl-ref/source/options.h
+index 1234567890..1234567891 100644
+--- a/crawl-ref/source/options.h
++++ b/crawl-ref/source/options.h
+@@ -471,6 +471,7 @@ public:
+     int         mlist_min_height;
+     int         msg_min_height;
+     int         msg_max_height;
++    int         msg_max_width;
+     int         msg_webtiles_height;
+     bool        mlist_allow_alternate_layout;
+     bool        monster_item_view_coordinates;

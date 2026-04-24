@@ -32,6 +32,8 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.ViewGroup.LayoutParams;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.os.Handler;
 import android.os.Message;
@@ -43,12 +45,17 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.crawlmb.CrawlDialog;
+import com.crawlmb.FontConfig;
+import com.crawlmb.PassThroughListener;
 import com.crawlmb.keylistener.GameKeyListener;
 import com.crawlmb.keyboard.CrawlKeyboardWrapper;
 import com.crawlmb.keyboard.DirectionalTouchView;
 import com.crawlmb.GameThread;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
+import com.crawlmb.view.RegionRouter;
+import com.crawlmb.view.RegionTermView;
+import com.crawlmb.view.TerminalRenderer;
 import com.crawlmb.view.TermView;
 
 public class GameActivity extends Activity
@@ -61,6 +68,7 @@ public class GameActivity extends Activity
 
 	private RelativeLayout screenLayout = null;
 	private TermView term = null;
+	private int gamePanelId = View.NO_ID;
 
 	protected Handler handler = null;
 
@@ -99,11 +107,12 @@ public class GameActivity extends Activity
 	public boolean onPrepareOptionsMenu(Menu menu) {
 		super.onPrepareOptionsMenu(menu);
 		MenuItem lockTerminalPositionItem = menu.findItem(R.id.menu_lock_terminal_position);
-		if (term.getLockPositioning()) {
+		if (term != null && term.getLockPositioning()) {
 			lockTerminalPositionItem.setTitle(R.string.menu_unlock_terminal_position);
 		} else {
 			lockTerminalPositionItem.setTitle(R.string.menu_lock_terminal_position);
 		}
+		lockTerminalPositionItem.setVisible(term != null);
 
 		MenuItem changeTransparencyItem = menu.findItem(R.id.menu_change_transparency);
 
@@ -129,10 +138,12 @@ public class GameActivity extends Activity
 			startActivityForResult(intent, PREFERENCES_FINISHED);
 			break;
 		case '3':// Reset terminal position
-			term.resetTerminalPosition();
+			if (term != null)
+				term.resetTerminalPosition();
 			break;
 		case '4':// Lock terminal position
-			term.toggleLockPosition();
+			if (term != null)
+				term.toggleLockPosition();
 			break;
 		case '5':// Quit
 			finish();
@@ -231,31 +242,31 @@ public class GameActivity extends Activity
 				return WindowInsetsCompat.CONSUMED;
 			});
 
-			term = new TermView(this, gameKeyListener);
-			RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(
-					LayoutParams.FILL_PARENT, LayoutParams.WRAP_CONTENT);
-			layoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-			term.setLayoutParams(layoutParams);
-			term.setFocusable(true);
-			registerForContextMenu(term);
-
 			boolean hapticFeedbackEnabled = Preferences
 					.getHapticFeedbackEnabled();
-			term.setHapticFeedbackEnabled(hapticFeedbackEnabled);
-			gameKeyListener.link(term, handler);
 
-			screenLayout.addView(term);
+			TerminalRenderer renderer;
+			boolean isPortrait = Preferences.isScreenPortraitOrientation();
+
+			if (isPortrait)
+			{
+				renderer = buildPortraitLayout(hapticFeedbackEnabled);
+			}
+			else
+			{
+				renderer = buildLandscapeLayout(hapticFeedbackEnabled);
+			}
+
+			gameKeyListener.link(renderer, handler);
 
 			String keyboardType;
-			if (Preferences.isScreenPortraitOrientation())
+			if (isPortrait)
 				keyboardType = Preferences.getPortraitKeyboard();
 			else
 				keyboardType = Preferences.getLandscapeKeyboard();
 
 			String[] keyboards = getResources().getStringArray(
 					R.array.virtualKeyboardValues);
-
-
 
 			if (keyboardType.equals(keyboards[1])) // Crawl Keyboard
 			{
@@ -264,19 +275,27 @@ public class GameActivity extends Activity
 						.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 				screenLayout.addView(virtualKeyboard.virtualKeyboardView);
 
+				// Constrain game panel to sit above keyboard
+				if (gamePanelId != View.NO_ID)
+				{
+					View gamePanel = screenLayout.findViewById(gamePanelId);
+					if (gamePanel != null)
+					{
+						RelativeLayout.LayoutParams gp = (RelativeLayout.LayoutParams) gamePanel.getLayoutParams();
+						gp.addRule(RelativeLayout.ABOVE, virtualKeyboard.virtualKeyboardView.getId());
+						gamePanel.setLayoutParams(gp);
+					}
+				}
 
-				// Add directional-key view
 				addDirectionalKeyView(
 						virtualKeyboard.virtualKeyboardView.getId(),
 						hapticFeedbackEnabled);
 
-				// Add seekbar here (probably invisible by default)
 				View transparencySliderView = getLayoutInflater().inflate(R.layout.transparency_seekbar, screenLayout);
 				SeekBar transparencySeekbar = (SeekBar) transparencySliderView.findViewById(R.id.transparency_seekbar);
 				transparencySeekbar.setProgress(Preferences.getKeyboardTransparency());
 				transparencySeekbar.setOnSeekBarChangeListener(virtualKeyboard.virtualKeyboardView);
 
-				// Invalidate options (won't work pre honeycomb but no big deal)
 				if (VERSION.SDK_INT >= VERSION_CODES.HONEYCOMB) {
 					invalidateOptionsMenu();
 				}
@@ -299,12 +318,91 @@ public class GameActivity extends Activity
 								WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
 			}
 
-
 			setContentView(screenLayout);
 			dialog.restoreDialog();
-
-			term.invalidate();
 		}
+	}
+
+	private TerminalRenderer buildPortraitLayout(boolean hapticFeedbackEnabled) {
+		term = null;
+		FontConfig fontConfig = FontConfig.load(getAssets());
+
+		FrameLayout gamePanel = new FrameLayout(this);
+		gamePanel.setId(View.generateViewId());
+		gamePanelId = gamePanel.getId();
+
+		RegionTermView fullView = new RegionTermView(this, 0, 0, 24, 80);
+		fullView.setFontScaleMultiplier(fontConfig.portraitFullFontScale);
+		fullView.setGameStartTrigger(handler);
+		gamePanel.addView(fullView, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+		LinearLayout splitContainer = new LinearLayout(this);
+		splitContainer.setOrientation(LinearLayout.VERTICAL);
+		splitContainer.setVisibility(View.INVISIBLE);
+
+		RegionTermView mapView = new RegionTermView(this,
+				RegionRouter.MAP_START_ROW, RegionRouter.MAP_START_COL,
+				RegionRouter.MAP_END_ROW, RegionRouter.MAP_END_COL);
+		mapView.setFontScaleMultiplier(fontConfig.portraitMapFontScale);
+		mapView.setOffsetCols(fontConfig.portraitMapOffsetCols);
+
+		RegionTermView hudView = new RegionTermView(this,
+				RegionRouter.HUD_START_ROW, RegionRouter.HUD_START_COL,
+				RegionRouter.HUD_END_ROW, RegionRouter.HUD_END_COL);
+		hudView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
+
+		RegionTermView msgView = new RegionTermView(this,
+				RegionRouter.MSG_START_ROW, RegionRouter.MSG_START_COL,
+				RegionRouter.MSG_END_ROW, RegionRouter.MSG_END_COL);
+		msgView.setFontScaleMultiplier(fontConfig.portraitMsgFontScale);
+
+		splitContainer.addView(mapView, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		splitContainer.addView(hudView, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		splitContainer.addView(msgView, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+		gamePanel.addView(splitContainer, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+		RelativeLayout.LayoutParams gamePanelParams = new RelativeLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+		gamePanelParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+		gamePanel.setLayoutParams(gamePanelParams);
+
+		registerForContextMenu(mapView);
+		mapView.setHapticFeedbackEnabled(hapticFeedbackEnabled);
+
+		screenLayout.addView(gamePanel);
+
+		RegionRouter router = new RegionRouter(this);
+		router.setFullView(fullView);
+		router.setSplitContainer(splitContainer);
+		router.addRegion(mapView);
+		router.addRegion(hudView);
+		router.addRegion(msgView);
+
+		return router;
+	}
+
+	private TerminalRenderer buildLandscapeLayout(boolean hapticFeedbackEnabled) {
+		gamePanelId = View.NO_ID;
+		FontConfig fontConfig = FontConfig.load(getAssets());
+		term = new TermView(this, gameKeyListener);
+		term.setFontScaleMultiplier(fontConfig.landscapeFontScale);
+		RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(
+				LayoutParams.FILL_PARENT, LayoutParams.WRAP_CONTENT);
+		layoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+		term.setLayoutParams(layoutParams);
+		term.setFocusable(true);
+		registerForContextMenu(term);
+		term.setHapticFeedbackEnabled(hapticFeedbackEnabled);
+
+		screenLayout.addView(term);
+
+		return term;
 	}
 
 	private void addDirectionalKeyView(int virtualKeyboardId,
@@ -316,7 +414,31 @@ public class GameActivity extends Activity
 		directionalLayoutParams
 				.addRule(RelativeLayout.ABOVE, virtualKeyboardId);
 		view.setLayoutParams(directionalLayoutParams);
-		view.setPassThroughListener(term);
+
+		if (term != null)
+		{
+			view.setPassThroughListener(term);
+		}
+		else
+		{
+			view.setPassThroughListener(new PassThroughListener()
+			{
+				@Override
+				public boolean onScroll(android.view.MotionEvent e1,
+						android.view.MotionEvent e2, float dx, float dy) { return false; }
+				@Override
+				public boolean onScale(
+						android.view.ScaleGestureDetector d) { return false; }
+				@Override
+				public boolean onScaleBegin(
+						android.view.ScaleGestureDetector d) { return false; }
+				@Override
+				public void savePosition() {}
+				@Override
+				public void onLongPress(android.view.MotionEvent e) {}
+			});
+		}
+
 		view.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 		screenLayout.addView(view);
 	}

@@ -1,0 +1,37 @@
+# DCSS Android Font Configuration
+# ──────────────────────────────────────────────────────────────────────────────
+# Scale values are multipliers applied after the font is auto-sized to fill
+# the panel width. 1.0 = auto-size only, 1.25 = 25% larger, 0.9 = 10% smaller.
+#
+# The col/row counts in comments are the terminal character dimensions of each
+# panel region — they are fixed in the layout and shown here for reference only.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Portrait: full screen
+# Shown during: main menu, character creation, in-game full-screen menus
+# Terminal region: 80 cols x 24 rows
+portrait_full_font_scale=1.25
+
+# Portrait: map panel
+# Shown during: gameplay — top portion, dungeon viewport
+# Terminal region: 37 cols x 17 rows  (terminal cols 0-36, rows 0-16)
+portrait_map_font_scale=0.85
+
+# Portrait: map horizontal shift in terminal columns (positive = right)
+# 0 = left-aligned, 2 = shifted 2 cols right (roughly centers the dungeon view)
+portrait_map_offset_cols=4
+
+# Portrait: HUD panel
+# Shown during: gameplay — top portion, health/stats (right side of terminal)
+# Terminal region: 43 cols x 17 rows  (terminal cols 37-79, rows 0-16)
+portrait_hud_font_scale=0.85
+
+# Portrait: message panel
+# Shown during: gameplay — bottom strip, game messages
+# Terminal region: 80 cols x 7 rows  (terminal cols 0-79, rows 17-23)
+portrait_msg_font_scale=1.35
+
+# Landscape: full terminal
+# Shown during: all screens in landscape orientation
+# Terminal region: 80 cols x 24 rows
+landscape_font_scale=1.0

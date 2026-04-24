@@ -1,0 +1,17 @@
+diff --git a/crawl-ref/source/startup.cc b/crawl-ref/source/startup.cc
+--- a/crawl-ref/source/startup.cc
++++ b/crawl-ref/source/startup.cc
+@@ -1036,11 +1036,13 @@
+     if (!SysEnv.crawl_name.empty())
+         choice.name = SysEnv.crawl_name;
+
+ #ifdef __ANDROID__
++#ifdef USE_TILE_LOCAL
+     // Request the Android virtual keyboard. Waiting for the SDLActivity to be
+     // resized avoids some display bugs.
+     jni_keyboard_control(1);
+     sleep(1);
++#endif
+ #endif
+
+ #ifndef DGAMELAUNCH
