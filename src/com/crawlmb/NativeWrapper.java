@@ -40,6 +40,7 @@ public class NativeWrapper
 	}
 
 	public native void initGame(String initFileLocation);
+	public static native void nativeSaveGame();
 
 	public NativeWrapper(GameKeyListener s)
 	{
