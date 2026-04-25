@@ -29,7 +29,7 @@ portrait_hud_font_scale=0.85
 # Portrait: message panel
 # Shown during: gameplay — bottom strip, game messages
 # Terminal region: 80 cols x 7 rows  (terminal cols 0-79, rows 17-23)
-portrait_msg_font_scale=1.35
+portrait_msg_font_scale=1.425
 
 # Landscape: full terminal
 # Shown during: all screens in landscape orientation

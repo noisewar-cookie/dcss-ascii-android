@@ -31,6 +31,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.ViewGroup.LayoutParams;
+import android.view.ViewTreeObserver;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -51,6 +52,7 @@ import com.crawlmb.keylistener.GameKeyListener;
 import com.crawlmb.keyboard.CrawlKeyboardWrapper;
 import com.crawlmb.keyboard.DirectionalTouchView;
 import com.crawlmb.GameThread;
+import com.crawlmb.NativeWrapper;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.view.RegionRouter;
@@ -69,6 +71,7 @@ public class GameActivity extends Activity
 	private RelativeLayout screenLayout = null;
 	private TermView term = null;
 	private int gamePanelId = View.NO_ID;
+	private RegionTermView portraitMsgView = null;
 
 	protected Handler handler = null;
 
@@ -351,11 +354,14 @@ public class GameActivity extends Activity
 				RegionRouter.HUD_START_ROW, RegionRouter.HUD_START_COL,
 				RegionRouter.HUD_END_ROW, RegionRouter.HUD_END_COL);
 		hudView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
+		hudView.setOffsetCols(1);
 
 		RegionTermView msgView = new RegionTermView(this,
 				RegionRouter.MSG_START_ROW, RegionRouter.MSG_START_COL,
 				RegionRouter.MSG_END_ROW, RegionRouter.MSG_END_COL);
 		msgView.setFontScaleMultiplier(fontConfig.portraitMsgFontScale);
+		msgView.setHorizontalScrollEnabled(true);
+		portraitMsgView = msgView;
 
 		splitContainer.addView(mapView, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
@@ -383,6 +389,57 @@ public class GameActivity extends Activity
 		router.addRegion(mapView);
 		router.addRegion(hudView);
 		router.addRegion(msgView);
+
+		final float maxMapScale = fontConfig.portraitMapFontScale;
+		final float maxHudScale = fontConfig.portraitHudFontScale;
+		final float MIN_FONT_SCALE = 0.3f;
+		final int MAX_ADJUST_ATTEMPTS = 5;
+
+		gamePanel.getViewTreeObserver().addOnGlobalLayoutListener(
+				new ViewTreeObserver.OnGlobalLayoutListener()
+				{
+					private int attempts = 0;
+
+					@Override
+					public void onGlobalLayout()
+					{
+						if (splitContainer.getVisibility() != View.VISIBLE)
+							return;
+
+						int available = gamePanel.getHeight();
+						if (available <= 0)
+							return;
+
+						int mapH = mapView.getMeasuredHeight();
+						int hudH = hudView.getMeasuredHeight();
+						int msgH = msgView.getMeasuredHeight();
+						int total = mapH + hudH + msgH;
+
+						if (total <= available)
+							return;
+
+						float curMapScale = mapView.getFontScaleMultiplier();
+						float curHudScale = hudView.getFontScaleMultiplier();
+						if (curMapScale <= MIN_FONT_SCALE
+								&& curHudScale <= MIN_FONT_SCALE)
+							return;
+						if (attempts >= MAX_ADJUST_ATTEMPTS)
+							return;
+
+						attempts++;
+						int mapHudCurrent = mapH + hudH;
+						int mapHudTarget = available - msgH;
+						if (mapHudCurrent <= 0 || mapHudTarget <= 0)
+							return;
+
+						float ratio = (float) mapHudTarget / mapHudCurrent;
+						mapView.setFontScaleMultiplier(Math.max(MIN_FONT_SCALE,
+								curMapScale * ratio));
+						hudView.setFontScaleMultiplier(Math.max(MIN_FONT_SCALE,
+								curHudScale * ratio));
+						splitContainer.requestLayout();
+					}
+				});
 
 		return router;
 	}
@@ -439,6 +496,9 @@ public class GameActivity extends Activity
 			});
 		}
 
+		if (portraitMsgView != null)
+			view.setMessageView(portraitMsgView);
+
 		view.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 		screenLayout.addView(view);
 	}
@@ -473,6 +533,12 @@ public class GameActivity extends Activity
 	private void toggleSystemKeyboard() {
 		InputMethodManager inputMethodManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
 		inputMethodManager.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+	}
+
+	@Override
+	protected void onPause() {
+		super.onPause();
+		NativeWrapper.nativeSaveGame();
 	}
 
 	@Override

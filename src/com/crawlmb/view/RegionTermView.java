@@ -9,7 +9,9 @@ import android.graphics.Typeface;
 import android.os.Handler;
 import android.util.Log;
 import android.view.Display;
+import android.view.GestureDetector;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 
@@ -49,6 +51,10 @@ public class RegionTermView extends View
 	private int drawOffsetX = 0;
 	private int offsetCols = 0;
 
+	private boolean horizontalScrollEnabled = false;
+	private int scrollOffsetX = 0;
+	private GestureDetector scrollDetector;
+
 	public RegionTermView(Context context, int startRow, int startCol, int endRow, int endCol)
 	{
 		super(context);
@@ -64,6 +70,50 @@ public class RegionTermView extends View
 	public void setFontScaleMultiplier(float multiplier)
 	{
 		this.fontScaleMultiplier = multiplier;
+	}
+
+	public float getFontScaleMultiplier()
+	{
+		return fontScaleMultiplier;
+	}
+
+	public void setHorizontalScrollEnabled(boolean enabled)
+	{
+		this.horizontalScrollEnabled = enabled;
+		if (enabled && scrollDetector == null)
+		{
+			scrollDetector = new GestureDetector(getContext(),
+					new GestureDetector.SimpleOnGestureListener()
+					{
+						@Override
+						public boolean onScroll(MotionEvent e1, MotionEvent e2,
+								float distanceX, float distanceY)
+						{
+							int maxScroll = Math.max(0, canvas_width - getWidth());
+							scrollOffsetX = Math.max(0,
+									Math.min(maxScroll, scrollOffsetX + (int) distanceX));
+							invalidate();
+							return true;
+						}
+
+						@Override
+						public boolean onDown(MotionEvent e)
+						{
+							return true;
+						}
+					});
+		}
+	}
+
+	@Override
+	public boolean onTouchEvent(MotionEvent event)
+	{
+		if (horizontalScrollEnabled && scrollDetector != null)
+		{
+			scrollDetector.onTouchEvent(event);
+			return true;
+		}
+		return super.onTouchEvent(event);
 	}
 
 	public void setCenterHorizontally(boolean center)
@@ -99,7 +149,7 @@ public class RegionTermView extends View
 	{
 		if (bitmap != null)
 		{
-			canvas.drawBitmap(bitmap, drawOffsetX, 0, null);
+			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX, 0, null);
 		}
 	}
 
