@@ -13,22 +13,48 @@ public class FontConfig
     private static final String ASSET_PATH = "font_config.txt";
 
     public final float portraitFullFontScale;
+    public final boolean portraitFullScrollable;
     public final float portraitMapFontScale;
     public final int portraitMapOffsetCols;
     public final float portraitHudFontScale;
     public final float portraitMsgFontScale;
     public final float landscapeFontScale;
 
-    private FontConfig(float portraitFullFontScale, float portraitMapFontScale,
-                       int portraitMapOffsetCols, float portraitHudFontScale,
-                       float portraitMsgFontScale, float landscapeFontScale)
+    public final float portraitItemsFontScale;
+    public final boolean portraitItemsScrollable;
+    public final float portraitSpellsFontScale;
+    public final boolean portraitSpellsScrollable;
+    public final float portraitOverviewFontScale;
+    public final boolean portraitOverviewScrollable;
+    public final float portraitSkillsFontScale;
+    public final boolean portraitSkillsScrollable;
+    public final float portraitReligionFontScale;
+    public final boolean portraitReligionScrollable;
+    public final float portraitHiscoresFontScale;
+    public final boolean portraitHiscoresScrollable;
+
+    private FontConfig(Properties props)
     {
-        this.portraitFullFontScale = portraitFullFontScale;
-        this.portraitMapFontScale = portraitMapFontScale;
-        this.portraitMapOffsetCols = portraitMapOffsetCols;
-        this.portraitHudFontScale = portraitHudFontScale;
-        this.portraitMsgFontScale = portraitMsgFontScale;
-        this.landscapeFontScale = landscapeFontScale;
+        this.portraitFullFontScale     = getFloat(props, "portrait_full_font_scale", 1.25f);
+        this.portraitFullScrollable    = getBool (props, "portrait_full_scrollable", false);
+        this.portraitMapFontScale      = getFloat(props, "portrait_map_font_scale", 1.0f);
+        this.portraitMapOffsetCols     = getInt  (props, "portrait_map_offset_cols", 2);
+        this.portraitHudFontScale      = getFloat(props, "portrait_hud_font_scale", 1.0f);
+        this.portraitMsgFontScale      = getFloat(props, "portrait_msg_font_scale", 1.5f);
+        this.landscapeFontScale        = getFloat(props, "landscape_font_scale", 1.0f);
+
+        this.portraitItemsFontScale    = getFloat(props, "portrait_items_font_scale", this.portraitFullFontScale);
+        this.portraitItemsScrollable   = getBool (props, "portrait_items_scrollable", this.portraitFullScrollable);
+        this.portraitSpellsFontScale   = getFloat(props, "portrait_spells_font_scale", this.portraitFullFontScale);
+        this.portraitSpellsScrollable  = getBool (props, "portrait_spells_scrollable", this.portraitFullScrollable);
+        this.portraitOverviewFontScale = getFloat(props, "portrait_overview_font_scale", this.portraitFullFontScale);
+        this.portraitOverviewScrollable= getBool (props, "portrait_overview_scrollable", this.portraitFullScrollable);
+        this.portraitSkillsFontScale   = getFloat(props, "portrait_skills_font_scale", this.portraitFullFontScale);
+        this.portraitSkillsScrollable  = getBool (props, "portrait_skills_scrollable", this.portraitFullScrollable);
+        this.portraitReligionFontScale = getFloat(props, "portrait_religion_font_scale", this.portraitFullFontScale);
+        this.portraitReligionScrollable= getBool (props, "portrait_religion_scrollable", this.portraitFullScrollable);
+        this.portraitHiscoresFontScale = getFloat(props, "portrait_hiscores_font_scale", this.portraitFullFontScale);
+        this.portraitHiscoresScrollable= getBool (props, "portrait_hiscores_scrollable", this.portraitFullScrollable);
     }
 
     public static FontConfig load(AssetManager assets)
@@ -45,14 +71,7 @@ public class FontConfig
             Log.w(TAG, "Could not load " + ASSET_PATH + ", using defaults");
         }
 
-        return new FontConfig(
-            getFloat(props, "portrait_full_font_scale", 1.25f),
-            getFloat(props, "portrait_map_font_scale", 1.0f),
-            getInt(props,   "portrait_map_offset_cols", 2),
-            getFloat(props, "portrait_hud_font_scale", 1.0f),
-            getFloat(props, "portrait_msg_font_scale", 1.5f),
-            getFloat(props, "landscape_font_scale", 1.0f)
-        );
+        return new FontConfig(props);
     }
 
     private static float getFloat(Properties props, String key, float def)
@@ -85,5 +104,19 @@ public class FontConfig
             Log.w(TAG, "Invalid value for " + key + ": " + val);
             return def;
         }
+    }
+
+    private static boolean getBool(Properties props, String key, boolean def)
+    {
+        String val = props.getProperty(key);
+        if (val == null)
+            return def;
+        String t = val.trim().toLowerCase();
+        if (t.equals("true") || t.equals("1") || t.equals("yes") || t.equals("on"))
+            return true;
+        if (t.equals("false") || t.equals("0") || t.equals("no") || t.equals("off"))
+            return false;
+        Log.w(TAG, "Invalid value for " + key + ": " + val);
+        return def;
     }
 }

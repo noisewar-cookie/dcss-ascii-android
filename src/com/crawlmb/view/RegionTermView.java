@@ -69,7 +69,14 @@ public class RegionTermView extends View
 
 	public void setFontScaleMultiplier(float multiplier)
 	{
+		if (this.fontScaleMultiplier == multiplier)
+			return;
 		this.fontScaleMultiplier = multiplier;
+		// If we're already laid out, kick a re-measure so the font is
+		// re-rasterized at the new scale and the bitmap is recreated to
+		// match the new char dimensions (see onMeasure).
+		if (canvas != null)
+			requestLayout();
 	}
 
 	public float getFontScaleMultiplier()
@@ -77,9 +84,23 @@ public class RegionTermView extends View
 		return fontScaleMultiplier;
 	}
 
+	public boolean isHorizontalScrollEnabled()
+	{
+		return horizontalScrollEnabled;
+	}
+
 	public void setHorizontalScrollEnabled(boolean enabled)
 	{
+		if (this.horizontalScrollEnabled == enabled)
+			return;
 		this.horizontalScrollEnabled = enabled;
+		if (!enabled)
+		{
+			// Reset offset so a new scrollable menu doesn't inherit a stale
+			// scroll position from a prior one.
+			scrollOffsetX = 0;
+			invalidate();
+		}
 		if (enabled && scrollDetector == null)
 		{
 			scrollDetector = new GestureDetector(getContext(),
@@ -324,6 +345,23 @@ public class RegionTermView extends View
 		}
 		drawOffsetX += offsetCols * char_width;
 
+		// Recreate the bitmap if the canvas dimensions have changed (e.g.
+		// after a font scale change). drawPoint draws at char_width/height
+		// positions, so an undersized bitmap would crop content. We swap
+		// references rather than null-then-assign so a concurrent drawPoint
+		// from the native thread never sees a null canvas.
+		if (canvas_width > 0 && canvas_height > 0
+				&& (bitmap == null
+					|| bitmap.getWidth() != canvas_width
+					|| bitmap.getHeight() != canvas_height))
+		{
+			Bitmap newBitmap = Bitmap.createBitmap(canvas_width, canvas_height,
+					Bitmap.Config.RGB_565);
+			Canvas newCanvas = new Canvas(newBitmap);
+			bitmap = newBitmap;
+			canvas = newCanvas;
+		}
+
 		setMeasuredDimension(width, canvas_height);
 	}
 
@@ -333,6 +371,14 @@ public class RegionTermView extends View
 		super.onSizeChanged(w, h, oldw, oldh);
 		if (triggerGameStart && handler != null)
 		{
+			// One-shot: only fire on the very first size change (initial
+			// layout). Later size changes come from font-scale updates and
+			// must not retrigger StartGame, which would call resize() and
+			// reset RegionRouter's menu/mode state, snapping menu scale
+			// back to default. The zoom gestures call resize() directly
+			// via NativeWrapper.increase/decreaseFontSize, so they don't
+			// depend on this trigger.
+			triggerGameStart = false;
 			handler.sendEmptyMessage(CrawlDialog.Action.StartGame.ordinal());
 		}
 	}

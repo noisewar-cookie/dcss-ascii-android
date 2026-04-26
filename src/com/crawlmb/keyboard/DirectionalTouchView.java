@@ -12,6 +12,7 @@ import com.crawlmb.keylistener.GameKeyListener;
 import com.crawlmb.PassThroughListener;
 import com.crawlmb.Preferences;
 import com.crawlmb.keylistener.KeyListener;
+import com.crawlmb.view.RegionTermView;
 
 public class DirectionalTouchView extends View implements  GestureDetector.OnGestureListener, ScaleGestureDetector.OnScaleGestureListener
 {
@@ -21,10 +22,38 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	private KeyListener keyListener = null;
 	private PassThroughListener passThroughListener;
 	private View messageView;
-	private boolean messageAreaTouch = false;
-	private boolean forwardingToMessage = false;
+	private RegionTermView menuView;
+	private View activeForwardTarget = null;
+	private boolean targetAreaTouch = false;
+	private boolean forwardingToTarget = false;
 	private float downX, downY;
 	private int touchSlop;
+
+	// Two-finger long-press state. Single-finger long-press is disabled
+	// because it collides with single-finger drag-scroll on the msg/menu
+	// panels. Two fingers held still for the long-press timeout opens the
+	// app context menu via passThroughListener.onLongPress.
+	private boolean twoFingerArmed = false;
+	private boolean twoFingerLongPressFired = false;
+	private float p0DownX, p0DownY, p1DownX, p1DownY;
+	private final Runnable twoFingerLongPressFire = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			if (!twoFingerArmed || twoFingerLongPressFired
+					|| passThroughListener == null)
+				return;
+			twoFingerArmed = false;
+			twoFingerLongPressFired = true;
+			// Drop any in-flight drag-scroll forwarding so the menu open
+			// isn't followed by a stray drag once the popup closes.
+			forwardingToTarget = false;
+			targetAreaTouch = false;
+			activeForwardTarget = null;
+			passThroughListener.onLongPress(null);
+		}
+	};
 	
 	public DirectionalTouchView(Context context, KeyListener keyListener)
 	{
@@ -45,17 +74,37 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		this.messageView = view;
 	}
 
-	private boolean isInMessageView(MotionEvent e)
+	public void setMenuView(RegionTermView view)
 	{
-		if (messageView == null || e == null)
-			return false;
-		// Skip routing when the message panel is hidden (menu mode).
-		if (messageView.getVisibility() != View.VISIBLE)
-			return false;
-		int[] loc = new int[2];
-		messageView.getLocationOnScreen(loc);
-		float ey = e.getRawY();
-		return ey >= loc[1] && ey < loc[1] + messageView.getHeight();
+		this.menuView = view;
+	}
+
+	// Returns the currently-eligible drag-scroll forwarding target whose
+	// bounds contain this touch, or null if none. Eligibility = view is
+	// VISIBLE and (for RegionTermView) horizontal scroll is enabled.
+	// msgView is gameplay-only; menuView is menu-only — they're never
+	// both visible at once, so order doesn't matter.
+	private View pickForwardTarget(MotionEvent e)
+	{
+		if (e == null)
+			return null;
+		View[] candidates = { messageView, menuView };
+		for (View v : candidates)
+		{
+			if (v == null)
+				continue;
+			if (v.getVisibility() != View.VISIBLE)
+				continue;
+			if (v instanceof RegionTermView
+					&& !((RegionTermView) v).isHorizontalScrollEnabled())
+				continue;
+			int[] loc = new int[2];
+			v.getLocationOnScreen(loc);
+			float ey = e.getRawY();
+			if (ey >= loc[1] && ey < loc[1] + v.getHeight())
+				return v;
+		}
+		return null;
 	}
 	
 
@@ -72,15 +121,18 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	}
 
 	@Override
-	public void onLongPress(MotionEvent e) 
+	public void onLongPress(MotionEvent e)
 	{
-		passThroughListener.onLongPress(e);
+		// Single-finger long-press intentionally disabled — it collides
+		// with single-finger drag-scroll on the msg/menu panels. The
+		// app context menu now opens on a two-finger long-press, handled
+		// in onTouchEvent.
 	}
 
 	@Override
 	public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY)
 	{
-		if (forwardingToMessage || messageAreaTouch)
+		if (forwardingToTarget || targetAreaTouch)
 			return true;
 		passThroughListener.onScroll(e1, e2, distanceX, distanceY);
 		return true;
@@ -150,52 +202,111 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	public boolean onTouchEvent(MotionEvent event)
 	{
 		int action = event.getAction();
+		int actionMasked = event.getActionMasked();
 
 		if (action == MotionEvent.ACTION_DOWN)
 		{
-			forwardingToMessage = false;
-			messageAreaTouch = isInMessageView(event);
-			if (messageAreaTouch)
+			forwardingToTarget = false;
+			activeForwardTarget = pickForwardTarget(event);
+			targetAreaTouch = activeForwardTarget != null;
+			if (targetAreaTouch)
 			{
 				downX = event.getRawX();
 				downY = event.getRawY();
 			}
+			twoFingerArmed = false;
+			twoFingerLongPressFired = false;
+			removeCallbacks(twoFingerLongPressFire);
 		}
 
-		if (messageAreaTouch && !forwardingToMessage
+		// Two-finger long-press: arm when a second finger touches down,
+		// disarm if either finger moves beyond touch slop or any finger
+		// lifts before the timeout fires.
+		if (actionMasked == MotionEvent.ACTION_POINTER_DOWN
+				&& event.getPointerCount() >= 2 && !twoFingerLongPressFired)
+		{
+			p0DownX = event.getX(0);
+			p0DownY = event.getY(0);
+			p1DownX = event.getX(1);
+			p1DownY = event.getY(1);
+			twoFingerArmed = true;
+			removeCallbacks(twoFingerLongPressFire);
+			postDelayed(twoFingerLongPressFire,
+					ViewConfiguration.getLongPressTimeout());
+		}
+		if (twoFingerArmed && actionMasked == MotionEvent.ACTION_MOVE
+				&& event.getPointerCount() >= 2)
+		{
+			float dx0 = event.getX(0) - p0DownX;
+			float dy0 = event.getY(0) - p0DownY;
+			float dx1 = event.getX(1) - p1DownX;
+			float dy1 = event.getY(1) - p1DownY;
+			int slopSq = touchSlop * touchSlop;
+			if (dx0 * dx0 + dy0 * dy0 > slopSq
+					|| dx1 * dx1 + dy1 * dy1 > slopSq)
+			{
+				twoFingerArmed = false;
+				removeCallbacks(twoFingerLongPressFire);
+			}
+		}
+		if (twoFingerArmed
+				&& (actionMasked == MotionEvent.ACTION_POINTER_UP
+					|| actionMasked == MotionEvent.ACTION_UP
+					|| actionMasked == MotionEvent.ACTION_CANCEL))
+		{
+			twoFingerArmed = false;
+			removeCallbacks(twoFingerLongPressFire);
+		}
+
+		// After the menu opens, swallow remaining gesture events until
+		// all fingers lift so we don't generate stray taps or scrolls
+		// that would land under the popup.
+		if (twoFingerLongPressFired)
+		{
+			if (actionMasked == MotionEvent.ACTION_UP
+					|| actionMasked == MotionEvent.ACTION_CANCEL)
+				twoFingerLongPressFired = false;
+			return true;
+		}
+
+		if (targetAreaTouch && !forwardingToTarget
 				&& action == MotionEvent.ACTION_MOVE)
 		{
 			float dx = event.getRawX() - downX;
 			float dy = event.getRawY() - downY;
 			if (dx * dx + dy * dy > touchSlop * touchSlop)
 			{
-				forwardingToMessage = true;
+				forwardingToTarget = true;
 				MotionEvent syntheticDown = MotionEvent.obtain(event);
 				syntheticDown.setAction(MotionEvent.ACTION_DOWN);
 				MotionEvent translated = translateToView(syntheticDown,
-						messageView);
-				messageView.onTouchEvent(translated);
+						activeForwardTarget);
+				activeForwardTarget.onTouchEvent(translated);
 				translated.recycle();
 				syntheticDown.recycle();
 			}
 		}
 
-		if (forwardingToMessage)
+		if (forwardingToTarget && activeForwardTarget != null)
 		{
-			MotionEvent translated = translateToView(event, messageView);
-			messageView.onTouchEvent(translated);
+			MotionEvent translated = translateToView(event, activeForwardTarget);
+			activeForwardTarget.onTouchEvent(translated);
 			translated.recycle();
 			if (action == MotionEvent.ACTION_UP
 					|| action == MotionEvent.ACTION_CANCEL)
 			{
-				forwardingToMessage = false;
-				messageAreaTouch = false;
+				forwardingToTarget = false;
+				targetAreaTouch = false;
+				activeForwardTarget = null;
 			}
 			return true;
 		}
 
 		if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
-			messageAreaTouch = false;
+		{
+			targetAreaTouch = false;
+			activeForwardTarget = null;
+		}
 		if (action == MotionEvent.ACTION_UP)
 			passThroughListener.savePosition();
 

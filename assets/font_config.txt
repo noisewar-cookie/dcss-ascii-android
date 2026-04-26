@@ -5,12 +5,21 @@
 #
 # The col/row counts in comments are the terminal character dimensions of each
 # panel region — they are fixed in the layout and shown here for reference only.
+#
+# *_scrollable=true allows horizontal drag-scrolling within that panel/menu
+# when the rendered 80-col bitmap is wider than the screen (i.e. the font
+# scale pushes content past the screen edge). Below that, scrollable is a
+# no-op. Drag area = the full rendered region of that panel/menu.
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Portrait: full screen
-# Shown during: main menu, character creation, in-game full-screen menus
+# Shown during: pregame (main menu, character creation) AND any in-game
+# menu/info screen not matched by the more specific groups below (item
+# descriptions, monster examine, lookup help, message history, level map,
+# macros, help text, etc.)
 # Terminal region: 80 cols x 24 rows
 portrait_full_font_scale=1.25
+portrait_full_scrollable=false
 
 # Portrait: map panel
 # Shown during: gameplay — top portion, dungeon viewport
@@ -35,3 +44,34 @@ portrait_msg_font_scale=1.425
 # Shown during: all screens in landscape orientation
 # Terminal region: 80 cols x 24 rows
 landscape_font_scale=1.0
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Per-menu overrides (portrait only). Each group below overrides
+# portrait_full_font_scale / portrait_full_scrollable when that menu is shown.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Item lists: inventory (i), item-use prompts (w/W/T/P/R/q/r/v/f/t),
+# drop (d), pickup, shop, stash search, known items (\)
+portrait_items_font_scale=1.5
+portrait_items_scrollable=false
+
+# Spell/ability lists: spell list (I), cast (z), memorise (M),
+# abilities (a), mutations (A)
+portrait_spells_font_scale=1.5
+portrait_spells_scrollable=false
+
+# Character overview (%)
+portrait_overview_font_scale=1.5
+portrait_overview_scrollable=true
+
+# Skill training (m)
+portrait_skills_font_scale=1.5
+portrait_skills_scrollable=true
+
+# Religion screen (^)
+portrait_religion_font_scale=1.5
+portrait_religion_scrollable=false
+
+# Hi-score screen (end of game)
+portrait_hiscores_font_scale=1.25
+portrait_hiscores_scrollable=false

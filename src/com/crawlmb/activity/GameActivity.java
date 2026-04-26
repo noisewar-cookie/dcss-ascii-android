@@ -24,6 +24,8 @@ import android.content.pm.ActivityInfo;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
+import android.view.ContextMenu;
+import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -72,6 +74,8 @@ public class GameActivity extends Activity
 	private TermView term = null;
 	private int gamePanelId = View.NO_ID;
 	private RegionTermView portraitMsgView = null;
+	private RegionTermView portraitFullView = null;
+	private View portraitContextHost = null;
 
 	protected Handler handler = null;
 
@@ -104,6 +108,14 @@ public class GameActivity extends Activity
 		MenuInflater inflater = new MenuInflater(getApplication());
 		inflater.inflate(R.menu.main, menu);
 		return true;
+	}
+
+	@Override
+	public void onCreateContextMenu(ContextMenu menu, View v,
+			ContextMenu.ContextMenuInfo menuInfo) {
+		super.onCreateContextMenu(menu, v, menuInfo);
+		new MenuInflater(getApplication()).inflate(R.menu.main, menu);
+		menu.setHeaderTitle(R.string.menu);
 	}
 
 	@Override
@@ -337,6 +349,7 @@ public class GameActivity extends Activity
 		RegionTermView fullView = new RegionTermView(this, 0, 0, 24, 80);
 		fullView.setFontScaleMultiplier(fontConfig.portraitFullFontScale);
 		fullView.setGameStartTrigger(handler);
+		portraitFullView = fullView;
 		gamePanel.addView(fullView, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
@@ -377,7 +390,8 @@ public class GameActivity extends Activity
 		gamePanelParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
 		gamePanel.setLayoutParams(gamePanelParams);
 
-		registerForContextMenu(mapView);
+		registerForContextMenu(gamePanel);
+		portraitContextHost = gamePanel;
 		mapView.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 
 		screenLayout.addView(gamePanel);
@@ -388,6 +402,8 @@ public class GameActivity extends Activity
 		router.addRegion(mapView);
 		router.addRegion(hudView);
 		router.addRegion(msgView);
+		router.setFontConfig(fontConfig);
+		router.setRedrawRequester(() -> gameKeyListener.nativew.redrawScreen());
 
 		final float maxMapScale = fontConfig.portraitMapFontScale;
 		final float maxHudScale = fontConfig.portraitHudFontScale;
@@ -445,6 +461,9 @@ public class GameActivity extends Activity
 
 	private TerminalRenderer buildLandscapeLayout(boolean hapticFeedbackEnabled) {
 		gamePanelId = View.NO_ID;
+		portraitMsgView = null;
+		portraitFullView = null;
+		portraitContextHost = null;
 		FontConfig fontConfig = FontConfig.load(getAssets());
 		term = new TermView(this, gameKeyListener);
 		term.setFontScaleMultiplier(fontConfig.landscapeFontScale);
@@ -477,6 +496,8 @@ public class GameActivity extends Activity
 		}
 		else
 		{
+			final View contextHost = portraitContextHost;
+			final View hapticSource = view;
 			view.setPassThroughListener(new PassThroughListener()
 			{
 				@Override
@@ -491,12 +512,20 @@ public class GameActivity extends Activity
 				@Override
 				public void savePosition() {}
 				@Override
-				public void onLongPress(android.view.MotionEvent e) {}
+				public void onLongPress(android.view.MotionEvent e) {
+					if (contextHost == null)
+						return;
+					hapticSource.performHapticFeedback(
+							HapticFeedbackConstants.LONG_PRESS);
+					contextHost.showContextMenu();
+				}
 			});
 		}
 
 		if (portraitMsgView != null)
 			view.setMessageView(portraitMsgView);
+		if (portraitFullView != null)
+			view.setMenuView(portraitFullView);
 
 		view.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 		screenLayout.addView(view);

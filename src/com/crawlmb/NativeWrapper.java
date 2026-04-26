@@ -140,4 +140,17 @@ public class NativeWrapper
 		}
 	}
 
+	// Ask DCSS to repaint the current screen state. Used after a font scale
+	// change recreates the underlying bitmap (which is then blank): DCSS
+	// re-issues drawPoint calls for every cell, refilling the new bitmap.
+	// Distinct from resize() which also re-runs onGameStart and resets
+	// detection state.
+	public void redrawScreen()
+	{
+		synchronized (display_lock)
+		{
+			refreshTerminal();
+		}
+	}
+
 }
