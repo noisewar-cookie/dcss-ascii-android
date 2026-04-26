@@ -26,7 +26,7 @@ public class EditConfigFilePreference extends Preference
 
 	private void setEditConfigFileIntent(String key)
 	{
-		File file = new File(getContext().getFilesDir() + "/settings/" + key + ".txt");
+		File file = new File(Paths.getSettingsDir(getContext()), key + ".txt");
 		Uri uri = Uri.fromFile(file);
 		Intent editConfigIntent = new Intent(Intent.ACTION_VIEW ,uri);
 		editConfigIntent.setDataAndType(uri, "text/plain"); 

@@ -411,7 +411,7 @@ public class ConfigEditor extends Activity
   // Same method as in CrawlAppActivity. Should probably put this in one place,
   // but ceebs right now.
     AssetManager assetManager = getAssets();
-    String destname = getFilesDir().toString() + "/settings/init.txt";
+    String destname = new File(com.crawlmb.Paths.getSettingsDir(this), "init.txt").getPath();
     File newasset = new File(destname);
     try
     {

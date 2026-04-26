@@ -21,7 +21,11 @@ public class NativeWrapper
 
 	public void gameStart()
 	{
-		initGame(renderer.getContext().getFilesDir().getPath());
+		android.content.Context ctx = renderer.getContext();
+		String dataDir = ctx.getFilesDir().getPath();
+		String settingsDir = Paths.getSettingsDir(ctx).getPath();
+		String morgueDir = Paths.getMorgueDir(ctx).getPath();
+		initGame(dataDir, settingsDir, morgueDir);
 	}
 
 	private void showLoadingMessage()
@@ -39,7 +43,7 @@ public class NativeWrapper
 		}
 	}
 
-	public native void initGame(String initFileLocation);
+	public native void initGame(String dataDir, String settingsDir, String morgueDir);
 	public static native void nativeSaveGame();
 
 	public NativeWrapper(GameKeyListener s)

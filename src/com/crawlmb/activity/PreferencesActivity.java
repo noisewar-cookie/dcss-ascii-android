@@ -287,14 +287,22 @@ public class PreferencesActivity extends PreferenceActivity implements
 
     private void backupDirectory(String destination, String relativeDir) {
         showDialog(DIALOG_COPY_FILES_PROGRESS);
-        new CopySaveDirectoryTask(false).execute(getFilesDir() + relativeDir,
+        new CopySaveDirectoryTask(false).execute(localPathFor(relativeDir),
                 destination + relativeDir);
     }
 
     private void restoreDirectory(String source, String relativeDir) {
         showDialog(DIALOG_COPY_FILES_PROGRESS);
         new CopySaveDirectoryTask(true).execute(source + relativeDir,
-                getFilesDir() + relativeDir);
+                localPathFor(relativeDir));
+    }
+
+    // Saves stay in internal storage; morgue lives in user-visible external
+    // storage (see com.crawlmb.Paths).
+    private String localPathFor(String relativeDir) {
+        if ("/morgue".equals(relativeDir))
+            return com.crawlmb.Paths.getMorgueDir(this).getPath();
+        return getFilesDir() + relativeDir;
     }
 
     @Override
@@ -342,7 +350,7 @@ public class PreferencesActivity extends PreferenceActivity implements
 
         // The macro file is a special case. We should only show this setting if
         // the file exists
-        File macroFile = new File(getFilesDir() + "/settings/macro.txt");
+        File macroFile = new File(com.crawlmb.Paths.getSettingsDir(this), "macro.txt");
         if (macroFile.exists()) {
             EditConfigFilePreference editConfigFilePreference = new EditConfigFilePreference(
                     this, "macro");

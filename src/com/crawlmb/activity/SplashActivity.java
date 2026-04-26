@@ -30,6 +30,7 @@ import android.util.Log;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import com.crawlmb.Paths;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
 
@@ -299,18 +300,27 @@ public class SplashActivity extends Activity {
             publishProgress(++installedFiles);
             mkdir("/saves/bones");
             publishProgress(++installedFiles);
-            mkdir("/morgue");
+
+            // settings/ and morgue/ live in user-visible external storage
+            // (Paths.getSettingsDir / getMorgueDir). Migrate from any old
+            // internal copy on first run after this change, then ensure the
+            // external dirs exist.
+            migrateUserVisibleDir("settings");
+            migrateUserVisibleDir("morgue");
+            Paths.getMorgueDir(SplashActivity.this);
             publishProgress(++installedFiles);
 
             delete(new File(getFilesDir() + "/dat"));
             copyFileOrDir("dat");
             // Create settings folder if needed, but always refresh init.txt
             // (other files like macro.txt are preserved)
-            File settingsFolder = new File(getFilesDir() + "/settings");
-            if (!settingsFolder.exists()) {
-                copyFileOrDir("settings");
+            File settingsFolder = Paths.getSettingsDir(SplashActivity.this);
+            if (settingsFolder.list() == null
+                    || settingsFolder.list().length == 0) {
+                copyAssetDirTo("settings", settingsFolder);
             } else {
-                copyFile("settings/init.txt");
+                copyAssetFileTo("settings/init.txt",
+                        new File(settingsFolder, "init.txt"));
             }
             copyFileOrDir("docs");
             writeVersionFile();
@@ -369,6 +379,104 @@ public class SplashActivity extends Activity {
             }
         }
 
+
+        // Move <name>/ from internal getFilesDir() to its external location
+        // if the external dir is empty/missing. One-shot upgrade path for
+        // users installed before settings/morgue moved to external storage.
+        private void migrateUserVisibleDir(String name) {
+            File oldDir = new File(getFilesDir(), name);
+            if (!oldDir.exists() || !oldDir.isDirectory())
+                return;
+            File newDir = Paths.getUserVisibleDir(SplashActivity.this, name);
+            String[] existing = newDir.list();
+            if (existing != null && existing.length > 0)
+                return;
+            File[] items = oldDir.listFiles();
+            if (items != null) {
+                for (File f : items) {
+                    File dest = new File(newDir, f.getName());
+                    if (f.isDirectory())
+                        copyTree(f, dest);
+                    else
+                        copyFileTo(f, dest);
+                }
+            }
+            delete(oldDir);
+        }
+
+        private void copyTree(File src, File dest) {
+            if (src.isDirectory()) {
+                dest.mkdirs();
+                File[] items = src.listFiles();
+                if (items != null) {
+                    for (File f : items)
+                        copyTree(f, new File(dest, f.getName()));
+                }
+            } else {
+                copyFileTo(src, dest);
+            }
+        }
+
+        private void copyFileTo(File src, File dest) {
+            try {
+                BufferedInputStream in = new BufferedInputStream(
+                        new FileInputStream(src));
+                BufferedOutputStream out = new BufferedOutputStream(
+                        new FileOutputStream(dest, false));
+                byte[] buf = new byte[8192];
+                int len;
+                while ((len = in.read(buf)) != -1)
+                    out.write(buf, 0, len);
+                out.flush();
+                out.close();
+                in.close();
+            } catch (IOException ex) {
+                Log.e(TAG, "Migration copy failed for " + src + ": " + ex);
+            }
+        }
+
+        // Copy an asset directory tree to an arbitrary destination File
+        // (the legacy copyFileOrDir hardcodes getFilesDir()).
+        private void copyAssetDirTo(String assetPath, File destDir) {
+            AssetManager assetManager = getAssets();
+            try {
+                String[] entries = assetManager.list(assetPath);
+                publishProgress(++installedFiles, TOTAL_FILES);
+                if (entries.length == 0) {
+                    copyAssetFileTo(assetPath, destDir);
+                    return;
+                }
+                destDir.mkdirs();
+                chmod(destDir.getAbsolutePath(), 0777);
+                for (String entry : entries) {
+                    copyAssetDirTo(assetPath + "/" + entry,
+                            new File(destDir, entry));
+                }
+            } catch (IOException ex) {
+                Log.e(TAG, "IOException: " + ex);
+            }
+        }
+
+        private void copyAssetFileTo(String assetPath, File dest) {
+            AssetManager assetManager = getAssets();
+            try {
+                dest.createNewFile();
+                BufferedOutputStream out = new BufferedOutputStream(
+                        new FileOutputStream(dest, false));
+                BufferedInputStream in = new BufferedInputStream(
+                        assetManager.open(assetPath));
+                byte[] buf = new byte[8192];
+                int len;
+                while ((len = in.read(buf)) != -1)
+                    out.write(buf, 0, len);
+                out.flush();
+                out.close();
+                in.close();
+            } catch (IOException ex) {
+                Log.e(TAG, "Exception copying asset " + assetPath + ": " + ex);
+            }
+            chmod(dest.getAbsolutePath(), 0666);
+        }
 
         private void copyFile(String fileName) {
             AssetManager assetManager = getAssets();

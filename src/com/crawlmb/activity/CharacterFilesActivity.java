@@ -22,7 +22,7 @@ public class CharacterFilesActivity extends ListActivity
 	{
 		super.onCreate(bundle);
 		
-		File morgueDirFile = new File(getFilesDir() + "/morgue");
+		File morgueDirFile = com.crawlmb.Paths.getMorgueDir(this);
 		charFiles = morgueDirFile.list();
 		if (charFiles == null || charFiles.length == 0)
 		{
@@ -39,7 +39,7 @@ public class CharacterFilesActivity extends ListActivity
 	protected void onListItemClick (ListView l, View v, int position, long id)
 	{
 		String charFileName = charFiles[position];
-		File file = new File(getFilesDir() + "/morgue/" + charFileName);
+		File file = new File(com.crawlmb.Paths.getMorgueDir(this), charFileName);
 		Uri uri = Uri.fromFile(file);
 		Intent intent = new Intent();
 		intent.setDataAndType(uri, "text/plain"); 
