@@ -55,6 +55,18 @@ for patch in "$PATCHES_DIR"/*.patch; do
 done
 echo ""
 
+# ── Step 3b: Sync help text files into assets/docs ──
+# command.cc:_get_help_section() opens every entry in help_files[] and asserts
+# on failure. Missing any of these crashes the app when '?' is pressed in-game.
+echo "Syncing help text files into assets/docs..."
+DOCS_SRC="$PROJECT_DIR/android-crawl-console/crawl-ref/docs"
+DOCS_DST="$PROJECT_DIR/assets/docs"
+mkdir -p "$DOCS_DST"
+for f in crawl_manual.txt aptitudes.txt quickstart.txt macros_guide.txt options_guide.txt; do
+    cp -v "$DOCS_SRC/$f" "$DOCS_DST/$f"
+done
+echo ""
+
 # ── Step 4: Generate headers ──
 echo "Generating headers..."
 cd "$SOURCE_DIR"
