@@ -354,7 +354,6 @@ public class GameActivity extends Activity
 				RegionRouter.HUD_START_ROW, RegionRouter.HUD_START_COL,
 				RegionRouter.HUD_END_ROW, RegionRouter.HUD_END_COL);
 		hudView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
-		hudView.setOffsetCols(1);
 
 		RegionTermView msgView = new RegionTermView(this,
 				RegionRouter.MSG_START_ROW, RegionRouter.MSG_START_COL,
@@ -374,7 +373,7 @@ public class GameActivity extends Activity
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
 		RelativeLayout.LayoutParams gamePanelParams = new RelativeLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
 		gamePanelParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
 		gamePanel.setLayoutParams(gamePanelParams);
 

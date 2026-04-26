@@ -49,6 +49,9 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	{
 		if (messageView == null || e == null)
 			return false;
+		// Skip routing when the message panel is hidden (menu mode).
+		if (messageView.getVisibility() != View.VISIBLE)
+			return false;
 		int[] loc = new int[2];
 		messageView.getLocationOnScreen(loc);
 		float ey = e.getRawY();
