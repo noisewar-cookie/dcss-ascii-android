@@ -20,23 +20,24 @@ package com.crawlmb.activity;
 
 import android.app.Dialog;
 import android.app.ProgressDialog;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.preference.DialogPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceCategory;
 import android.preference.PreferenceScreen;
 import android.util.Log;
 import android.view.WindowManager;
-import android.widget.EditText;
 import android.widget.Toast;
 
+import androidx.documentfile.provider.DocumentFile;
+
 import com.crawlmb.EditConfigFilePreference;
+import com.crawlmb.Paths;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.keymap.KeyMapPreference;
@@ -51,105 +52,181 @@ import java.io.OutputStream;
 public class PreferencesActivity extends PreferenceActivity implements
         OnSharedPreferenceChangeListener {
 
-    private final class CopySaveDirectoryTask extends
-            AsyncTask<String, Void, Boolean> {
-        public String TAG = "CopySaveDirectoryTask";
-        private String source;
-        private String destination;
-        private boolean reloadCrawl;
+    // Copies a directory tree between an internal File location and a
+    // user-chosen Storage Access Framework tree (Uri). Used for save/morgue
+    // backup and restore. The user-chosen tree is the *parent* — backup
+    // creates a "saves" or "morgue" subdir under it; restore reads the same
+    // subdir name back out. This mirrors the previous EditText UX where
+    // users typed a parent path.
+    // Enums live at the enclosing-class level because Java < 16 disallows
+    // static (and thus implicitly-static) declarations inside non-static
+    // inner classes. SafCopyTask is non-static so it can call showDialog /
+    // removeDialog / setResult / finish on the activity directly.
+    private enum CopyDirection { BACKUP, RESTORE }
+    private enum CopyResult { SUCCESS, ERROR_IO, ERROR_NOT_FOUND }
 
-        public CopySaveDirectoryTask(boolean reloadCrawl) {
-            this.reloadCrawl = reloadCrawl;
-        }
+    private final class SafCopyTask extends AsyncTask<Void, Void, CopyResult> {
+        private static final String TAG = "SafCopyTask";
 
-        void deleteRecursive(File fileOrDirectory) {
-            if (fileOrDirectory.isDirectory())
-                for (File child : fileOrDirectory.listFiles())
-                    deleteRecursive(child);
+        private final CopyDirection direction;
+        private final Uri treeUri;
+        private final File localDir;
+        private final String childName;
+        private final boolean reloadCrawlOnSuccess;
 
-            fileOrDirectory.delete();
+        SafCopyTask(CopyDirection direction, Uri treeUri, File localDir,
+                String childName, boolean reloadCrawlOnSuccess) {
+            this.direction = direction;
+            this.treeUri = treeUri;
+            this.localDir = localDir;
+            this.childName = childName;
+            this.reloadCrawlOnSuccess = reloadCrawlOnSuccess;
         }
 
         @Override
-        protected Boolean doInBackground(String... params) {
-            source = params[0];
-            destination = params[1];
-            deleteRecursive(new File(destination));
-            boolean result = copyFileOrDir(source, "");
-
-            return result;
+        protected void onPreExecute() {
+            showDialog(DIALOG_COPY_FILES_PROGRESS);
         }
 
-        private boolean copyFileOrDir(String prefix, String fileName) {
-            String originalPath = prefix + "/" + fileName;
-            File originalPathFile = new File(originalPath);
-            File[] listOfFiles = originalPathFile.listFiles();
-            if (listOfFiles == null) // then we know it's a file, not a
-            // directory
-            {
-                return copyFile(originalPath, fileName);
-            } else {
-                String destPath = destination + "/" + fileName;
-
-                File dir = new File(destPath);
-                boolean mkdirSuccess = dir.mkdir();
-                if (!mkdirSuccess) {
-                    return false;
+        @Override
+        protected CopyResult doInBackground(Void... v) {
+            DocumentFile tree = DocumentFile.fromTreeUri(
+                    PreferencesActivity.this, treeUri);
+            if (tree == null)
+                return CopyResult.ERROR_IO;
+            try {
+                if (direction == CopyDirection.BACKUP) {
+                    DocumentFile existing = tree.findFile(childName);
+                    if (existing != null && !existing.delete())
+                        return CopyResult.ERROR_IO;
+                    DocumentFile destChild = tree.createDirectory(childName);
+                    if (destChild == null)
+                        return CopyResult.ERROR_IO;
+                    copyFileTreeToSaf(localDir, destChild);
+                } else {
+                    DocumentFile srcChild = tree.findFile(childName);
+                    if (srcChild == null || !srcChild.isDirectory())
+                        return CopyResult.ERROR_NOT_FOUND;
+                    deleteRecursive(localDir);
+                    if (!localDir.mkdirs() && !localDir.isDirectory())
+                        return CopyResult.ERROR_IO;
+                    copySafTreeToFile(srcChild, localDir);
                 }
+                return CopyResult.SUCCESS;
+            } catch (IOException ex) {
+                Log.e(TAG, "Copy failed: " + ex);
+                return CopyResult.ERROR_IO;
+            }
+        }
 
-                for (int i = 0; i < listOfFiles.length; i++) {
-                    boolean result = copyFileOrDir(prefix, fileName + "/"
-                            + listOfFiles[i].getName());
-                    if (!result) {
-                        return false;
+        private void copyFileTreeToSaf(File src, DocumentFile destDir)
+                throws IOException {
+            File[] kids = src.listFiles();
+            if (kids == null)
+                return;
+            for (File kid : kids) {
+                if (kid.isDirectory()) {
+                    DocumentFile sub = destDir.createDirectory(kid.getName());
+                    if (sub == null)
+                        throw new IOException(
+                                "createDirectory failed: " + kid.getName());
+                    copyFileTreeToSaf(kid, sub);
+                } else {
+                    DocumentFile out = destDir.createFile(
+                            "application/octet-stream", kid.getName());
+                    if (out == null)
+                        throw new IOException(
+                                "createFile failed: " + kid.getName());
+                    InputStream in = null;
+                    OutputStream os = null;
+                    try {
+                        in = new FileInputStream(kid);
+                        os = getContentResolver().openOutputStream(out.getUri());
+                        if (os == null)
+                            throw new IOException("openOutputStream null");
+                        streamCopy(in, os);
+                    } finally {
+                        closeQuietly(in);
+                        closeQuietly(os);
                     }
                 }
-                return true;
             }
         }
 
-        private boolean copyFile(String originalPath, String fileName) {
-            String destname = destination + "/" + fileName;
-            Log.d(TAG, "Copying: " + fileName + " to " + destname);
-            File destinationFile = new File(destname);
-            try {
-                destinationFile.createNewFile();
-
-                InputStream in = new FileInputStream(originalPath);
-                OutputStream out = new FileOutputStream(destinationFile, false);
-
-                // Transfer bytes from in to out
-                byte[] buf = new byte[1024];
-                int len;
-                while ((len = in.read(buf)) > 0) {
-                    out.write(buf, 0, len);
+        private void copySafTreeToFile(DocumentFile srcDir, File destDir)
+                throws IOException {
+            for (DocumentFile kid : srcDir.listFiles()) {
+                String name = kid.getName();
+                if (name == null)
+                    continue;
+                File destChild = new File(destDir, name);
+                if (kid.isDirectory()) {
+                    if (!destChild.mkdirs() && !destChild.isDirectory())
+                        throw new IOException("mkdir failed: " + name);
+                    copySafTreeToFile(kid, destChild);
+                } else {
+                    InputStream in = null;
+                    OutputStream os = null;
+                    try {
+                        in = getContentResolver().openInputStream(kid.getUri());
+                        if (in == null)
+                            throw new IOException("openInputStream null");
+                        os = new FileOutputStream(destChild);
+                        streamCopy(in, os);
+                    } finally {
+                        closeQuietly(in);
+                        closeQuietly(os);
+                    }
                 }
-                in.close();
-                out.close();
-            } catch (IOException ex) {
-                Log.e(TAG, "Exception occured copying " + fileName + ": " + ex);
-                return false;
             }
-            return true;
+        }
+
+        private void streamCopy(InputStream in, OutputStream out)
+                throws IOException {
+            byte[] buf = new byte[8192];
+            int len;
+            while ((len = in.read(buf)) > 0)
+                out.write(buf, 0, len);
+        }
+
+        private void closeQuietly(java.io.Closeable c) {
+            if (c == null)
+                return;
+            try { c.close(); } catch (IOException ignored) {}
+        }
+
+        private void deleteRecursive(File f) {
+            if (f.isDirectory()) {
+                File[] kids = f.listFiles();
+                if (kids != null)
+                    for (File k : kids)
+                        deleteRecursive(k);
+            }
+            f.delete();
         }
 
         @Override
-        protected void onPostExecute(Boolean result) {
+        protected void onPostExecute(CopyResult r) {
             removeDialog(DIALOG_COPY_FILES_PROGRESS);
-            int toastTextResource;
-            if (result) {
-                toastTextResource = R.string.files_copied_successfully;
-                if (reloadCrawl) {
-                    Intent resultIntent = new Intent();
-                    resultIntent.putExtra("reloadCrawl", true);
-                    setResult(RESULT_OK, resultIntent);
-                    finish();
-                }
-            } else {
-                toastTextResource = R.string.error_copying_files;
+            int toastRes;
+            switch (r) {
+                case SUCCESS:
+                    toastRes = R.string.files_copied_successfully;
+                    break;
+                case ERROR_NOT_FOUND:
+                    toastRes = R.string.backup_not_found_in_folder;
+                    break;
+                default:
+                    toastRes = R.string.error_copying_files;
             }
-            Toast.makeText(PreferencesActivity.this, toastTextResource,
+            Toast.makeText(PreferencesActivity.this, toastRes,
                     Toast.LENGTH_LONG).show();
+            if (r == CopyResult.SUCCESS && reloadCrawlOnSuccess) {
+                Intent resultIntent = new Intent();
+                resultIntent.putExtra("reloadCrawl", true);
+                setResult(RESULT_OK, resultIntent);
+                finish();
+            }
         }
     }
 
@@ -171,138 +248,82 @@ public class PreferencesActivity extends PreferenceActivity implements
 
         setCustomizeKeyboardIntent();
 
-        addExportMorguePreference();
-        addRestoreMorguePreference();
-
-        addExportSavePreference();
-        addRestoreSavePreference();
+        addBackupRestorePreferences();
     }
 
-    private void addExportMorguePreference() {
-        DialogPreference backupDialogPreference = new DialogPreference(this,
-                null) {
+    // Tap a backup/restore preference -> launch the system folder picker
+    // (ACTION_OPEN_DOCUMENT_TREE). The chosen Uri comes back via
+    // onActivityResult, identified by request code, and is handed to a
+    // SafCopyTask. No storage permissions needed; the picker grant scopes
+    // access to that one folder for this session.
+    private static final int REQ_BACKUP_SAVES = 1001;
+    private static final int REQ_RESTORE_SAVES = 1002;
+    private static final int REQ_BACKUP_MORGUE = 1003;
+    private static final int REQ_RESTORE_MORGUE = 1004;
+
+    private void addBackupRestorePreferences() {
+        addPickerPreference("morgue", R.string.backup_morgue_directory,
+                REQ_BACKUP_MORGUE);
+        addPickerPreference("morgue", R.string.restore_morgue_directory,
+                REQ_RESTORE_MORGUE);
+        addPickerPreference("saveFiles", R.string.backup_save_directory,
+                REQ_BACKUP_SAVES);
+        addPickerPreference("saveFiles", R.string.restore_save_directory,
+                REQ_RESTORE_SAVES);
+    }
+
+    private void addPickerPreference(String categoryKey, int titleRes,
+            final int requestCode) {
+        Preference p = new Preference(this);
+        p.setTitle(titleRes);
+        p.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
-            public void onClick(DialogInterface dialog, int which) {
-                switch (which) {
-                    case DialogInterface.BUTTON_POSITIVE:
-                        // Get stuff in edittext, back it up to that directory
-                        EditText directoryBox = (EditText) getDialog()
-                                .findViewById(R.id.directoryBox);
-                        String destination = directoryBox.getText().toString();
-                        backupDirectory(destination, "/morgue");
-                        break;
-                }
+            public boolean onPreferenceClick(Preference pref) {
+                launchFolderPicker(requestCode);
+                return true;
             }
-        };
-        backupDialogPreference.setDialogLayoutResource(R.layout.backup_morgue_dialog);
-        backupDialogPreference.setDialogTitle(R.string.backup_morgue_directory);
-        backupDialogPreference.setTitle(R.string.backup_morgue_directory);
-        backupDialogPreference.setPositiveButtonText(R.string.backup);
-        backupDialogPreference.setNegativeButtonText(android.R.string.cancel);
-
-        PreferenceCategory saveFilesCategory = (PreferenceCategory) findPreference("morgue");
-        saveFilesCategory.addPreference(backupDialogPreference);
+        });
+        ((PreferenceCategory) findPreference(categoryKey)).addPreference(p);
     }
 
-    private void addExportSavePreference() {
-        DialogPreference backupDialogPreference = new DialogPreference(this,
-                null) {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                switch (which) {
-                    case DialogInterface.BUTTON_POSITIVE:
-                        // Get stuff in edittext, back it up to that directory
-                        EditText directoryBox = (EditText) getDialog()
-                                .findViewById(R.id.directoryBox);
-                        String destination = directoryBox.getText().toString();
-                        backupDirectory(destination, "/saves");
-                        break;
-                }
-            }
-        };
-        backupDialogPreference.setDialogLayoutResource(R.layout.backup_saves_dialog);
-        backupDialogPreference.setDialogTitle(R.string.backup_save_directory);
-        backupDialogPreference.setTitle(R.string.backup_save_directory);
-        backupDialogPreference.setPositiveButtonText(R.string.backup);
-        backupDialogPreference.setNegativeButtonText(android.R.string.cancel);
-
-        PreferenceCategory saveFilesCategory = (PreferenceCategory) findPreference("saveFiles");
-        saveFilesCategory.addPreference(backupDialogPreference);
-
+    private void launchFolderPicker(int requestCode) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        startActivityForResult(intent, requestCode);
     }
 
-    private void addRestoreSavePreference() {
-        DialogPreference backupDialogPreference = new DialogPreference(this,
-                null) {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                switch (which) {
-                    case DialogInterface.BUTTON_POSITIVE:
-                        // Get stuff in edittext, restore it from that directory
-                        EditText directoryBox = (EditText) getDialog()
-                                .findViewById(R.id.directoryBox);
-                        String source = directoryBox.getText().toString();
-                        restoreDirectory(source, "/saves");
-                        break;
-                }
-            }
-        };
-        backupDialogPreference.setDialogLayoutResource(R.layout.restore_saves_dialog);
-        backupDialogPreference.setDialogTitle(R.string.restore_save_directory);
-        backupDialogPreference.setTitle(R.string.restore_save_directory);
-        backupDialogPreference.setPositiveButtonText(R.string.restore);
-        backupDialogPreference.setNegativeButtonText(android.R.string.cancel);
-
-        PreferenceCategory saveFilesCategory = (PreferenceCategory) findPreference("saveFiles");
-        saveFilesCategory.addPreference(backupDialogPreference);
-
-    }
-
-    private void addRestoreMorguePreference() {
-        DialogPreference backupDialogPreference = new DialogPreference(this,
-                null) {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                switch (which) {
-                    case DialogInterface.BUTTON_POSITIVE:
-                        // Get stuff in edittext, restore it from that directory
-                        EditText directoryBox = (EditText) getDialog()
-                                .findViewById(R.id.directoryBox);
-                        String source = directoryBox.getText().toString();
-                        restoreDirectory(source, "/morgue");
-                        break;
-                }
-            }
-        };
-        backupDialogPreference.setDialogLayoutResource(R.layout.restore_morgue_dialog);
-        backupDialogPreference.setDialogTitle(R.string.restore_morgue_directory);
-        backupDialogPreference.setTitle(R.string.restore_morgue_directory);
-        backupDialogPreference.setPositiveButtonText(R.string.restore);
-        backupDialogPreference.setNegativeButtonText(android.R.string.cancel);
-
-        PreferenceCategory saveFilesCategory = (PreferenceCategory) findPreference("morgue");
-        saveFilesCategory.addPreference(backupDialogPreference);
-
-    }
-
-    private void backupDirectory(String destination, String relativeDir) {
-        showDialog(DIALOG_COPY_FILES_PROGRESS);
-        new CopySaveDirectoryTask(false).execute(localPathFor(relativeDir),
-                destination + relativeDir);
-    }
-
-    private void restoreDirectory(String source, String relativeDir) {
-        showDialog(DIALOG_COPY_FILES_PROGRESS);
-        new CopySaveDirectoryTask(true).execute(source + relativeDir,
-                localPathFor(relativeDir));
-    }
-
-    // Saves stay in internal storage; morgue lives in user-visible external
-    // storage (see com.crawlmb.Paths).
-    private String localPathFor(String relativeDir) {
-        if ("/morgue".equals(relativeDir))
-            return com.crawlmb.Paths.getMorgueDir(this).getPath();
-        return getFilesDir() + relativeDir;
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode,
+            Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null)
+            return;
+        Uri uri = data.getData();
+        if (uri == null)
+            return;
+        File savesDir = new File(getFilesDir(), "saves");
+        File morgueDir = Paths.getMorgueDir(this);
+        switch (requestCode) {
+            case REQ_BACKUP_SAVES:
+                new SafCopyTask(CopyDirection.BACKUP, uri,
+                        savesDir, "saves", false).execute();
+                break;
+            case REQ_RESTORE_SAVES:
+                // reload Crawl after restore so the running game picks up
+                // the new save state.
+                new SafCopyTask(CopyDirection.RESTORE, uri,
+                        savesDir, "saves", true).execute();
+                break;
+            case REQ_BACKUP_MORGUE:
+                new SafCopyTask(CopyDirection.BACKUP, uri,
+                        morgueDir, "morgue", false).execute();
+                break;
+            case REQ_RESTORE_MORGUE:
+                new SafCopyTask(CopyDirection.RESTORE, uri,
+                        morgueDir, "morgue", false).execute();
+                break;
+        }
     }
 
     @Override

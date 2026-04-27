@@ -2,9 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     android:installLocation="preferExternal" >
 
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+    <!-- No storage permissions needed: backup/restore uses Storage Access
+         Framework (ACTION_OPEN_DOCUMENT_TREE), settings/morgue live in
+         getExternalFilesDir(), and saves stay in app-private internal. -->
 
     <!-- Compile SDK specified in build.gradle -->
 

@@ -160,24 +160,21 @@ void init_java_methods( JNIEnv* env1, jobject object )
 
 extern "C"
 {
-	void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jInitLocation);
+	void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir);
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
 };
 
-void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jCrawlDirectory)
+void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir)
 {
 	init_java_methods(env, object);
-	const char *constCrawlDirectory = env->GetStringUTFChars(jCrawlDirectory, NULL);
+	const char *dataDir = env->GetStringUTFChars(jDataDir, NULL);
+	const char *settingsDir = env->GetStringUTFChars(jSettingsDir, NULL);
+	const char *morgueDir = env->GetStringUTFChars(jMorgueDir, NULL);
 
-	const char * settingsSubDir = "/settings";
-	int macroDirectoryStrlen = strlen(constCrawlDirectory) + strlen(settingsSubDir);
-	char macroDirectory[macroDirectoryStrlen + 1];
-	strcpy(macroDirectory,constCrawlDirectory);
-	strcat(macroDirectory, settingsSubDir);
-
-	int argc = 7;
-	char *argv[] = {(char*)"", (char*)"-dir", (char*)constCrawlDirectory,
-                      (char*)"-macro", macroDirectory,
+	int argc = 9;
+	char *argv[] = {(char*)"", (char*)"-dir", (char*)dataDir,
+                      (char*)"-macro", (char*)settingsDir,
+                      (char*)"-morgue", (char*)morgueDir,
                       (char*)"-extra-opt-first", (char*)"char_set=ascii"};
 	main(argc, argv);
 }

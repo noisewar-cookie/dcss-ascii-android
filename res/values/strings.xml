@@ -23,18 +23,13 @@
     <string name="morgue">Morgue</string>
     <string name="save_files">Save Files</string>
     <string name="backup_save_directory">Backup save directory</string>
-    <string name="backup_saves_dialog_message">The save directory will be backed up to here:</string>
     <string name="backup_morgue_directory">Backup morgue directory</string>
-    <string name="backup_morgue_dialog_message">The morgue directory will be backed up to here:</string>
-    <string name="backup">Backup</string>
     <string name="restore_save_directory">Restore save directory</string>
-    <string name="restore_saves_dialog_message">The save directory will be restored from here:</string>
     <string name="restore_morgue_directory">Restore morgue directory</string>
-    <string name="restore_morgue_dialog_message">The morgue directory will be restored from here:</string>
-    <string name="restore">Restore</string>
     <string name="copying_files">Copying files...</string>
     <string name="files_copied_successfully">Files copied successfully</string>
     <string name="error_copying_files">Error copying files</string>
+    <string name="backup_not_found_in_folder">No backup folder found in the selected location.</string>
 
     <string name="preferences_vibrate_title">Vibrate</string>
     <string name="preferences_vibrate_summary">Enable or disable vibration in game</string>
