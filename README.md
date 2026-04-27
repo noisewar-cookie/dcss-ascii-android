@@ -50,6 +50,22 @@ cd ..
 
 The debug APK will be at `build/outputs/apk/debug/dcss-ascii-android-debug.apk`.
 
+### Rebuilding after upstream or patch changes
+
+Re-run `setup.sh` whenever you:
+
+- Bump the `android-crawl-console/` submodule pointer (e.g., DCSS upstream version bump)
+- Modify anything under `android-console-patches/` (`Android.mk`, `Application.mk`, `libandroid.cc`, or any `*.patch`)
+
+`setup.sh` re-applies custom files and patches into the submodule, regenerates auto-generated headers from submodule sources, and recomputes `assets/dat-hash.txt` — a content hash that `SplashActivity` uses to decide whether to re-extract game data on install. Skipping it can ship an APK whose stored hash doesn't match its bundled `dat/` content, leaving existing users running new code against their old extracted files.
+
+```bash
+cd android-console-patches
+bash setup.sh
+cd ..
+./gradlew assembleDebug
+```
+
 ## License
 
 This project is licensed under the [GNU General Public License v2.0](LICENSE) (or later), the same license as Dungeon Crawl Stone Soup.

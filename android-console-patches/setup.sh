@@ -67,6 +67,23 @@ for f in crawl_manual.txt aptitudes.txt quickstart.txt macros_guide.txt options_
 done
 echo ""
 
+# ── Step 3c: Compute content hash of assets/dat/ ──
+# SplashActivity reads this and compares to the installed copy in filesDir.
+# If they match, dat/ is not re-extracted on launch — preserving file mtimes
+# so DCSS's TextDB freshness check (database.cc:_needs_update) keeps the
+# already-built SQLite caches valid. Hashes content + relative path only;
+# mtimes/sizes/perms are ignored so identical content always produces the
+# same hash regardless of when the tree was checked out.
+echo "Computing assets/dat/ content hash..."
+DAT_DIR="$PROJECT_DIR/assets/dat"
+HASH_FILE="$PROJECT_DIR/assets/dat-hash.txt"
+(
+    cd "$DAT_DIR"
+    find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
+) | sha256sum | awk '{print $1}' > "$HASH_FILE"
+echo "  dat-hash.txt: $(cat "$HASH_FILE")"
+echo ""
+
 # ── Step 4: Generate headers ──
 echo "Generating headers..."
 cd "$SOURCE_DIR"

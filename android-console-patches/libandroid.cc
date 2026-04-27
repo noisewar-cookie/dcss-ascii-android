@@ -9,7 +9,7 @@
  * Originally based off of libunix.cc
 
    Aug 2012 Michael Barlow <michaelbarlow7@gmail.com>
-   Updated by noisewar for 0.34.1 compatibility                                    */
+   Updated for 0.34.1 compatibility                                    */
 
 #include "AppHdr.h"
 
@@ -26,6 +26,7 @@
 #include "delay.h"
 #include "enum.h"
 #include "externs.h"
+#include "player.h"
 #include "libutil.h"
 #include "options.h"
 #include "files.h"
@@ -162,7 +163,14 @@ extern "C"
 {
 	void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir);
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
+	void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz);
 };
+
+void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz)
+{
+	if (you.save)
+		save_game(false);
+}
 
 void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir)
 {
@@ -251,6 +259,11 @@ int getch_ck()
     case KEY_DOWN:  return CK_DOWN;
     case KEY_LEFT:  return CK_LEFT;
     case KEY_RIGHT: return CK_RIGHT;
+    case KEY_A1:    return CK_HOME;
+    case KEY_A3:    return CK_PGUP;
+    case KEY_B2:    return CK_CLEAR;
+    case KEY_C1:    return CK_END;
+    case KEY_C3:    return CK_PGDN;
 
     default:         return c;
     }
@@ -429,13 +442,11 @@ void cprintf(const char *format, ...)
 
     char32_t c;
     char *bp = buffer;
-    int i = 0;
     while (int s = utf8towc(&c, bp))
     {
-		i++;
+        addChar((wchar_t)c);
         bp += s;
     }
-    addnstr(i, buffer);
 }
 
 

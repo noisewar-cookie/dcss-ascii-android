@@ -57,26 +57,60 @@ public class SplashActivity extends Activity {
         installIfRequired();
     }
 
-    // Install a new version if we need to
+    // Install a new version if we need to.
+    //
+    // Gating is content-hash based: setup.sh writes the SHA-256 of assets/dat/
+    // contents to assets/dat-hash.txt at build time. We compare it to the copy
+    // in filesDir from the previous install. Match → skip extraction so file
+    // mtimes stay stable and DCSS's TextDB freshness check (database.cc:_needs_update)
+    // keeps the already-built SQLite caches valid. Mismatch (or first install,
+    // or upgrade from a pre-hash build) → re-extract.
     private void installIfRequired() {
-        File versionFile = new File(getFilesDir() + "/version.txt");
-        if (versionFile.exists()) {
-            String installedVersion = readFile(versionFile);
+        String expectedHash = readAssetHash();
+        String installedHash = readInstalledHash();
 
-            // If installedVersion is < minimumInstallVersion, files will be copied across
-            int minimumInstallVersion = 36;
-            if (installedVersion != null && installedVersion.trim().length() > 0 && Integer.parseInt(installedVersion) >= minimumInstallVersion) {
-                // already installed, just start the game
-                startGameActivity();
-                return;
-            }
+        if (expectedHash != null && expectedHash.equals(installedHash)) {
+            startGameActivity();
+            return;
         }
+
         // If save folder exists, we are updating
         File saveDir = new File(getFilesDir() + "/saves");
         if (saveDir.exists()) {
             updating = true;
         }
         new InstallProgramTask().execute();
+    }
+
+    private String readAssetHash() {
+        AssetManager assetManager = getAssets();
+        StringBuilder sb = new StringBuilder();
+        BufferedInputStream in = null;
+        try {
+            in = new BufferedInputStream(assetManager.open("dat-hash.txt"));
+            byte[] buf = new byte[128];
+            int len;
+            while ((len = in.read(buf)) != -1) {
+                sb.append(new String(buf, 0, len));
+            }
+            return sb.toString().trim();
+        } catch (IOException ex) {
+            Log.w(TAG, "dat-hash.txt missing from assets — will re-extract: " + ex);
+            return null;
+        } finally {
+            if (in != null) {
+                try { in.close(); } catch (IOException ignored) {}
+            }
+        }
+    }
+
+    private String readInstalledHash() {
+        File hashFile = new File(getFilesDir() + "/dat-hash.txt");
+        if (!hashFile.exists()) {
+            return null;
+        }
+        String contents = readFile(hashFile);
+        return contents == null ? null : contents.trim();
     }
 
     private int getApplicationVersionCode() {
@@ -312,6 +346,10 @@ public class SplashActivity extends Activity {
 
             delete(new File(getFilesDir() + "/dat"));
             copyFileOrDir("dat");
+            // Stamp the content hash that gates the next launch's re-extract.
+            // Done immediately after copyFileOrDir("dat") so installedHash and
+            // the actual on-disk content stay in sync on a clean install.
+            copyFileOrDir("dat-hash.txt");
             // Create settings folder if needed, but always refresh init.txt
             // (other files like macro.txt are preserved)
             File settingsFolder = Paths.getSettingsDir(SplashActivity.this);
