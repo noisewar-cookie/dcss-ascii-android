@@ -359,6 +359,11 @@ public class SplashActivity extends Activity {
             } else {
                 copyAssetFileTo("settings/init.txt",
                         new File(settingsFolder, "init.txt"));
+                // Seed macro.txt only when missing — never overwrite user macros.
+                File macroFile = new File(settingsFolder, "macro.txt");
+                if (!macroFile.exists()) {
+                    copyAssetFileTo("settings/macro.txt", macroFile);
+                }
             }
             copyFileOrDir("docs");
             writeVersionFile();

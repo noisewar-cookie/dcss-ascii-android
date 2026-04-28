@@ -125,6 +125,11 @@
     <string name="menu_save">Save</string>
     <string name="menu_restore_default">Restore default file</string>
     <string name="restore_default_confirm_message">This will restore the config file to its default setting, are you sure you want to continue?</string>
+    <string name="menu_import_from_file">Import from file…</string>
+    <string name="import_confirm_message">This will replace the current file contents with the file you choose. Continue?</string>
+    <string name="import_success">File imported</string>
+    <string name="import_error_io">Couldn\'t read the selected file</string>
+    <string name="import_error_too_large">File too large (over 1 MB)</string>
     <string name="config_saved">Config saved. Restart to apply changes</string>
     <string name="error_writing_file">Error while writing file</string>
     <string name="warning_unsaved_changes_title">Text modified</string>
@@ -140,6 +145,7 @@
         <item>menu_colours</item>
         <item>messages</item-->
         <item>no_vi_command_keys</item>
+        <item>macro</item>
         <!--  item>runrest_messages</item>
         <item>standard_colours</item-->
     </string-array>

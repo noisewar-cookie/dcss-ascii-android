@@ -368,15 +368,6 @@ public class PreferencesActivity extends PreferenceActivity implements
                     this, configFiles[i]);
             configFilePreferences.addPreference(editConfigFilePreference);
         }
-
-        // The macro file is a special case. We should only show this setting if
-        // the file exists
-        File macroFile = new File(com.crawlmb.Paths.getSettingsDir(this), "macro.txt");
-        if (macroFile.exists()) {
-            EditConfigFilePreference editConfigFilePreference = new EditConfigFilePreference(
-                    this, "macro");
-            configFilePreferences.addPreference(editConfigFilePreference);
-        }
     }
 
     @Override

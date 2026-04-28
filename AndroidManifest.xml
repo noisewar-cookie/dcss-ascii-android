@@ -41,7 +41,7 @@
         </activity>
         <activity
             android:name=".ConfigEditor"
-            android:theme="@android:style/Theme.Light"
+            android:theme="@style/Theme.Crawl.Editor"
             android:windowSoftInputMode="stateHidden"
             android:label="Config Editor">
         </activity>

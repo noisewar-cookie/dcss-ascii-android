@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark variant of the editor theme. Selected automatically when the
+         system is in dark mode (API 29+). See res/values/styles.xml for
+         the light counterpart and the rationale (including the rationale
+         for windowOptOutEdgeToEdgeEnforcement). -->
+    <style name="Theme.Crawl.Editor" parent="@android:style/Theme.DeviceDefault">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

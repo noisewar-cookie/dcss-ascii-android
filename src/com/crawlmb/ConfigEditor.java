@@ -25,6 +25,7 @@ package com.crawlmb;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -32,6 +33,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
@@ -55,7 +57,6 @@ import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
-import android.view.Window;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -66,7 +67,6 @@ public class ConfigEditor extends Activity
 
 	// This is our state data that is stored when freezing.
 	private static final String BUNDLE_ORIGINAL_CONTENT = "original_content";
-	private static final String BUNDLE_UNDO_REVERT = "undo_revert";
 	private static final String BUNDLE_STATE = "state";
 	private static final String BUNDLE_URI = "uri";
 	private static final String BUNDLE_SELECTION_START = "selection_start";
@@ -77,9 +77,9 @@ public class ConfigEditor extends Activity
 	private static final String BUNDLE_APPLY_TEXT_AFTER = "apply_text_after";
 
 	// Identifiers for our menu items.
-	private static final int MENU_REVERT = Menu.FIRST;
 	private static final int MENU_SAVE = Menu.FIRST + 1;
 	private static final int MENU_RESTORE_DEFAULT = Menu.FIRST + 2;
+	private static final int MENU_IMPORT = Menu.FIRST + 3;
 
 	// The different distinct states the activity can be run in.
 	private static final int STATE_EDIT = 0;
@@ -87,12 +87,15 @@ public class ConfigEditor extends Activity
 
 	private static final int DIALOG_UNSAVED_CHANGES = 1;
 	private static final int DIALOG_RESTORE_DEFAULT_CONFIRM = 2;
+	private static final int DIALOG_IMPORT_CONFIRM = 3;
+
+	private static final int REQUEST_IMPORT_FILE = 2001;
+	private static final long IMPORT_MAX_BYTES = 1024L * 1024L;
 
 	private int mState;
 	private Uri mUri;
 	private EditText mText;
 	private String mOriginalContent;
-	private String mUndoRevert;
 	private int mSelectionStart;
 	private int mSelectionStop;
 
@@ -122,7 +125,6 @@ public class ConfigEditor extends Activity
 		if (savedInstanceState != null)
 		{
 			mOriginalContent = savedInstanceState.getString(BUNDLE_ORIGINAL_CONTENT);
-			mUndoRevert = savedInstanceState.getString(BUNDLE_UNDO_REVERT);
 			mState = savedInstanceState.getInt(BUNDLE_STATE);
 			mUri = Uri.parse(savedInstanceState.getString(BUNDLE_URI));
 			mSelectionStart = savedInstanceState.getInt(BUNDLE_SELECTION_START);
@@ -145,8 +147,15 @@ public class ConfigEditor extends Activity
 		mState = STATE_EDIT_NOTE_FROM_SDCARD;
 		// Load the file into a new note.
 
-		mFileContent = readFile(getFile(mUri));
-		requestWindowFeature(Window.FEATURE_RIGHT_ICON);
+		File targetFile = getFile(mUri);
+		// Seed from the bundled default if the file is missing. Covers upgrade
+		// paths where SplashActivity's hash gate skipped re-extraction, and
+		// users who manually deleted the file.
+		if (targetFile != null && !targetFile.exists())
+		{
+			seedFromAssetIfAvailable(targetFile);
+		}
+		mFileContent = readFile(targetFile);
 		setContentView(R.layout.config_editor);
 
 		getMText();
@@ -350,7 +359,6 @@ public class ConfigEditor extends Activity
 		mFileContent = getMText().getText().toString();
 
 		outState.putString(BUNDLE_ORIGINAL_CONTENT, mOriginalContent);
-		outState.putString(BUNDLE_UNDO_REVERT, mUndoRevert);
 		outState.putInt(BUNDLE_STATE, mState);
 		outState.putString(BUNDLE_URI, mUri.toString());
 		outState.putInt(BUNDLE_SELECTION_START, mSelectionStart);
@@ -368,11 +376,11 @@ public class ConfigEditor extends Activity
 
 		// Build the menus that are shown when editing.
 
-		menu.add(Menu.NONE, MENU_REVERT, Menu.NONE, R.string.menu_revert).setIcon(android.R.drawable.ic_menu_revert);
-
 		menu.add(Menu.NONE, MENU_SAVE, Menu.NONE, R.string.menu_save).setIcon(android.R.drawable.ic_menu_save);
 		
 		menu.add(Menu.NONE, MENU_RESTORE_DEFAULT, Menu.NONE, R.string.menu_restore_default).setIcon(android.R.drawable.ic_menu_set_as);
+
+		menu.add(Menu.NONE, MENU_IMPORT, Menu.NONE, R.string.menu_import_from_file).setIcon(android.R.drawable.ic_menu_upload);
 
 		return true;
 	}
@@ -381,8 +389,7 @@ public class ConfigEditor extends Activity
 	public boolean onPrepareOptionsMenu(Menu menu)
 	{
 		boolean contentChanged = !mOriginalContent.equals(getMText().getText().toString());
-		menu.findItem(MENU_SAVE).setEnabled(contentChanged || mUndoRevert != null);
-		menu.findItem(MENU_REVERT).setEnabled(contentChanged);
+		menu.findItem(MENU_SAVE).setEnabled(contentChanged);
 		return super.onPrepareOptionsMenu(menu);
 	}
 
@@ -393,14 +400,14 @@ public class ConfigEditor extends Activity
 		switch (item.getItemId())
 		{
 
-		case MENU_REVERT:
-			revertNote();
-			break;
 		case MENU_SAVE:
 			saveNote();
 			break;
 		case MENU_RESTORE_DEFAULT:
 		  showDialog(DIALOG_RESTORE_DEFAULT_CONFIRM);
+			break;
+		case MENU_IMPORT:
+		  showDialog(DIALOG_IMPORT_CONFIRM);
 			break;
 		}
 		return super.onOptionsItemSelected(item);
@@ -408,30 +415,45 @@ public class ConfigEditor extends Activity
 	
   private void copyConfigFile()
   {
-  // Same method as in CrawlAppActivity. Should probably put this in one place,
-  // but ceebs right now.
+    File target = getFile(mUri);
+    if (target == null)
+      return;
+    seedFromAssetIfAvailable(target);
+  }
+
+  // Copies settings/<filename> from APK assets into the given target file,
+  // overwriting if present. Silent no-op when no matching asset exists.
+  private void seedFromAssetIfAvailable(File target)
+  {
+    String fileName = target.getName();
     AssetManager assetManager = getAssets();
-    String destname = new File(com.crawlmb.Paths.getSettingsDir(this), "init.txt").getPath();
-    File newasset = new File(destname);
+    BufferedInputStream in = null;
+    BufferedOutputStream out = null;
     try
     {
-      newasset.createNewFile();
-      BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(newasset, false));
-      BufferedInputStream in = new BufferedInputStream(assetManager.open("settings/init.txt"));
-      int b;
-      while ((b = in.read()) != -1)
+      in = new BufferedInputStream(assetManager.open("settings/" + fileName));
+      File parent = target.getParentFile();
+      if (parent != null) parent.mkdirs();
+      out = new BufferedOutputStream(new FileOutputStream(target, false));
+      byte[] buf = new byte[8192];
+      int len;
+      while ((len = in.read(buf)) != -1)
       {
-        out.write(b);
+        out.write(buf, 0, len);
       }
       out.flush();
-      out.close();
-      in.close();
     }
     catch (IOException ex)
     {
-      Log.e(TAG, "Exception occured copying init.txt : " + ex);
+      Log.e(TAG, "Couldn't seed " + fileName + " from asset: " + ex);
+      return;
     }
-    chmod(destname, 0666);
+    finally
+    {
+      if (in != null) try { in.close(); } catch (IOException ignored) {}
+      if (out != null) try { out.close(); } catch (IOException ignored) {}
+    }
+    chmod(target.getPath(), 0666);
   }
   
   private void chmod(String filename, int permissions)
@@ -472,23 +494,6 @@ public class ConfigEditor extends Activity
     }
   }
 
-	private final void revertNote()
-	{
-		String tmp = getMText().getText().toString();
-		if (!tmp.equals(mOriginalContent))
-		{
-			// revert to original content
-			getMText().setTextKeepState(mOriginalContent);
-			mUndoRevert = tmp;
-		}
-		else if (mUndoRevert != null)
-		{
-			// revert to original content
-			getMText().setTextKeepState(mUndoRevert);
-			mUndoRevert = null;
-		}
-	}
-
 	private void saveNote()
 	{
 		mFileContent = getMText().getText().toString();
@@ -527,9 +532,115 @@ public class ConfigEditor extends Activity
 			return getUnsavedChangesWarningDialog();
 		case DIALOG_RESTORE_DEFAULT_CONFIRM:
 		  return getRestoreDialogConfirmDialog();
+		case DIALOG_IMPORT_CONFIRM:
+		  return getImportConfirmDialog();
 		default:
 			return null;
 		}
+	}
+
+	private Dialog getImportConfirmDialog()
+	{
+		return new AlertDialog.Builder(this).setIcon(android.R.drawable.ic_dialog_alert)
+				.setTitle(R.string.menu_import_from_file)
+				.setMessage(R.string.import_confirm_message)
+				.setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener()
+				{
+					@Override
+					public void onClick(DialogInterface dialog, int which)
+					{
+						launchImportPicker();
+					}
+				})
+				.setNegativeButton(android.R.string.no, null)
+				.create();
+	}
+
+	private void launchImportPicker()
+	{
+		Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+		intent.addCategory(Intent.CATEGORY_OPENABLE);
+		intent.setType("*/*");
+		intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+		startActivityForResult(intent, REQUEST_IMPORT_FILE);
+	}
+
+	@Override
+	protected void onActivityResult(int requestCode, int resultCode, Intent data)
+	{
+		super.onActivityResult(requestCode, resultCode, data);
+		if (requestCode == REQUEST_IMPORT_FILE && resultCode == RESULT_OK
+				&& data != null && data.getData() != null)
+		{
+			importFromUri(data.getData());
+		}
+	}
+
+	private void importFromUri(Uri sourceUri)
+	{
+		File target = getFile(mUri);
+		if (target == null)
+			return;
+
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		InputStream in = null;
+		try
+		{
+			in = getContentResolver().openInputStream(sourceUri);
+			if (in == null)
+			{
+				Toast.makeText(this, R.string.import_error_io, Toast.LENGTH_SHORT).show();
+				return;
+			}
+			byte[] buf = new byte[8192];
+			long total = 0;
+			int len;
+			while ((len = in.read(buf)) != -1)
+			{
+				total += len;
+				if (total > IMPORT_MAX_BYTES)
+				{
+					Toast.makeText(this, R.string.import_error_too_large, Toast.LENGTH_LONG).show();
+					return;
+				}
+				baos.write(buf, 0, len);
+			}
+		}
+		catch (IOException ex)
+		{
+			Log.e(TAG, "Exception reading import source " + sourceUri + ": " + ex);
+			Toast.makeText(this, R.string.import_error_io, Toast.LENGTH_SHORT).show();
+			return;
+		}
+		finally
+		{
+			if (in != null) try { in.close(); } catch (IOException ignored) {}
+		}
+
+		BufferedOutputStream out = null;
+		try
+		{
+			target.createNewFile();
+			out = new BufferedOutputStream(new FileOutputStream(target, false));
+			out.write(baos.toByteArray());
+			out.flush();
+		}
+		catch (IOException ex)
+		{
+			Log.e(TAG, "Exception writing " + target.getName() + ": " + ex);
+			Toast.makeText(this, R.string.import_error_io, Toast.LENGTH_SHORT).show();
+			return;
+		}
+		finally
+		{
+			if (out != null) try { out.close(); } catch (IOException ignored) {}
+		}
+		chmod(target.getPath(), 0666);
+
+		mFileContent = readFile(target);
+		mOriginalContent = mFileContent;
+		getNoteFromFile();
+		Toast.makeText(this, R.string.import_success, Toast.LENGTH_SHORT).show();
 	}
 
 	private Dialog getRestoreDialogConfirmDialog()

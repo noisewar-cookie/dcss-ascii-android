@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--@android:style/Theme.NoTitleBar.Fullscreen"-->
+    <!-- Editor theme: follows the system day/night setting via the -night
+         resource qualifier (see res/values-night/styles.xml). On API <29
+         devices (no system dark mode) this always resolves to the light
+         variant, which is fine — those devices have no toggle to follow.
+         windowOptOutEdgeToEdgeEnforcement disables Android 15's default
+         edge-to-edge so the action bar/nav bar push content out of the way
+         instead of overlaying it (otherwise the file's first lines hide
+         behind the action bar and the last lines behind the nav bar). The
+         attribute is API 35+; older devices ignore it and don't enforce
+         edge-to-edge anyway. -->
+    <style name="Theme.Crawl.Editor" parent="@android:style/Theme.DeviceDefault.Light">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+
     <style name="Theme.Crawl" parent="@android:style/Theme.NoTitleBar.Fullscreen">
         <item name="android:windowBackground">@android:color/black</item>
         <!--<item name="colorPrimary">@color/primary</item>-->
