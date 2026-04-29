@@ -13,13 +13,27 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Portrait: full screen
-# Shown during: pregame (main menu, character creation) AND any in-game
-# menu/info screen not matched by the more specific groups below (item
-# descriptions, monster examine, lookup help, message history, level map,
-# macros, help text, etc.)
+# Shown during: any in-game menu/info screen not matched by the more
+# specific groups below (item descriptions, monster examine, lookup help,
+# message history, level map, macros, help text, etc.)
 # Terminal region: 80 cols x 24 rows
 portrait_full_font_scale=1.25
 portrait_full_scrollable=false
+
+# Portrait: pre-game loading screen
+# Shown during: the static loading screen (text from string-array.xml,
+# starting with "Launching game. May take a while the first time.")
+# Defaults: falls back to portrait_full_* if unset
+portrait_pregame_font_scale=1.5
+portrait_pregame_scrollable=true
+
+# Portrait: DCSS main menu and character creation flow
+# Shown during: "Hello, welcome to Dungeon Crawl ..." through name prompt,
+# save selection, species/background selection, starting weapon, etc. —
+# i.e. everything DCSS draws before gameplay (HUD) starts.
+# Defaults: falls back to portrait_full_* if unset
+portrait_mainmenu_font_scale=1.5
+portrait_mainmenu_scrollable=true
 
 # Portrait: map panel
 # Shown during: gameplay — top portion, dungeon viewport
@@ -38,7 +52,7 @@ portrait_hud_font_scale=0.85
 # Portrait: message panel
 # Shown during: gameplay — bottom strip, game messages
 # Terminal region: 80 cols x 7 rows  (terminal cols 0-79, rows 17-23)
-portrait_msg_font_scale=1.425
+portrait_msg_font_scale=1.5
 
 # Landscape: full terminal
 # Shown during: all screens in landscape orientation
@@ -52,8 +66,11 @@ landscape_font_scale=1.0
 
 # Item lists: inventory (i), item-use prompts (w/W/T/P/R/q/r/v/f/t),
 # drop (d), pickup, shop, stash search, known items (\)
+# - portrait_items_scrollable: enable horizontal drag (when content > width)
+# - portrait_items_vscrollable: enable vertical drag (when content > height)
 portrait_items_font_scale=1.5
 portrait_items_scrollable=false
+portrait_items_vscrollable=true
 
 # Spell/ability lists: spell list (I), cast (z), memorise (M),
 # abilities (a), mutations (A)
@@ -65,13 +82,20 @@ portrait_overview_font_scale=1.5
 portrait_overview_scrollable=true
 
 # Skill training (m)
+# In portrait, skill training is reorganized into a single column: column 0
+# (Fighting...Stealth) is followed by column 1 (Spellcasting...Shapeshifting)
+# without repeating the "Skill" header, then the help text. This makes the
+# screen taller; vertical scrolling is needed at most font scales.
+# - portrait_skills_scrollable: enable horizontal drag (when content > width)
+# - portrait_skills_vscrollable: enable vertical drag (when content > height)
 portrait_skills_font_scale=1.5
 portrait_skills_scrollable=true
+portrait_skills_vscrollable=false
 
 # Religion screen (^)
-portrait_religion_font_scale=1.5
-portrait_religion_scrollable=false
+portrait_religion_font_scale=1.4
+portrait_religion_scrollable=true
 
 # Hi-score screen (end of game)
-portrait_hiscores_font_scale=1.25
-portrait_hiscores_scrollable=false
+portrait_hiscores_font_scale=1.4
+portrait_hiscores_scrollable=true

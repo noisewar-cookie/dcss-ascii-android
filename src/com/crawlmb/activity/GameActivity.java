@@ -75,6 +75,7 @@ public class GameActivity extends Activity
 	private int gamePanelId = View.NO_ID;
 	private RegionTermView portraitMsgView = null;
 	private RegionTermView portraitFullView = null;
+	private RegionTermView portraitSkillsView = null;
 	private View portraitContextHost = null;
 
 	protected Handler handler = null;
@@ -353,6 +354,23 @@ public class GameActivity extends Activity
 		gamePanel.addView(fullView, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
+		// Skills menu view: 41 rows tall. The 24 source rows expand to 41
+		// after folding the second skill column underneath the first — the
+		// fold offset is RegionRouter.SKILL_FOLD_ROWS (= 17), and the
+		// help/button block at original rows 19..23 also shifts down by
+		// the same amount, landing at rows 36..40. Vertical scroll is on
+		// by default because at typical font scales the folded layout
+		// overflows the gamePanel; RegionTermView caps its reported height
+		// to the parent so siblings aren't pushed offscreen.
+		RegionTermView skillsView = new RegionTermView(this, 0, 0, 41, 80);
+		skillsView.setFontScaleMultiplier(fontConfig.portraitSkillsFontScale);
+		skillsView.setHorizontalScrollEnabled(fontConfig.portraitSkillsScrollable);
+		skillsView.setVerticalScrollEnabled(fontConfig.portraitSkillsVScrollable);
+		skillsView.setVisibility(View.INVISIBLE);
+		portraitSkillsView = skillsView;
+		gamePanel.addView(skillsView, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
 		LinearLayout splitContainer = new LinearLayout(this);
 		splitContainer.setOrientation(LinearLayout.VERTICAL);
 		splitContainer.setVisibility(View.INVISIBLE);
@@ -398,6 +416,7 @@ public class GameActivity extends Activity
 
 		RegionRouter router = new RegionRouter(this);
 		router.setFullView(fullView);
+		router.setSkillsView(skillsView);
 		router.setSplitContainer(splitContainer);
 		router.addRegion(mapView);
 		router.addRegion(hudView);
@@ -463,6 +482,7 @@ public class GameActivity extends Activity
 		gamePanelId = View.NO_ID;
 		portraitMsgView = null;
 		portraitFullView = null;
+		portraitSkillsView = null;
 		portraitContextHost = null;
 		FontConfig fontConfig = FontConfig.load(getAssets());
 		term = new TermView(this, gameKeyListener);
@@ -526,6 +546,8 @@ public class GameActivity extends Activity
 			view.setMessageView(portraitMsgView);
 		if (portraitFullView != null)
 			view.setMenuView(portraitFullView);
+		if (portraitSkillsView != null)
+			view.setSkillsView(portraitSkillsView);
 
 		view.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 		screenLayout.addView(view);

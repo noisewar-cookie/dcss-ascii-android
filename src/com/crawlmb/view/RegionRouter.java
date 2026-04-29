@@ -15,13 +15,14 @@ public class RegionRouter implements TerminalRenderer
 {
 	public enum LayoutMode { PREGAME, GAMEPLAY, MENU }
 
-	// Menu sub-classification used only when in MENU mode. Detected per-frame
-	// from terminalShadow contents; controls which font_config.txt scale and
-	// scrollable setting fullView gets. DEFAULT covers pregame and any menu
-	// not matched by the more specific groups.
+	// Menu sub-classification. Detected per-frame from terminalShadow
+	// contents; controls which font_config.txt scale and scrollable setting
+	// fullView/skillsView gets. DEFAULT covers any menu not matched by a
+	// more specific group. PREGAME and MAINMENU are sub-types of
+	// LayoutMode.PREGAME (loading screen vs. DCSS welcome/character creation).
 	public enum MenuType
 	{
-		DEFAULT, ITEMS, SPELLS, OVERVIEW, SKILLS, RELIGION, HISCORES
+		DEFAULT, PREGAME, MAINMENU, ITEMS, SPELLS, OVERVIEW, SKILLS, RELIGION, HISCORES
 	}
 
 	public interface ScrollStateListener
@@ -67,8 +68,20 @@ public class RegionRouter implements TerminalRenderer
 	// Menu-type anchors. Row 0 prefixes for menus that use Menu::set_title.
 	// Custom-rendered screens (overview, skills, religion, hiscores) need
 	// looser scans on different rows.
+	// Row 0 prefixes for ITEMS-category screens. The four "Gear:" / "Potions:"
+	// / "Scrolls:" / "Evocable Items:" prefixes are the per-page titles of
+	// the paged inventory ('i') menu — InvMenu::set_title in
+	// crawl-ref/source/invent.cc emits one of these when MF_PAGED_INVENTORY
+	// is set, which is the default in 0.34 (Options.show_paged_inventory).
+	// Without these, paged inventory was misclassified as DEFAULT and got
+	// portraitFullFontScale instead of portraitItemsFontScale. Non-paged
+	// inventory still uses the literal "Inventory:" title.
 	private static final String[] ITEMS_ROW0_PREFIXES = {
 		"Inventory:",
+		"Gear:",
+		"Potions:",
+		"Scrolls:",
+		"Evocable Items:",
 		"Drop what?",
 		"Wield ",
 		"Unequip ",
@@ -94,8 +107,26 @@ public class RegionRouter implements TerminalRenderer
 		"Innate Abilities, Weirdness"
 	};
 
+	// Skills menu (m) is rendered into a dedicated wider/taller view so its
+	// two-column layout can be folded into one column. The remap moves the
+	// second column's skill rows underneath the first column's, and shifts
+	// the help/button block down by SKILL_FOLD_ROWS. The value matches
+	// (SK_ARR_LN - 1), i.e. the number of m_skills rows per column below
+	// the title row — 17 for ndisplayed_skills=38 in 0.34.x. See
+	// crawl-ref/source/skills.h (skill_display_order) and
+	// crawl-ref/source/skill-menu.h (SK_ARR_LN).
+	public static final int SKILL_FOLD_ROWS = 17;
+	// Header anchor: scan rows 0..3 for the literal "Skill" header text
+	// emitted by SkillMenuEntry::set_title (with five leading spaces).
+	private static final String SKILL_HEADER = "     Skill";
+	// Loading screen anchor: the first item of loading_message_array starts
+	// with this exact string. Lets us distinguish the static load screen
+	// (PREGAME) from DCSS's "Hello, welcome..." main menu (MAINMENU).
+	private static final String LOADING_ANCHOR = "Launching game";
+
 	private final List<RegionTermView> splitRegions = new ArrayList<>();
 	private RegionTermView fullView;
+	private RegionTermView skillsView;
 	private LinearLayout splitContainer;
 	private final Context context;
 
@@ -103,6 +134,21 @@ public class RegionRouter implements TerminalRenderer
 	private volatile LayoutMode currentMode = LayoutMode.PREGAME;
 	private volatile MenuType currentMenuType = MenuType.DEFAULT;
 	private boolean gameplayEverDetected = false;
+
+	// Anchor for the single-column fold of the skills menu. Recomputed on
+	// each transition INTO MenuType.SKILLS by scanning terminalShadow for
+	// the two occurrences of "     Skill" on the same row. skillsLeftCol
+	// is the start of col 0's title; skillsRightCol is the start of col 1's
+	// title. The cut threshold (which side of the fold a char belongs to)
+	// is skillsRightCol; the shift applied to col 1 chars to align them
+	// under col 0 is (skillsRightCol - skillsLeftCol), which equals
+	// MIN_COLS/2 = 39 in practice. The two values must come from the same
+	// detection so the col-shift stays consistent with the cut. -1 = anchor
+	// unknown (pre-detection or detection failed) → drawPoint forwards to
+	// skillsView 1:1 as a fallback.
+	private volatile int skillsHeaderRow = -1;
+	private volatile int skillsLeftCol = -1;
+	private volatile int skillsRightCol = -1;
 
 	private FontConfig fontConfig;
 	private ScrollStateListener scrollStateListener;
@@ -121,6 +167,16 @@ public class RegionRouter implements TerminalRenderer
 	public void setFullView(RegionTermView view)
 	{
 		this.fullView = view;
+	}
+
+	public void setSkillsView(RegionTermView view)
+	{
+		this.skillsView = view;
+	}
+
+	public RegionTermView getSkillsView()
+	{
+		return skillsView;
 	}
 
 	public void setSplitContainer(LinearLayout container)
@@ -150,61 +206,112 @@ public class RegionRouter implements TerminalRenderer
 	private void applyMode(LayoutMode mode, MenuType menuType)
 	{
 		boolean splitVisible = (mode == LayoutMode.GAMEPLAY);
-		// INVISIBLE (never GONE) on both sides keeps layout dimensions stable
-		// across transitions, which prevents the bleedthrough seen previously.
+		boolean skillsVisible = !splitVisible
+				&& menuType == MenuType.SKILLS
+				&& skillsView != null;
+		boolean fullVisible = !splitVisible && !skillsVisible;
+
+		// INVISIBLE (never GONE) keeps layout dimensions stable across
+		// transitions, which prevents the bleedthrough seen previously.
 		if (fullView != null)
-			fullView.setVisibility(splitVisible ? View.INVISIBLE : View.VISIBLE);
+			fullView.setVisibility(fullVisible ? View.VISIBLE : View.INVISIBLE);
+		if (skillsView != null)
+		{
+			skillsView.setVisibility(skillsVisible ? View.VISIBLE : View.INVISIBLE);
+			// Wipe stale content from a previous skills session — some
+			// destination cells of the fold remap aren't covered by any
+			// source cell, so without a clear they can show old data.
+			if (skillsVisible)
+				skillsView.clear();
+		}
 		if (splitContainer != null)
 			splitContainer.setVisibility(splitVisible ? View.VISIBLE : View.INVISIBLE);
 
+		// Apply scale/scroll config to whichever menu view is now active.
+		// fullView and skillsView are mutually exclusive in non-gameplay
+		// modes; the skills menu owns skillsView, everything else owns
+		// fullView.
 		boolean scaleChanged = false;
-		if (fullView != null && fontConfig != null && !splitVisible)
-			scaleChanged = applyMenuConfig(menuType);
+		RegionTermView activeMenu = null;
+		if (fontConfig != null)
+		{
+			if (skillsVisible)
+			{
+				activeMenu = skillsView;
+				scaleChanged = applySkillsConfig();
+			}
+			else if (fullVisible && fullView != null)
+			{
+				activeMenu = fullView;
+				scaleChanged = applyFullConfig(menuType);
+			}
+		}
 
 		if (scrollStateListener != null)
 		{
-			boolean menuScrollable = !splitVisible
-					&& fullView != null
-					&& fullView.isHorizontalScrollEnabled();
+			boolean menuScrollable = activeMenu != null
+					&& activeMenu.isScrollEnabled();
 			scrollStateListener.onMenuScrollableChanged(menuScrollable);
 		}
 
 		// applyMenuConfig's setFontScaleMultiplier triggers a re-measure
 		// that recreates the bitmap blank; DCSS won't redraw mid-menu
 		// without input. Fire the redraw requester after the next layout
-		// pass so it draws into the freshly-sized bitmap.
-		if (scaleChanged && redrawRequester != null && fullView != null)
-			scheduleRedrawAfterLayout();
+		// pass so it draws into the freshly-sized bitmap. Also fire on
+		// any view-swap (fullView <-> skillsView), since the freshly
+		// shown view's bitmap may be empty or stale.
+		if (redrawRequester != null && activeMenu != null
+				&& (scaleChanged || activeMenu == skillsView))
+			scheduleRedrawAfterLayout(activeMenu);
 	}
 
-	private void scheduleRedrawAfterLayout()
+	private void scheduleRedrawAfterLayout(final View target)
 	{
-		final ViewTreeObserver vto = fullView.getViewTreeObserver();
+		final ViewTreeObserver vto = target.getViewTreeObserver();
 		vto.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener()
 		{
 			@Override
 			public void onGlobalLayout()
 			{
-				ViewTreeObserver o = fullView.getViewTreeObserver();
+				ViewTreeObserver o = target.getViewTreeObserver();
 				if (o.isAlive())
 					o.removeOnGlobalLayoutListener(this);
 				if (redrawRequester != null)
 					redrawRequester.run();
 			}
 		});
+		// Force a layout pass so the listener is guaranteed to fire. A
+		// view-swap (INVISIBLE→VISIBLE) only calls invalidate() on the
+		// parent, not requestLayout(), so without this the listener would
+		// never run when the target's font scale didn't change — leaving
+		// the freshly-cleared skillsView bitmap blank because DCSS hadn't
+		// been asked to repaint into it. requestLayout coalesces with any
+		// pending pass triggered by setFontScaleMultiplier, so it's safe
+		// to call unconditionally.
+		target.requestLayout();
 	}
 
-	// Returns true if the font scale multiplier actually changed (i.e. the
-	// bitmap will be recreated and needs a repaint).
-	private boolean applyMenuConfig(MenuType type)
+	// Returns true if the font scale multiplier on fullView changed (i.e.
+	// the bitmap will be recreated and needs a repaint).
+	private boolean applyFullConfig(MenuType type)
 	{
 		float scale;
 		boolean scrollable;
+		boolean vscrollable = false;
 		switch (type)
 		{
+		case PREGAME:
+			scale = fontConfig.portraitPregameFontScale;
+			scrollable = fontConfig.portraitPregameScrollable;
+			break;
+		case MAINMENU:
+			scale = fontConfig.portraitMainmenuFontScale;
+			scrollable = fontConfig.portraitMainmenuScrollable;
+			break;
 		case ITEMS:
 			scale = fontConfig.portraitItemsFontScale;
 			scrollable = fontConfig.portraitItemsScrollable;
+			vscrollable = fontConfig.portraitItemsVScrollable;
 			break;
 		case SPELLS:
 			scale = fontConfig.portraitSpellsFontScale;
@@ -214,10 +321,6 @@ public class RegionRouter implements TerminalRenderer
 			scale = fontConfig.portraitOverviewFontScale;
 			scrollable = fontConfig.portraitOverviewScrollable;
 			break;
-		case SKILLS:
-			scale = fontConfig.portraitSkillsFontScale;
-			scrollable = fontConfig.portraitSkillsScrollable;
-			break;
 		case RELIGION:
 			scale = fontConfig.portraitReligionFontScale;
 			scrollable = fontConfig.portraitReligionScrollable;
@@ -226,6 +329,9 @@ public class RegionRouter implements TerminalRenderer
 			scale = fontConfig.portraitHiscoresFontScale;
 			scrollable = fontConfig.portraitHiscoresScrollable;
 			break;
+		case SKILLS:
+			// Should never happen — SKILLS uses skillsView. Fall through
+			// to default to be defensive.
 		case DEFAULT:
 		default:
 			scale = fontConfig.portraitFullFontScale;
@@ -235,6 +341,22 @@ public class RegionRouter implements TerminalRenderer
 		float prevScale = fullView.getFontScaleMultiplier();
 		fullView.setFontScaleMultiplier(scale);
 		fullView.setHorizontalScrollEnabled(scrollable);
+		// Only ITEMS opts into vertical scroll today; every other MenuType
+		// leaves vscrollable=false above. Drag-scroll only takes effect when
+		// the rendered bitmap is taller than the screen — at smaller font
+		// scales this is a no-op.
+		fullView.setVerticalScrollEnabled(vscrollable);
+		return prevScale != scale;
+	}
+
+	// Returns true if the font scale multiplier on skillsView changed.
+	private boolean applySkillsConfig()
+	{
+		float scale = fontConfig.portraitSkillsFontScale;
+		float prevScale = skillsView.getFontScaleMultiplier();
+		skillsView.setFontScaleMultiplier(scale);
+		skillsView.setHorizontalScrollEnabled(fontConfig.portraitSkillsScrollable);
+		skillsView.setVerticalScrollEnabled(fontConfig.portraitSkillsVScrollable);
 		return prevScale != scale;
 	}
 
@@ -244,15 +366,20 @@ public class RegionRouter implements TerminalRenderer
 		currentMode = LayoutMode.PREGAME;
 		currentMenuType = MenuType.DEFAULT;
 		gameplayEverDetected = false;
+		skillsHeaderRow = -1;
+		skillsLeftCol = -1;
+		skillsRightCol = -1;
 		for (int i = 0; i < TERMINAL_ROWS; i++)
 			for (int j = 0; j < TERMINAL_COLS; j++)
 				terminalShadow[i][j] = 0;
 
 		if (fullView != null)
-			fullView.post(() -> applyMode(LayoutMode.PREGAME, MenuType.DEFAULT));
+			fullView.post(() -> applyMode(LayoutMode.PREGAME, MenuType.PREGAME));
 
 		boolean allOk = true;
 		if (fullView != null && !fullView.onGameStart())
+			allOk = false;
+		if (skillsView != null && !skillsView.onGameStart())
 			allOk = false;
 		for (RegionTermView region : splitRegions)
 		{
@@ -272,6 +399,107 @@ public class RegionRouter implements TerminalRenderer
 			fullView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
 		for (RegionTermView region : splitRegions)
 			region.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+
+		if (skillsView != null && currentMenuType == MenuType.SKILLS)
+			forwardToSkillsView(r, c, ch, fcolor, bcolor, extendedErase);
+	}
+
+	// Remap the 24x80 two-column skills layout into a 41x80 single-column
+	// view. Uses the cached anchor (skillsHeaderRow, skillsLeftCol,
+	// skillsRightCol). The cut threshold for which column a char belongs to
+	// is skillsRightCol; the col-shift applied to col-1 chars is
+	// (skillsRightCol - skillsLeftCol). These differ — the right column's
+	// title is at col 41 but its content is offset 39 from the left column's
+	// content, because col_split=MIN_COLS/2=39 and both columns share the
+	// same x++ indent before placement.
+	// Rules:
+	//   r < headerRow                                  → pass through
+	//   r == headerRow, c <  rightCol                  → pass through (left header)
+	//   r == headerRow, c >= rightCol                  → drop (redundant right header)
+	//   headerRow < r <= headerRow + SKILL_FOLD_ROWS
+	//     c <  rightCol                                → pass through (col 0 skill)
+	//     c >= rightCol                                → emit at (r+fold, c-(rightCol-leftCol))
+	//   r > headerRow + SKILL_FOLD_ROWS                → emit at (r+fold, c)
+	//                                                    (help/button rows span full width)
+	// If the anchor isn't set yet, forward 1:1 — the destination view will
+	// be repainted once the anchor resolves on the next frame.
+	private void forwardToSkillsView(int r, int c, char ch, int fcolor,
+			int bcolor, boolean extendedErase)
+	{
+		int headerRow = skillsHeaderRow;
+		int leftCol = skillsLeftCol;
+		int rightCol = skillsRightCol;
+		if (headerRow < 0 || leftCol < 0 || rightCol < 0)
+		{
+			skillsView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+			return;
+		}
+		int fold = SKILL_FOLD_ROWS;
+		int colShift = rightCol - leftCol;
+		if (r < headerRow)
+		{
+			skillsView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+		}
+		else if (r == headerRow)
+		{
+			if (c < rightCol)
+				skillsView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+		}
+		else if (r <= headerRow + fold)
+		{
+			if (c < rightCol)
+				skillsView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+			else
+				skillsView.drawPoint(r + fold, c - colShift, ch, fcolor,
+						bcolor, extendedErase);
+		}
+		else
+		{
+			skillsView.drawPoint(r + fold, c, ch, fcolor, bcolor, extendedErase);
+		}
+	}
+
+	// Scan rows 0..3 for the literal SKILL_HEADER text. If two matches
+	// land on the same row, store both column positions: skillsLeftCol is
+	// the start of the first occurrence (col-0 title), skillsRightCol is
+	// the start of the second (col-1 title). The col-shift for the fold
+	// is the difference between them. Otherwise leave the anchor unset
+	// (-1, -1, -1) and fall back to 1:1 forwarding.
+	private void recomputeSkillsAnchor()
+	{
+		skillsHeaderRow = -1;
+		skillsLeftCol = -1;
+		skillsRightCol = -1;
+		int patLen = SKILL_HEADER.length();
+		for (int r = 0; r <= 3; r++)
+		{
+			int firstCol = -1;
+			for (int c = 0; c + patLen <= TERMINAL_COLS; c++)
+			{
+				boolean ok = true;
+				for (int i = 0; i < patLen; i++)
+				{
+					if (terminalShadow[r][c + i] != SKILL_HEADER.charAt(i))
+					{
+						ok = false;
+						break;
+					}
+				}
+				if (!ok)
+					continue;
+				if (firstCol < 0)
+				{
+					firstCol = c;
+				}
+				else
+				{
+					skillsHeaderRow = r;
+					skillsLeftCol = firstCol;
+					skillsRightCol = c;
+					return;
+				}
+			}
+		}
 	}
 
 	private boolean matchesAt(int row, int col, String pattern)
@@ -375,8 +603,13 @@ public class RegionRouter implements TerminalRenderer
 	public void postInvalidate()
 	{
 		LayoutMode detected = detectMode();
-		MenuType detectedType = (detected == LayoutMode.MENU)
-				? detectMenuType() : MenuType.DEFAULT;
+		MenuType detectedType;
+		if (detected == LayoutMode.MENU)
+			detectedType = detectMenuType();
+		else if (detected == LayoutMode.PREGAME)
+			detectedType = detectPregameType();
+		else
+			detectedType = MenuType.DEFAULT;
 
 		if (detected != currentMode || detectedType != currentMenuType)
 		{
@@ -384,6 +617,18 @@ public class RegionRouter implements TerminalRenderer
 			currentMenuType = detectedType;
 			if (detected == LayoutMode.GAMEPLAY)
 				gameplayEverDetected = true;
+			// Recompute the fold anchor as we enter the skills menu so the
+			// next frame's drawPoints can remap. Done here (not inside the
+			// applyMode post) because applyMode runs on the UI thread later;
+			// drawPoints arriving in between need the anchor immediately.
+			if (detectedType == MenuType.SKILLS)
+				recomputeSkillsAnchor();
+			else
+			{
+				skillsHeaderRow = -1;
+				skillsLeftCol = -1;
+				skillsRightCol = -1;
+			}
 			final LayoutMode targetMode = detected;
 			final MenuType targetType = detectedType;
 			if (fullView != null)
@@ -392,8 +637,22 @@ public class RegionRouter implements TerminalRenderer
 
 		if (fullView != null)
 			fullView.postInvalidate();
+		if (skillsView != null)
+			skillsView.postInvalidate();
 		for (RegionTermView region : splitRegions)
 			region.postInvalidate();
+	}
+
+	// Sub-classify LayoutMode.PREGAME. Before DCSS runs, SplashActivity
+	// hands off to GameActivity which prints the loading-message string
+	// (see res/values/string-array.xml; first entry begins "Launching
+	// game."). DCSS then clears the screen and prints "Hello, welcome to
+	// Dungeon Crawl ...". We match the loading anchor at row 0; if it's
+	// not there, the screen has been overwritten by DCSS → MAINMENU.
+	private MenuType detectPregameType()
+	{
+		return matchesAt(0, 0, LOADING_ANCHOR)
+				? MenuType.PREGAME : MenuType.MAINMENU;
 	}
 
 	@Override
@@ -401,6 +660,8 @@ public class RegionRouter implements TerminalRenderer
 	{
 		if (fullView != null)
 			fullView.increaseFontSize();
+		if (skillsView != null)
+			skillsView.increaseFontSize();
 		for (RegionTermView region : splitRegions)
 			region.increaseFontSize();
 	}
@@ -410,6 +671,8 @@ public class RegionRouter implements TerminalRenderer
 	{
 		if (fullView != null)
 			fullView.decreaseFontSize();
+		if (skillsView != null)
+			skillsView.decreaseFontSize();
 		for (RegionTermView region : splitRegions)
 			region.decreaseFontSize();
 	}

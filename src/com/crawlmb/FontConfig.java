@@ -20,14 +20,20 @@ public class FontConfig
     public final float portraitMsgFontScale;
     public final float landscapeFontScale;
 
+    public final float portraitPregameFontScale;
+    public final boolean portraitPregameScrollable;
+    public final float portraitMainmenuFontScale;
+    public final boolean portraitMainmenuScrollable;
     public final float portraitItemsFontScale;
     public final boolean portraitItemsScrollable;
+    public final boolean portraitItemsVScrollable;
     public final float portraitSpellsFontScale;
     public final boolean portraitSpellsScrollable;
     public final float portraitOverviewFontScale;
     public final boolean portraitOverviewScrollable;
     public final float portraitSkillsFontScale;
     public final boolean portraitSkillsScrollable;
+    public final boolean portraitSkillsVScrollable;
     public final float portraitReligionFontScale;
     public final boolean portraitReligionScrollable;
     public final float portraitHiscoresFontScale;
@@ -43,14 +49,20 @@ public class FontConfig
         this.portraitMsgFontScale      = getFloat(props, "portrait_msg_font_scale", 1.5f);
         this.landscapeFontScale        = getFloat(props, "landscape_font_scale", 1.0f);
 
+        this.portraitPregameFontScale  = getFloat(props, "portrait_pregame_font_scale", this.portraitFullFontScale);
+        this.portraitPregameScrollable = getBool (props, "portrait_pregame_scrollable", this.portraitFullScrollable);
+        this.portraitMainmenuFontScale = getFloat(props, "portrait_mainmenu_font_scale", this.portraitFullFontScale);
+        this.portraitMainmenuScrollable= getBool (props, "portrait_mainmenu_scrollable", this.portraitFullScrollable);
         this.portraitItemsFontScale    = getFloat(props, "portrait_items_font_scale", this.portraitFullFontScale);
         this.portraitItemsScrollable   = getBool (props, "portrait_items_scrollable", this.portraitFullScrollable);
+        this.portraitItemsVScrollable  = getBool (props, "portrait_items_vscrollable", false);
         this.portraitSpellsFontScale   = getFloat(props, "portrait_spells_font_scale", this.portraitFullFontScale);
         this.portraitSpellsScrollable  = getBool (props, "portrait_spells_scrollable", this.portraitFullScrollable);
         this.portraitOverviewFontScale = getFloat(props, "portrait_overview_font_scale", this.portraitFullFontScale);
         this.portraitOverviewScrollable= getBool (props, "portrait_overview_scrollable", this.portraitFullScrollable);
         this.portraitSkillsFontScale   = getFloat(props, "portrait_skills_font_scale", this.portraitFullFontScale);
         this.portraitSkillsScrollable  = getBool (props, "portrait_skills_scrollable", this.portraitFullScrollable);
+        this.portraitSkillsVScrollable = getBool (props, "portrait_skills_vscrollable", true);
         this.portraitReligionFontScale = getFloat(props, "portrait_religion_font_scale", this.portraitFullFontScale);
         this.portraitReligionScrollable= getBool (props, "portrait_religion_scrollable", this.portraitFullScrollable);
         this.portraitHiscoresFontScale = getFloat(props, "portrait_hiscores_font_scale", this.portraitFullFontScale);

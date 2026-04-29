@@ -23,6 +23,7 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	private PassThroughListener passThroughListener;
 	private View messageView;
 	private RegionTermView menuView;
+	private RegionTermView skillsView;
 	private View activeForwardTarget = null;
 	private boolean targetAreaTouch = false;
 	private boolean forwardingToTarget = false;
@@ -79,16 +80,22 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		this.menuView = view;
 	}
 
+	public void setSkillsView(RegionTermView view)
+	{
+		this.skillsView = view;
+	}
+
 	// Returns the currently-eligible drag-scroll forwarding target whose
 	// bounds contain this touch, or null if none. Eligibility = view is
-	// VISIBLE and (for RegionTermView) horizontal scroll is enabled.
-	// msgView is gameplay-only; menuView is menu-only — they're never
-	// both visible at once, so order doesn't matter.
+	// VISIBLE and (for RegionTermView) at least one scroll axis is enabled.
+	// msgView is gameplay-only; menuView/skillsView are menu-only and
+	// mutually exclusive — only one is VISIBLE at a time, so order doesn't
+	// matter beyond visibility.
 	private View pickForwardTarget(MotionEvent e)
 	{
 		if (e == null)
 			return null;
-		View[] candidates = { messageView, menuView };
+		View[] candidates = { messageView, menuView, skillsView };
 		for (View v : candidates)
 		{
 			if (v == null)
@@ -96,7 +103,7 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			if (v.getVisibility() != View.VISIBLE)
 				continue;
 			if (v instanceof RegionTermView
-					&& !((RegionTermView) v).isHorizontalScrollEnabled())
+					&& !((RegionTermView) v).isScrollEnabled())
 				continue;
 			int[] loc = new int[2];
 			v.getLocationOnScreen(loc);

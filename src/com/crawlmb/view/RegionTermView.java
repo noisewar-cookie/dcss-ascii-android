@@ -52,7 +52,9 @@ public class RegionTermView extends View
 	private int offsetCols = 0;
 
 	private boolean horizontalScrollEnabled = false;
+	private boolean verticalScrollEnabled = false;
 	private int scrollOffsetX = 0;
+	private int scrollOffsetY = 0;
 	private GestureDetector scrollDetector;
 
 	public RegionTermView(Context context, int startRow, int startCol, int endRow, int endCol)
@@ -89,6 +91,16 @@ public class RegionTermView extends View
 		return horizontalScrollEnabled;
 	}
 
+	public boolean isVerticalScrollEnabled()
+	{
+		return verticalScrollEnabled;
+	}
+
+	public boolean isScrollEnabled()
+	{
+		return horizontalScrollEnabled || verticalScrollEnabled;
+	}
+
 	public void setHorizontalScrollEnabled(boolean enabled)
 	{
 		if (this.horizontalScrollEnabled == enabled)
@@ -101,35 +113,80 @@ public class RegionTermView extends View
 			scrollOffsetX = 0;
 			invalidate();
 		}
-		if (enabled && scrollDetector == null)
-		{
-			scrollDetector = new GestureDetector(getContext(),
-					new GestureDetector.SimpleOnGestureListener()
-					{
-						@Override
-						public boolean onScroll(MotionEvent e1, MotionEvent e2,
-								float distanceX, float distanceY)
-						{
-							int maxScroll = Math.max(0, canvas_width - getWidth());
-							scrollOffsetX = Math.max(0,
-									Math.min(maxScroll, scrollOffsetX + (int) distanceX));
-							invalidate();
-							return true;
-						}
+		ensureScrollDetector();
+	}
 
-						@Override
-						public boolean onDown(MotionEvent e)
-						{
-							return true;
-						}
-					});
+	public void setVerticalScrollEnabled(boolean enabled)
+	{
+		if (this.verticalScrollEnabled == enabled)
+			return;
+		this.verticalScrollEnabled = enabled;
+		if (!enabled)
+		{
+			scrollOffsetY = 0;
+			// Vertical scroll caps the reported height; toggling it must
+			// re-measure so siblings reflow.
+			requestLayout();
+			invalidate();
 		}
+		else
+		{
+			requestLayout();
+		}
+		ensureScrollDetector();
+	}
+
+	private void ensureScrollDetector()
+	{
+		if (scrollDetector != null)
+			return;
+		scrollDetector = new GestureDetector(getContext(),
+				new GestureDetector.SimpleOnGestureListener()
+				{
+					@Override
+					public boolean onScroll(MotionEvent e1, MotionEvent e2,
+							float distanceX, float distanceY)
+					{
+						boolean changed = false;
+						if (horizontalScrollEnabled)
+						{
+							int maxX = Math.max(0, canvas_width - getWidth());
+							int newX = Math.max(0,
+									Math.min(maxX, scrollOffsetX + (int) distanceX));
+							if (newX != scrollOffsetX)
+							{
+								scrollOffsetX = newX;
+								changed = true;
+							}
+						}
+						if (verticalScrollEnabled)
+						{
+							int maxY = Math.max(0, canvas_height - getHeight());
+							int newY = Math.max(0,
+									Math.min(maxY, scrollOffsetY + (int) distanceY));
+							if (newY != scrollOffsetY)
+							{
+								scrollOffsetY = newY;
+								changed = true;
+							}
+						}
+						if (changed)
+							invalidate();
+						return true;
+					}
+
+					@Override
+					public boolean onDown(MotionEvent e)
+					{
+						return true;
+					}
+				});
 	}
 
 	@Override
 	public boolean onTouchEvent(MotionEvent event)
 	{
-		if (horizontalScrollEnabled && scrollDetector != null)
+		if (isScrollEnabled() && scrollDetector != null)
 		{
 			scrollDetector.onTouchEvent(event);
 			return true;
@@ -170,7 +227,8 @@ public class RegionTermView extends View
 	{
 		if (bitmap != null)
 		{
-			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX, 0, null);
+			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX,
+					-scrollOffsetY, null);
 		}
 	}
 
@@ -362,7 +420,28 @@ public class RegionTermView extends View
 			canvas = newCanvas;
 		}
 
-		setMeasuredDimension(width, canvas_height);
+		// When vertical scroll is enabled, cap reported height to the parent
+		// constraint so this view doesn't push siblings (or itself) past the
+		// visible area; the bitmap is taller and the user pans within the
+		// visible window via scrollOffsetY. Without scroll on, report the
+		// full bitmap height as before so no scroll is needed.
+		int reportedHeight = canvas_height;
+		if (verticalScrollEnabled)
+		{
+			int parentLimit = MeasureSpec.getSize(heightMeasureSpec);
+			int mode = MeasureSpec.getMode(heightMeasureSpec);
+			if (mode != MeasureSpec.UNSPECIFIED && parentLimit > 0
+					&& canvas_height > parentLimit)
+			{
+				reportedHeight = parentLimit;
+			}
+			// Re-clamp existing offset against the new viewport size.
+			int maxY = Math.max(0, canvas_height - reportedHeight);
+			if (scrollOffsetY > maxY)
+				scrollOffsetY = maxY;
+		}
+
+		setMeasuredDimension(width, reportedHeight);
 	}
 
 	@Override
