@@ -15,6 +15,14 @@
         <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
     </style>
 
+    <!-- CustomKeyboardActivity sits at the bottom of the screen with the
+         virtual keyboard pinned to the parent bottom. Opt out of Android
+         15's edge-to-edge enforcement so the gesture/nav bar pushes the
+         keyboard up instead of overlaying its bottom row. -->
+    <style name="Theme.Crawl.CustomKeyboard" parent="Theme.Crawl">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+
     <style name="Theme.Crawl" parent="@android:style/Theme.NoTitleBar.Fullscreen">
         <item name="android:windowBackground">@android:color/black</item>
         <!--<item name="colorPrimary">@color/primary</item>-->

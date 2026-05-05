@@ -59,6 +59,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".activity.CustomKeyboardActivity"
+            android:theme="@style/Theme.Crawl.CustomKeyboard"
             android:windowSoftInputMode="stateHidden"
             android:label="Customize keyboard">
         </activity>
