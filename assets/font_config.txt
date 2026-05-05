@@ -49,6 +49,10 @@ portrait_map_offset_cols=4
 # Terminal region: 43 cols x 17 rows  (terminal cols 37-79, rows 0-16)
 portrait_hud_font_scale=0.85
 
+# Portrait: HUD horizontal shift in terminal columns (positive = right)
+# 0 = left-aligned, 1 aligns with the underscore at col 0 of the message panel
+portrait_hud_offset_cols=1
+
 # Portrait: message panel
 # Shown during: gameplay — bottom strip, game messages
 # Terminal region: 80 cols x 7 rows  (terminal cols 0-79, rows 17-23)

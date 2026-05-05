@@ -385,6 +385,7 @@ public class GameActivity extends Activity
 				RegionRouter.HUD_START_ROW, RegionRouter.HUD_START_COL,
 				RegionRouter.HUD_END_ROW, RegionRouter.HUD_END_COL);
 		hudView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
+		hudView.setOffsetCols(fontConfig.portraitHudOffsetCols);
 
 		RegionTermView msgView = new RegionTermView(this,
 				RegionRouter.MSG_START_ROW, RegionRouter.MSG_START_COL,

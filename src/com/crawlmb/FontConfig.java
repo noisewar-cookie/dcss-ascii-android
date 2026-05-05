@@ -17,6 +17,7 @@ public class FontConfig
     public final float portraitMapFontScale;
     public final int portraitMapOffsetCols;
     public final float portraitHudFontScale;
+    public final int portraitHudOffsetCols;
     public final float portraitMsgFontScale;
     public final float landscapeFontScale;
 
@@ -46,6 +47,7 @@ public class FontConfig
         this.portraitMapFontScale      = getFloat(props, "portrait_map_font_scale", 1.0f);
         this.portraitMapOffsetCols     = getInt  (props, "portrait_map_offset_cols", 2);
         this.portraitHudFontScale      = getFloat(props, "portrait_hud_font_scale", 1.0f);
+        this.portraitHudOffsetCols     = getInt  (props, "portrait_hud_offset_cols", 0);
         this.portraitMsgFontScale      = getFloat(props, "portrait_msg_font_scale", 1.5f);
         this.landscapeFontScale        = getFloat(props, "landscape_font_scale", 1.0f);
 
