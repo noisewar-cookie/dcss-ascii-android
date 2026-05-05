@@ -83,14 +83,26 @@ extern int main(int argc, char *argv[]);
 void (*crawl_quit_hook)(void) = NULL;
 
 static jmp_buf jbuf;
-/* JVM enviroment */
-static JavaVM *jvm;
+
+// JNI globals split into two phases:
+//
+//   Phase 1 — cached once in JNI_OnLoad (write-once, read-only after):
+//     g_jvm, NativeWrapperClass (global ref), NativeWrapper_* method IDs.
+//     The JVM serializes JNI_OnLoad via NativeWrapper's static initializer
+//     lock, so subsequent reads from any thread see them initialized.
+//
+//   Phase 2 — captured per game session in init_java_methods:
+//     env (game-thread JNIEnv) and NativeWrapperObj (instance jobject).
+//     Used by same-thread crawl callbacks (getchk, sendTerminalToScreen,
+//     crawl_quit). Refresh from the UI thread does NOT use these — it
+//     uses the env/object passed into the JNI entry point.
+static JavaVM *g_jvm;
 static JNIEnv *env;
 
 static jclass NativeWrapperClass;
 static jobject NativeWrapperObj;
 
-/* Java Methods */
+/* Java Methods (cached in JNI_OnLoad) */
 static jmethodID NativeWrapper_fatal;
 static jmethodID NativeWrapper_getch;
 static jmethodID NativeWrapper_printTerminalChar;
@@ -146,17 +158,61 @@ TerminalChar * getCurrentTerminalChar()
 	return getTerminalCharAt(y, x);
 }
 
+// Cache the NativeWrapper class and its method IDs. Called once from
+// JNI_OnLoad. Returns false on any lookup failure so the loader can
+// fail fast with a clear log line rather than crashing later on a NULL
+// jmethodID. To bridge a new Java method, declare it above and add one
+// line here — single point of maintenance.
+static bool _cache_native_wrapper_methods(JNIEnv* e)
+{
+	jclass local = e->FindClass("com/crawlmb/NativeWrapper");
+	if (!local)
+		return false;
+	NativeWrapperClass = (jclass)e->NewGlobalRef(local);
+	e->DeleteLocalRef(local);
+	if (!NativeWrapperClass)
+		return false;
+
+	NativeWrapper_fatal = e->GetMethodID(NativeWrapperClass,
+		"fatal", "(Ljava/lang/String;)V");
+	NativeWrapper_getch = e->GetMethodID(NativeWrapperClass,
+		"getch", "(I)I");
+	NativeWrapper_printTerminalChar = e->GetMethodID(NativeWrapperClass,
+		"printTerminalChar", "(IICII)V");
+	NativeWrapper_invalidateTerminal = e->GetMethodID(NativeWrapperClass,
+		"invalidateTerminal", "()V");
+
+	return NativeWrapper_fatal
+		&& NativeWrapper_getch
+		&& NativeWrapper_printTerminalChar
+		&& NativeWrapper_invalidateTerminal;
+}
+
+extern "C" jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/)
+{
+	g_jvm = vm;
+	JNIEnv* e = NULL;
+	if (vm->GetEnv((void**)&e, JNI_VERSION_1_6) != JNI_OK)
+	{
+		__android_log_write(ANDROID_LOG_ERROR, "Crawl",
+			"JNI_OnLoad: GetEnv failed");
+		return JNI_ERR;
+	}
+	if (!_cache_native_wrapper_methods(e))
+	{
+		__android_log_write(ANDROID_LOG_ERROR, "Crawl",
+			"JNI_OnLoad: failed to cache NativeWrapper methods");
+		return JNI_ERR;
+	}
+	return JNI_VERSION_1_6;
+}
+
+// Capture the per-game-session env and instance for same-thread crawl
+// callbacks. Class and method IDs are already cached in JNI_OnLoad.
 void init_java_methods( JNIEnv* env1, jobject object )
 {
 	env = env1;
 	NativeWrapperObj = object;
-	NativeWrapperClass = env->GetObjectClass(NativeWrapperObj);
-
-	/* NativeWrapper Methods */
-	NativeWrapper_fatal = JAVA_METHOD("fatal", "(Ljava/lang/String;)V");
-	NativeWrapper_getch = JAVA_METHOD("getch", "(I)I");
-	NativeWrapper_printTerminalChar = JAVA_METHOD("printTerminalChar", "(IICII)V");
-	NativeWrapper_invalidateTerminal = JAVA_METHOD("invalidateTerminal", "()V");
 }
 
 extern "C"
