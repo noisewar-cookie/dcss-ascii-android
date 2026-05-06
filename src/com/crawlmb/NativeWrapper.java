@@ -144,6 +144,20 @@ public class NativeWrapper
 		}
 	}
 
+	// Called from libandroid.cc at the start of each dirty-cell storm.
+	// isGameplay reflects whether the new terminal grid (already populated
+	// on the C++ side) shows a gameplay HUD anchor. Forwarded to the
+	// renderer so it can preemptively adjust drawPoint routing before the
+	// storm flushes cells.
+	public void preStormHint(boolean isGameplay)
+	{
+		synchronized (display_lock)
+		{
+			if (renderer != null)
+				renderer.preStormHint(isGameplay);
+		}
+	}
+
 	// Ask DCSS to repaint the current screen state. Used after a font scale
 	// change recreates the underlying bitmap (which is then blank): DCSS
 	// re-issues drawPoint calls for every cell, refilling the new bitmap.

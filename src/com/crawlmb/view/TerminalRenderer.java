@@ -12,4 +12,12 @@ public interface TerminalRenderer
 	void decreaseFontSize();
 	Context getContext();
 	Resources getResources();
+
+	// Called from libandroid.cc at the start of each dirty-cell storm with
+	// a flag indicating whether the new frame's terminal grid contains any
+	// gameplay HUD anchor. Lets the renderer adjust drawPoint routing
+	// before the storm begins (e.g. to skip forwarding to the gameplay
+	// split panels on a gameplay->menu transition). Default is no-op for
+	// renderers that don't care (e.g. landscape TermView).
+	default void preStormHint(boolean isGameplay) {}
 }

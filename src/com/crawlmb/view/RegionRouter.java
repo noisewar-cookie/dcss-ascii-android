@@ -135,6 +135,15 @@ public class RegionRouter implements TerminalRenderer
 	private volatile MenuType currentMenuType = MenuType.DEFAULT;
 	private boolean gameplayEverDetected = false;
 
+	// Set by preStormHint when the next storm transitions GAMEPLAY -> a
+	// non-gameplay frame. Read by drawPoint to skip forwarding to
+	// splitRegions for the duration of the storm — without this, the storm
+	// writes menu chars at terminal coordinates into mapView/hudView/msgView
+	// and a UI-thread vsync mid-storm or post-storm-pre-applyMode draws
+	// those chars in the wrong panel ("on top of the game map"). Cleared
+	// in postInvalidate after the storm so the next frame starts clean.
+	private volatile boolean skipSplitRegionsThisStorm = false;
+
 	// Anchor for the single-column fold of the skills menu. Recomputed on
 	// each transition INTO MenuType.SKILLS by scanning terminalShadow for
 	// the two occurrences of "     Skill" on the same row. skillsLeftCol
@@ -254,15 +263,26 @@ public class RegionRouter implements TerminalRenderer
 			scrollStateListener.onMenuScrollableChanged(menuScrollable);
 		}
 
-		// applyMenuConfig's setFontScaleMultiplier triggers a re-measure
-		// that recreates the bitmap blank; DCSS won't redraw mid-menu
-		// without input. Fire the redraw requester after the next layout
-		// pass so it draws into the freshly-sized bitmap. Also fire on
-		// any view-swap (fullView <-> skillsView), since the freshly
-		// shown view's bitmap may be empty or stale.
-		if (redrawRequester != null && activeMenu != null
+		// Decide whether DCSS needs to repaint into the now-active surface.
+		//   - splitContainer (gameplay): postInvalidate just cleared
+		//     splitRegions on this menu->gameplay transition, so DCSS must
+		//     repaint into the cleared bitmaps before the user sees them.
+		//   - menu views: applyMenuConfig's setFontScaleMultiplier
+		//     triggers a re-measure that recreates the bitmap blank, and a
+		//     view-swap into skillsView always lands on a stale bitmap
+		//     (drawPoint only forwards to skillsView while currentMenuType
+		//     == SKILLS, so the previous storm skipped it).
+		// applyMode is only called on state transitions, so this scheduler
+		// runs at most once per transition.
+		View redrawTarget = null;
+		if (splitVisible && splitContainer != null)
+			redrawTarget = splitContainer;
+		else if (activeMenu != null
 				&& (scaleChanged || activeMenu == skillsView))
-			scheduleRedrawAfterLayout(activeMenu);
+			redrawTarget = activeMenu;
+
+		if (redrawRequester != null && redrawTarget != null)
+			scheduleRedrawAfterLayout(redrawTarget);
 	}
 
 	private void scheduleRedrawAfterLayout(final View target)
@@ -397,11 +417,33 @@ public class RegionRouter implements TerminalRenderer
 
 		if (fullView != null)
 			fullView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
-		for (RegionTermView region : splitRegions)
-			region.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+		// Skip splitRegions during a gameplay->menu transition storm: the
+		// new frame's chars belong to a menu, and forwarding them at
+		// terminal coordinates into mapView/hudView/msgView would tear the
+		// next visible draw before applyMode hides splitContainer.
+		if (!skipSplitRegionsThisStorm)
+		{
+			for (RegionTermView region : splitRegions)
+				region.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+		}
 
 		if (skillsView != null && currentMenuType == MenuType.SKILLS)
 			forwardToSkillsView(r, c, ch, fcolor, bcolor, extendedErase);
+	}
+
+	// Set the skip flag when this storm transitions GAMEPLAY -> non-gameplay.
+	// That's the direction where the storm writes wrong-panel content into
+	// CURRENTLY-VISIBLE splitRegions, which mid-storm or post-storm-pre-
+	// applyMode draws expose. The reverse direction (menu -> gameplay) has
+	// stale content too, but splitContainer is still INVISIBLE during the
+	// storm, so we let it write and clear it in postInvalidate. Runs on
+	// the game thread under display_lock (NativeWrapper.preStormHint),
+	// strictly before the storm's drawPoint calls.
+	@Override
+	public void preStormHint(boolean isGameplay)
+	{
+		skipSplitRegionsThisStorm =
+				(currentMode == LayoutMode.GAMEPLAY) && !isGameplay;
 	}
 
 	// Remap the 24x80 two-column skills layout into a 41x80 single-column
@@ -613,6 +655,23 @@ public class RegionRouter implements TerminalRenderer
 
 		if (detected != currentMode || detectedType != currentMenuType)
 		{
+			// menu -> gameplay: splitRegions still hold whatever the menu
+			// storms wrote into them (drawPoint forwards unconditionally
+			// when the skip flag isn't set, and during menus splitContainer
+			// is INVISIBLE so we let those writes happen). Now that
+			// splitContainer is about to become visible, clear the stale
+			// menu content synchronously on the game thread; applyMode's
+			// scheduleRedrawAfterLayout will trigger DCSS to repaint
+			// gameplay into the cleared bitmaps. The reverse direction
+			// (gameplay -> menu) is handled by skipSplitRegionsThisStorm,
+			// set via preStormHint before this storm even started.
+			if (currentMode != LayoutMode.GAMEPLAY
+					&& detected == LayoutMode.GAMEPLAY)
+			{
+				for (RegionTermView region : splitRegions)
+					region.clear();
+			}
+
 			currentMode = detected;
 			currentMenuType = detectedType;
 			if (detected == LayoutMode.GAMEPLAY)
@@ -641,6 +700,11 @@ public class RegionRouter implements TerminalRenderer
 			skillsView.postInvalidate();
 		for (RegionTermView region : splitRegions)
 			region.postInvalidate();
+
+		// End of storm: clear the per-storm flag so the next storm starts
+		// from a known state. preStormHint will set it again at the start
+		// of the next storm if needed.
+		skipSplitRegionsThisStorm = false;
 	}
 
 	// Sub-classify LayoutMode.PREGAME. Before DCSS runs, SplashActivity

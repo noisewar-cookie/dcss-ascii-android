@@ -107,6 +107,7 @@ static jmethodID NativeWrapper_fatal;
 static jmethodID NativeWrapper_getch;
 static jmethodID NativeWrapper_printTerminalChar;
 static jmethodID NativeWrapper_invalidateTerminal;
+static jmethodID NativeWrapper_preStormHint;
 
 // Terminal stuff
 class TerminalChar //I guess this could be a struct.
@@ -181,11 +182,14 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"printTerminalChar", "(IICII)V");
 	NativeWrapper_invalidateTerminal = e->GetMethodID(NativeWrapperClass,
 		"invalidateTerminal", "()V");
+	NativeWrapper_preStormHint = e->GetMethodID(NativeWrapperClass,
+		"preStormHint", "(Z)V");
 
 	return NativeWrapper_fatal
 		&& NativeWrapper_getch
 		&& NativeWrapper_printTerminalChar
-		&& NativeWrapper_invalidateTerminal;
+		&& NativeWrapper_invalidateTerminal
+		&& NativeWrapper_preStormHint;
 }
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/)
@@ -262,12 +266,55 @@ void set_mouse_enabled(bool enabled)
 	return;
 }
 
+// Scan terminalWindow for any HUD label at col 37 in rows 2..8. Mirrors
+// RegionRouter.detectMode (Java side) but operates on the C-side grid
+// before the storm flushes it. This lets Java preemptively skip
+// forwarding cells to the gameplay split panels when the new frame is a
+// menu — without the hint, drawPoint would tear mapView/hudView/msgView
+// with menu chars at terminal coordinates while splitContainer is still
+// VISIBLE (applyMode's hide runs later on the UI thread). Keep the
+// label list and column in sync with HUD_LABELS / HUD_ANCHOR_COL in
+// RegionRouter.java.
+static bool _is_gameplay_frame()
+{
+	static const char *labels[] = {
+		"Health:", "HP:", "Magic:", "MP:", "AC:", "EV:", "SH:", "XL:"
+	};
+	static const int n_labels = sizeof(labels) / sizeof(labels[0]);
+	const int anchor_col = 37;
+	for (int r = 2; r <= 8; r++)
+	{
+		for (int li = 0; li < n_labels; li++)
+		{
+			const char *lbl = labels[li];
+			int llen = (int)strlen(lbl);
+			if (anchor_col + llen > COLS)
+				continue;
+			bool match = true;
+			for (int i = 0; i < llen; i++)
+			{
+				if (terminalWindow[r][anchor_col + i].character
+						!= (jchar)lbl[i])
+				{
+					match = false;
+					break;
+				}
+			}
+			if (match)
+				return true;
+		}
+	}
+	return false;
+}
+
 void sendTerminalToScreen()
 {
 	if (dirtyTerminalChars.empty())
 	{
 		return;
 	}
+	JAVA_CALL(NativeWrapper_preStormHint,
+		_is_gameplay_frame() ? JNI_TRUE : JNI_FALSE);
 	std::set<TerminalChar *>::iterator it;
 	for (it = dirtyTerminalChars.begin(); it != dirtyTerminalChars.end(); it++)
 	{
