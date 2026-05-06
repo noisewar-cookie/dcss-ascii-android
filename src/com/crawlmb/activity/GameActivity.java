@@ -348,7 +348,7 @@ public class GameActivity extends Activity
 		gamePanelId = gamePanel.getId();
 
 		RegionTermView fullView = new RegionTermView(this, 0, 0, 24, 80);
-		fullView.setFontScaleMultiplier(fontConfig.portraitFullFontScale);
+		fullView.setFontScaleMultiplier(fontConfig.portraitDefaultFontScale);
 		fullView.setGameStartTrigger(handler);
 		portraitFullView = fullView;
 		gamePanel.addView(fullView, new FrameLayout.LayoutParams(

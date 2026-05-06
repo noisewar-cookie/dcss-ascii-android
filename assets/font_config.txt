@@ -6,24 +6,28 @@
 # The col/row counts in comments are the terminal character dimensions of each
 # panel region — they are fixed in the layout and shown here for reference only.
 #
-# *_scrollable=true allows horizontal drag-scrolling within that panel/menu
-# when the rendered 80-col bitmap is wider than the screen (i.e. the font
-# scale pushes content past the screen edge). Below that, scrollable is a
-# no-op. Drag area = the full rendered region of that panel/menu.
+# *_scrollable=true  enables horizontal drag-scrolling within that panel/menu
+#                    when the rendered 80-col bitmap is wider than the screen.
+# *_vscrollable=true enables vertical drag-scrolling when the rendered bitmap
+#                    is taller than the screen.
+# Below the overflow threshold, the corresponding scrollable flag is a no-op.
+# Drag area = the full rendered region of that panel/menu.
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Portrait: full screen
-# Shown during: any in-game menu/info screen not matched by the more
-# specific groups below (item descriptions, monster examine, lookup help,
-# message history, level map, macros, help text, etc.)
+# Default Game Screens
+# Fallback for any in-game menu/info screen NOT matched by the more specific
+# groups below. Includes: help screens (?), description popups (item/monster
+# examine, lookup help ?/), message history (Ctrl+P), macros (~), and any
+# other menu without an explicit category.
 # Terminal region: 80 cols x 24 rows
-portrait_full_font_scale=1.25
-portrait_full_scrollable=false
+portrait_default_font_scale=1.4
+portrait_default_scrollable=true
+portrait_default_vscrollable=true
 
 # Portrait: pre-game loading screen
 # Shown during: the static loading screen (text from string-array.xml,
 # starting with "Launching game. May take a while the first time.")
-# Defaults: falls back to portrait_full_* if unset
+# Defaults: falls back to portrait_default_* if unset
 portrait_pregame_font_scale=1.5
 portrait_pregame_scrollable=true
 
@@ -31,7 +35,7 @@ portrait_pregame_scrollable=true
 # Shown during: "Hello, welcome to Dungeon Crawl ..." through name prompt,
 # save selection, species/background selection, starting weapon, etc. —
 # i.e. everything DCSS draws before gameplay (HUD) starts.
-# Defaults: falls back to portrait_full_* if unset
+# Defaults: falls back to portrait_default_* if unset
 portrait_mainmenu_font_scale=1.5
 portrait_mainmenu_scrollable=true
 
@@ -65,11 +69,13 @@ landscape_font_scale=1.0
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Per-menu overrides (portrait only). Each group below overrides
-# portrait_full_font_scale / portrait_full_scrollable when that menu is shown.
+# portrait_default_font_scale / portrait_default_scrollable when that menu is
+# shown.
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Item lists: inventory (i), item-use prompts (w/W/T/P/R/q/r/v/f/t),
-# drop (d), pickup, shop, stash search, known items (\)
+# drop (d), pickup (g), shop, stash search, known items (\),
+# inscribe ({), quiver (Shift+Q)
 # - portrait_items_scrollable: enable horizontal drag (when content > width)
 # - portrait_items_vscrollable: enable vertical drag (when content > height)
 portrait_items_font_scale=1.5
@@ -79,10 +85,11 @@ portrait_items_vscrollable=true
 # Spell/ability lists: spell list (I), cast (z), memorise (M),
 # abilities (a), mutations (A)
 portrait_spells_font_scale=1.5
-portrait_spells_scrollable=false
+portrait_spells_scrollable=true
+portrait_spells_vscrollable=true
 
 # Character overview (%)
-portrait_overview_font_scale=2.0
+portrait_overview_font_scale=1.6
 portrait_overview_scrollable=true
 
 # Skill training (m)
@@ -103,3 +110,24 @@ portrait_religion_scrollable=true
 # Hi-score screen (end of game)
 portrait_hiscores_font_scale=1.4
 portrait_hiscores_scrollable=true
+
+# Stash search results (Ctrl+F → match found)
+# Shown during: the menu listing matching items/features after a search.
+# Detected by the "[toggle:" marker in the title row.
+portrait_travel_font_scale=1.5
+portrait_travel_scrollable=true
+portrait_travel_vscrollable=true
+
+# Dungeon level map (Shift+X)
+# Shown during: the level overview / travel map. Detected by the
+# "(Press ? for help)" marker drawn at the right of the title row.
+portrait_levelmap_font_scale=1.75
+portrait_levelmap_scrollable=true
+portrait_levelmap_vscrollable=true
+
+# Visible features (Ctrl+X)
+# Shown during: the "Visible Monsters/Items/Features" target/travel menu.
+# Detected by the "Visible " prefix at the start of the title row.
+portrait_vfeatures_font_scale=1.5
+portrait_vfeatures_scrollable=true
+portrait_vfeatures_vscrollable=true

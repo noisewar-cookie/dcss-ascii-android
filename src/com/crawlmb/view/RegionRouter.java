@@ -22,7 +22,8 @@ public class RegionRouter implements TerminalRenderer
 	// LayoutMode.PREGAME (loading screen vs. DCSS welcome/character creation).
 	public enum MenuType
 	{
-		DEFAULT, PREGAME, MAINMENU, ITEMS, SPELLS, OVERVIEW, SKILLS, RELIGION, HISCORES
+		DEFAULT, PREGAME, MAINMENU, ITEMS, SPELLS, OVERVIEW, SKILLS,
+		RELIGION, HISCORES, TRAVEL, LEVELMAP, VFEATURES
 	}
 
 	public interface ScrollStateListener
@@ -74,8 +75,17 @@ public class RegionRouter implements TerminalRenderer
 	// crawl-ref/source/invent.cc emits one of these when MF_PAGED_INVENTORY
 	// is set, which is the default in 0.34 (Options.show_paged_inventory).
 	// Without these, paged inventory was misclassified as DEFAULT and got
-	// portraitFullFontScale instead of portraitItemsFontScale. Non-paged
+	// portraitDefaultFontScale instead of portraitItemsFontScale. Non-paged
 	// inventory still uses the literal "Inventory:" title.
+	//
+	// Pickup ('g') and the recognised-items menu ('\') were added after an
+	// earlier "Items known" anchor was found to never match: known-items.cc
+	// emits "Items not yet recognised:", "Recognised items.", or "You
+	// recognise all items." depending on state — none of which start with
+	// "Items known". Pickup's title is built in items.cc as either
+	// "Pick up what? ... (_ for help)" or, for a single-stack pile, "Select
+	// pick up quantity by entering a number, then select the item".
+	// Inscribe ('{') uses "Inscribe which item?" via prompt_invent_item.
 	private static final String[] ITEMS_ROW0_PREFIXES = {
 		"Inventory:",
 		"Gear:",
@@ -83,6 +93,8 @@ public class RegionRouter implements TerminalRenderer
 		"Scrolls:",
 		"Evocable Items:",
 		"Drop what?",
+		"Pick up what?",
+		"Select pick up quantity",
 		"Wield ",
 		"Unequip ",
 		"Equip ",
@@ -96,16 +108,52 @@ public class RegionRouter implements TerminalRenderer
 		"Drink which",
 		"Read which",
 		"Evoke which",
+		"Inscribe which",
 		"Welcome to ",
-		"Items known"
+		"Items not yet recognised",
+		"Recognised items",
+		"You recognise all items"
 	};
 
+	// Catches:
+	//   "Your spells (cast)" / "Your spells (describe)" — spell list (I), cast (z)
+	//     via list_spells() in spl-cast.cc
+	//   "Spells (Memorise)" / "Spells (Cast)" / "Spells (Imbue)" /
+	//   "Spells (Describe)" / "Spells (Hide)" / "Spells (Show)" — memorise (M),
+	//     Vehumet's Divine Exegesis, Spellspark Servitor imbue
+	//     via SpellLibraryMenu::calc_title in spl-book.cc
+	//   "Ability - do what" / "Ability - describe what" — abilities (a)
+	//   "Innate Abilities, Weirdness" — mutations (A)
 	private static final String[] SPELLS_ROW0_PREFIXES = {
 		"Your spells",
+		"Spells (",
 		"Ability - do what",
 		"Ability - describe what",
 		"Innate Abilities, Weirdness"
 	};
+
+	// Visible Monsters/Items/Features title from _full_describe_menu in
+	// directn.cc — accessed via Ctrl+X (full_describe_view).
+	private static final String VFEATURES_PREFIX = "Visible ";
+
+	// Quiver action menu (Shift+Q). ActionSelectMenu in quiver.cc sets an
+	// empty MEL_TITLE, so row-0 prefix matching can't catch it. Its more
+	// widget always contains "focus mode:" (built in get_keyhelp:
+	// "[Tab/!] focus mode: off|on") and that literal occurs in no other
+	// DCSS menu, so a full-terminal scan for it is unambiguous.
+	private static final String QUIVER_MORE_MARKER = "focus mode:";
+
+	// Level map title row: _draw_title in viewmap.cc renders the level name
+	// (left), feature list (centre), and "(Press ? for help)" (right) when
+	// columns >= help width. Accessed via Shift+X (CMD_DISPLAY_MAP).
+	private static final String LEVELMAP_HELP_MARKER = "(Press ? for help)";
+
+	// Stash search results title row from StashSearchMenu::calc_title in
+	// stash.cc — "5 matches: travel [toggle: !], by dist [/], hide useless &
+	// duplicates [=]" (or "view  " in examine mode). The "[toggle:" substring
+	// is unique to this title row format. Accessed via Ctrl+F when matches
+	// are found.
+	private static final String TRAVEL_TOGGLE_MARKER = "[toggle:";
 
 	// Skills menu (m) is rendered into a dedicated wider/taller view so its
 	// two-column layout can be folded into one column. The remap moves the
@@ -317,16 +365,18 @@ public class RegionRouter implements TerminalRenderer
 	{
 		float scale;
 		boolean scrollable;
-		boolean vscrollable = false;
+		boolean vscrollable;
 		switch (type)
 		{
 		case PREGAME:
 			scale = fontConfig.portraitPregameFontScale;
 			scrollable = fontConfig.portraitPregameScrollable;
+			vscrollable = false;
 			break;
 		case MAINMENU:
 			scale = fontConfig.portraitMainmenuFontScale;
 			scrollable = fontConfig.portraitMainmenuScrollable;
+			vscrollable = false;
 			break;
 		case ITEMS:
 			scale = fontConfig.portraitItemsFontScale;
@@ -336,35 +386,53 @@ public class RegionRouter implements TerminalRenderer
 		case SPELLS:
 			scale = fontConfig.portraitSpellsFontScale;
 			scrollable = fontConfig.portraitSpellsScrollable;
+			vscrollable = fontConfig.portraitSpellsVScrollable;
 			break;
 		case OVERVIEW:
 			scale = fontConfig.portraitOverviewFontScale;
 			scrollable = fontConfig.portraitOverviewScrollable;
+			vscrollable = false;
 			break;
 		case RELIGION:
 			scale = fontConfig.portraitReligionFontScale;
 			scrollable = fontConfig.portraitReligionScrollable;
+			vscrollable = false;
 			break;
 		case HISCORES:
 			scale = fontConfig.portraitHiscoresFontScale;
 			scrollable = fontConfig.portraitHiscoresScrollable;
+			vscrollable = false;
+			break;
+		case TRAVEL:
+			scale = fontConfig.portraitTravelFontScale;
+			scrollable = fontConfig.portraitTravelScrollable;
+			vscrollable = fontConfig.portraitTravelVScrollable;
+			break;
+		case LEVELMAP:
+			scale = fontConfig.portraitLevelmapFontScale;
+			scrollable = fontConfig.portraitLevelmapScrollable;
+			vscrollable = fontConfig.portraitLevelmapVScrollable;
+			break;
+		case VFEATURES:
+			scale = fontConfig.portraitVfeaturesFontScale;
+			scrollable = fontConfig.portraitVfeaturesScrollable;
+			vscrollable = fontConfig.portraitVfeaturesVScrollable;
 			break;
 		case SKILLS:
 			// Should never happen — SKILLS uses skillsView. Fall through
 			// to default to be defensive.
 		case DEFAULT:
 		default:
-			scale = fontConfig.portraitFullFontScale;
-			scrollable = fontConfig.portraitFullScrollable;
+			scale = fontConfig.portraitDefaultFontScale;
+			scrollable = fontConfig.portraitDefaultScrollable;
+			vscrollable = fontConfig.portraitDefaultVScrollable;
 			break;
 		}
 		float prevScale = fullView.getFontScaleMultiplier();
 		fullView.setFontScaleMultiplier(scale);
 		fullView.setHorizontalScrollEnabled(scrollable);
-		// Only ITEMS opts into vertical scroll today; every other MenuType
-		// leaves vscrollable=false above. Drag-scroll only takes effect when
-		// the rendered bitmap is taller than the screen — at smaller font
-		// scales this is a no-op.
+		// Drag-scroll only takes effect when the rendered bitmap exceeds
+		// the screen in that axis — at smaller font scales this is a no-op.
 		fullView.setVerticalScrollEnabled(vscrollable);
 		return prevScale != scale;
 	}
@@ -556,6 +624,30 @@ public class RegionRouter implements TerminalRenderer
 		return true;
 	}
 
+	// True if `pattern` appears at the start of `row` after any leading
+	// spaces. Use this for title-prefix detection instead of matchesAt(r,0,p):
+	// Menu::set_title(..., indent=true) (menu.cc:1479) prepends a single space
+	// to the title text via Menu::update_title (menu.cc:2878-2883), shifting
+	// the title to col 1. Strict col-0 matching silently misclassifies every
+	// such menu as DEFAULT — historically this hit spell list (I), cast (z),
+	// memorise (M), and abilities (a), all of which pass indent=true. Drift
+	// in upstream's indent flag is a recurring source of "menu lost its scale"
+	// bugs; tolerating leading whitespace makes detection robust to that flag.
+	private boolean rowStartsWith(int row, String pattern)
+	{
+		if (row < 0 || row >= TERMINAL_ROWS)
+			return false;
+		int start = 0;
+		while (start < TERMINAL_COLS && terminalShadow[row][start] == ' ')
+			start++;
+		if (start + pattern.length() > TERMINAL_COLS)
+			return false;
+		for (int i = 0; i < pattern.length(); i++)
+			if (terminalShadow[row][start + i] != pattern.charAt(i))
+				return false;
+		return true;
+	}
+
 	private boolean rowContains(int row, String pattern)
 	{
 		if (row < 0 || row >= TERMINAL_ROWS)
@@ -594,16 +686,44 @@ public class RegionRouter implements TerminalRenderer
 	private MenuType detectMenuType()
 	{
 		// Row 0 prefix matches: cheapest, covers all set_title-style menus.
+		// Use rowStartsWith (not matchesAt(0,0,...)) so the leading space
+		// added by Menu::set_title(..., indent=true) doesn't shift the title
+		// past our anchor.
 		for (String p : ITEMS_ROW0_PREFIXES)
 		{
-			if (matchesAt(0, 0, p))
+			if (rowStartsWith(0, p))
+				return MenuType.ITEMS;
+		}
+		// Quiver action menu (Shift+Q): title row is blank, so identify
+		// via the unique "focus mode:" string in the menu's more widget,
+		// which lives near the bottom of the terminal. Maps to ITEMS so
+		// it inherits the same scale/scroll config as inventory.
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+		{
+			if (rowContains(r, QUIVER_MORE_MARKER))
 				return MenuType.ITEMS;
 		}
 		for (String p : SPELLS_ROW0_PREFIXES)
 		{
-			if (matchesAt(0, 0, p))
+			if (rowStartsWith(0, p))
 				return MenuType.SPELLS;
 		}
+		// Visible Monsters/Items/Features (Ctrl+X). Title row 0 begins with
+		// "Visible " (modulo possible indent space) — must be checked before
+		// the generic row scans below to avoid being shadowed.
+		if (rowStartsWith(0, VFEATURES_PREFIX))
+			return MenuType.VFEATURES;
+
+		// Stash search results (Ctrl+F). Row 0 contains "[toggle:" as part of
+		// the StashSearchMenu calc_title format. Cheaper than the rowContains
+		// scans below and unique to that menu.
+		if (rowContains(0, TRAVEL_TOGGLE_MARKER))
+			return MenuType.TRAVEL;
+
+		// Level map (Shift+X). _draw_title in viewmap.cc renders
+		// "(Press ? for help)" at the right of row 0.
+		if (rowContains(0, LEVELMAP_HELP_MARKER))
+			return MenuType.LEVELMAP;
 
 		// Custom-rendered screens — scan distinctive markers across rows.
 		// Hiscores: title widget renders "<game name>: High Scores" near top.
@@ -612,14 +732,22 @@ public class RegionRouter implements TerminalRenderer
 			if (rowContains(r, "High Scores"))
 				return MenuType.HISCORES;
 		}
-		// Overview (%): _status_mut_rune_list emits "@:" at the start of a
-		// line — distinctive vs. the gameplay HUD which has no "@:" label.
+		// Overview (%): _get_overview_progress emits "Turns:" at the start
+		// of a line — distinctive vs. the gameplay HUD (which prints
+		// "Time:" / "Turn:" but never "Turns:"). Anchored near the top of
+		// the popup content (row ~5, after title + 3-row stat block + a
+		// blank row), so it stays visible regardless of popup viewport
+		// size or scroll position. The earlier "@:" anchor from
+		// _status_mut_rune_list lived at the BOTTOM of the overview; the
+		// 0.34 reorg (043235e) inserted a 5-row progress block above it
+		// and pushed "@:" past the rows 1-18 search window, so the menu
+		// fell through to DEFAULT and lost portrait_overview_font_scale.
 		// Allow a small left-margin for any popup framing.
 		for (int r = 1; r <= 18; r++)
 		{
 			for (int c = 0; c <= 4; c++)
 			{
-				if (matchesAt(r, c, "@:"))
+				if (matchesAt(r, c, "Turns:"))
 					return MenuType.OVERVIEW;
 			}
 		}
