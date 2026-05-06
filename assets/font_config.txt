@@ -82,7 +82,7 @@ portrait_spells_font_scale=1.5
 portrait_spells_scrollable=false
 
 # Character overview (%)
-portrait_overview_font_scale=1.5
+portrait_overview_font_scale=2.0
 portrait_overview_scrollable=true
 
 # Skill training (m)

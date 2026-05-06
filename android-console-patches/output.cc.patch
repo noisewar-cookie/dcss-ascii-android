@@ -1,0 +1,154 @@
+diff --git a/crawl-ref/source/output.cc b/crawl-ref/source/output.cc
+index 3c3bfb8186..651dbd29c2 100644
+--- a/crawl-ref/source/output.cc
++++ b/crawl-ref/source/output.cc
+@@ -2171,15 +2171,10 @@ static string _overview_screen_title(int sw)
+                                       species::name(you.species).c_str(),
+                                       get_job_name(you.char_class));
+ 
+-    handle_real_time();
+-    string time_turns = make_stringf(" Turns: %d, Time: ", you.num_turns)
+-                      + make_time_string(you.real_time(), true);
+-
+     const int char_width = strwidth(species_job);
+     const int title_width = strwidth(title);
+ 
+-    int linelength = strwidth(you.your_name) + title_width
+-                   + char_width + strwidth(time_turns);
++    int linelength = strwidth(you.your_name) + title_width + char_width;
+ 
+     if (linelength >= sw)
+     {
+@@ -2191,22 +2186,13 @@ static string _overview_screen_title(int sw)
+ 
+     // Still not enough?
+     if (linelength >= sw)
+-    {
+         title = " ";
+-        linelength -= (title_width - 1);
+-    }
+ 
+     string text;
+     text = "<yellow>";
+     text += you.your_name;
+     text += title;
+     text += species_job;
+-
+-    const int num_spaces = sw - linelength - 1;
+-    if (num_spaces > 0)
+-        text += string(num_spaces, ' ');
+-
+-    text += time_turns;
+     text += "</yellow>\n";
+ 
+     return text;
+@@ -2296,15 +2282,15 @@ static vector<formatted_string> _get_overview_stats()
+ {
+     formatted_string entry;
+ 
+-    // 4 columns
++    // 3 columns: Health/Magic/Gold, AC/EV/SH, Str/Int/Dex.
++    // XL/God/Spells/Lives now live in _get_overview_progress below.
+     int col1 = 20;
+     int col2 = 10;
+-    int col3 = 11;
+ 
+     if (player_drained())
+         col1 += 1;
+ 
+-    column_composer cols(4, col1, col1 + col2, col1 + col2 + col3);
++    column_composer cols(3, col1, col1 + col2);
+ 
+     entry.textcolour(HUD_CAPTION_COLOUR);
+     if (player_drained())
+@@ -2423,6 +2409,24 @@ static vector<formatted_string> _get_overview_stats()
+     cols.add_formatted(2, entry.to_colour_string(), false);
+     entry.clear();
+ 
++    return cols.formatted_lines();
++}
++
++// Progress block: turns/time on its own line plus XL, God, Spells, and
++// (for felids) Lives/Deaths. Inserted between the stat block and the
++// resist block in print_overview_screen / dump_overview_screen.
++static vector<formatted_string> _get_overview_progress()
++{
++    vector<formatted_string> lines;
++    formatted_string entry;
++
++    handle_real_time();
++    entry.textcolour(YELLOW);
++    entry.cprintf("Turns: %d, Time: %s", you.num_turns,
++                  make_time_string(you.real_time(), true).c_str());
++    lines.push_back(entry);
++    entry.clear();
++
+     entry.textcolour(HUD_CAPTION_COLOUR);
+     entry.cprintf("XL:     ");
+ 
+@@ -2438,7 +2442,7 @@ static vector<formatted_string> _get_overview_stats()
+         entry.cprintf("%d%%", get_exp_progress());
+     }
+ 
+-    cols.add_formatted(3, entry.to_colour_string(), false);
++    lines.push_back(entry);
+     entry.clear();
+ 
+     entry.textcolour(HUD_CAPTION_COLOUR);
+@@ -2453,7 +2457,7 @@ static vector<formatted_string> _get_overview_stats()
+ #endif
+     entry += formatted_string::parse_string(godpowers);
+ 
+-    cols.add_formatted(3, entry.to_colour_string(), false);
++    lines.push_back(entry);
+     entry.clear();
+ 
+     if (!you.has_mutation(MUT_INNATE_CASTER))
+@@ -2465,7 +2469,7 @@ static vector<formatted_string> _get_overview_stats()
+         entry.cprintf("%d/%d levels left",
+                       player_spell_levels(), player_total_spell_levels());
+ 
+-        cols.add_formatted(3, entry.to_colour_string(), false);
++        lines.push_back(entry);
+         entry.clear();
+     }
+ 
+@@ -2483,11 +2487,11 @@ static vector<formatted_string> _get_overview_stats()
+         entry.textcolour(HUD_VALUE_COLOUR);
+         entry.cprintf("%d", you.deaths);
+ 
+-        cols.add_formatted(3, entry.to_colour_string(), false);
++        lines.push_back(entry);
+         entry.clear();
+     }
+ 
+-    return cols.formatted_lines();
++    return lines;
+ }
+ 
+ // generator of resistance strings:
+@@ -2658,6 +2662,10 @@ void print_overview_screen()
+         overview.add_formatted_string(bline, true);
+     overview.add_text("\n");
+ 
++    for (const formatted_string &bline : _get_overview_progress())
++        overview.add_formatted_string(bline, true);
++    overview.add_text("\n");
++
+     {
+         vector<formatted_string> blines =
+             _get_overview_resistances(overview.equip_chars, num_cols);
+@@ -2683,6 +2691,13 @@ string dump_overview_screen()
+     }
+     text += "\n";
+ 
++    for (const formatted_string &bline : _get_overview_progress())
++    {
++        text += bline;
++        text += "\n";
++    }
++    text += "\n";
++
+     vector<char> equip_chars;
+     for (const formatted_string &bline
+             : _get_overview_resistances(equip_chars, 640))
