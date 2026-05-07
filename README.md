@@ -4,11 +4,6 @@ An unofficial ASCII port of [Dungeon Crawl Stone Soup](https://crawl.develz.org/
 
 This is a fork of [michaelbarlow7/dungeon-crawl-android](https://github.com/michaelbarlow7/dungeon-crawl-android), updated from DCSS 0.29.1 to **0.34.1**. Full credit to Michael Barlow for the original Android console port and JNI adapter architecture.
 
-## Status
-
-- **DCSS version:** 0.34.1
-- **Build:** Debug APK working, tested on Android emulator (API 37, arm64-v8a)
-- **Play Store:** Not yet published
 
 ## Architecture
 
@@ -18,7 +13,7 @@ This is an **ASCII/console** port — no tiles, no SDL2, no OpenGL. The game ren
 - `android-console-patches/` — Custom files and patches applied on top of the submodule at build time:
   - `libandroid.cc` — JNI console adapter implementing `libconsole.h`
   - `Android.mk` / `Application.mk` — NDK build files
-  - `*.patch` — Minimal diffs to upstream files (`initfile.cc`, `main.cc`, `syscalls.cc`)
+  - `*.patch` — Minimal diffs to upstream files (currently `initfile.cc`, `main.cc`, `message.cc`, `options.h`, `output.cc`, `startup.cc`, `syscalls.cc`)
   - `setup.sh` — Copies custom files, applies patches, generates headers
 - `src/com/crawlmb/` — Java/Android UI layer (keyboard, preferences, game activity)
 - `assets/` — Bundled crawl data files (dat/, docs/, settings/)

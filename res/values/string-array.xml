@@ -5,11 +5,10 @@
     <!-- It's important that none of these lines are more than 80 characters long -->
     <!-- and there can't be more than 24 lines -->
     <string-array name="loading_message_array">
-        <item>Launching game. May take a while the first time. </item>
-        <item>Please wait...</item>
+        <item>PLEASE WAIT...</item>
+        <item>First time launching may take some time.</item>
         <item> </item>
-        <item>You can access help and options by pressing the menu button.</item>
-        <item>Use 2-finger long-press on the screen to access the menu.</item>
+        <item>Use 2-finger long-press on the screen to access the app menu.</item>
         <item> </item>
         <item>The screen is divided into a 3 X 3 grid for touch input.</item>
         <item>Tapping in grid areas sends directional keys, center to rest.</item>
