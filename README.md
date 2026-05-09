@@ -1,4 +1,4 @@
-# Dungeon Crawl: Stone Soup (ASCII)
+# Dungeon Crawl Stone Soup ASCII
 
 An unofficial ASCII port of [Dungeon Crawl Stone Soup](https://crawl.develz.org/) for Android.
 

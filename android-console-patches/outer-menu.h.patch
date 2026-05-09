@@ -1,0 +1,18 @@
+diff --git a/crawl-ref/source/outer-menu.h b/crawl-ref/source/outer-menu.h
+index e4185f5bf3..35a9b2511c 100644
+--- a/crawl-ref/source/outer-menu.h
++++ b/crawl-ref/source/outer-menu.h
+@@ -91,6 +91,13 @@ public:
+     shared_ptr<ui::Switcher> descriptions;
+     const char *menu_id {nullptr};
+ 
++    // When true, UP/DOWN navigation wraps across grid columns in
++    // reading order: DOWN past the bottom of column N moves focus to
++    // the top of column N+1; UP past the top wraps the reverse. Used
++    // by the Android port's species/background pickers so 9-key touch
++    // can traverse all groups with only UP/DOWN.
++    bool linear_nav {false};
++
+ protected:
+     bool scroller_event_hook(const ui::Event& ev);
+     bool move_button_focus(int fx, int fy, int dx, int dy, int limit);

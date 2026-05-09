@@ -23,7 +23,12 @@ public class RegionRouter implements TerminalRenderer
 	public enum MenuType
 	{
 		DEFAULT, PREGAME, MAINMENU, ITEMS, SPELLS, OVERVIEW, SKILLS,
-		RELIGION, HISCORES, TRAVEL, LEVELMAP, VFEATURES
+		RELIGION, HISCORES, TRAVEL, LEVELMAP, VFEATURES,
+		// Newgame sub-states. Each picks a different vertically-stacked
+		// panel container (one panel per category) and per-panel scales
+		// from font_config.txt. Detected via row-0 "Welcome" + the
+		// "species." / "background." disambiguator from newgame.cc.
+		NEWGAME_SPECIES, NEWGAME_BACKGROUND
 	}
 
 	public interface ScrollStateListener
@@ -50,7 +55,7 @@ public class RegionRouter implements TerminalRenderer
 	public static final int MSG_END_COL = 80;
 
 	private static final int TERMINAL_ROWS = 24;
-	private static final int TERMINAL_COLS = 80;
+	public static final int TERMINAL_COLS = 80;
 
 	// Gameplay anchor: any HUD caption present at terminal col 37 in the HUD
 	// rows. We OR over multiple labels because draw_border() (which prints
@@ -172,10 +177,76 @@ public class RegionRouter implements TerminalRenderer
 	// (PREGAME) from DCSS's "Hello, welcome..." main menu (MAINMENU).
 	private static final String LOADING_ANCHOR = "Launching game";
 
+	// Newgame screen anchors. newgame.cc emits "Welcome, %s. Please select
+	// your species." / "...your background." into row 0 (formatted_string,
+	// no leading indent, so col-0 match works). The "Welcome" prefix alone
+	// is not enough — DCSS's main menu also opens with "Hello, welcome to
+	// Dungeon Crawl" — so we additionally require the trailing
+	// "species."/"background." token in the same row to disambiguate.
+	// _welcome() in newgame.cc emits "Welcome." (no comma) when nothing has
+	// been chosen yet (species/job/name all empty), and "Welcome, foo." once
+	// any of those is set. Matching just "Welcome" covers both forms; the
+	// species./background. token below disambiguates from the main menu's
+	// "Hello, welcome to Dungeon Crawl" greeting (lowercase 'w', and not at
+	// col 0).
+	private static final String NEWGAME_WELCOME_PREFIX = "Welcome";
+	private static final String NEWGAME_SPECIES_TOKEN = "species.";
+	private static final String NEWGAME_BACKGROUND_TOKEN = "background.";
+
+	// Newgame panel rectangles. Hardcoded to upstream 0.34 layout —
+	// m_main_items is OuterMenu(true, 3, 20) with set_margin_for_crt(1, 0),
+	// so the welcome row sits at row 0, content starts at row 2 after the
+	// 1-row top margin, and the 3-col grid splits 80 cols into ~27/27/26.
+	// Group titles are at the y-offset given by their static coord_def.
+	// If upstream nudges these, the symptom is a panel showing wrong/empty
+	// content; verify alongside the existing "regression-test menu types
+	// after submodule bump" check in RenderingImplementation.md.
+	public static final int NEWGAME_WELCOME_ROW0 = 0;
+	public static final int NEWGAME_WELCOME_ROW1 = 2;   // rows 0..1
+	public static final int NEWGAME_SUB_ROW0     = 13;
+	public static final int NEWGAME_SUB_ROW1     = 19;  // rows 13..18
+	public static final int NEWGAME_COL_LEFT     = 0;
+	public static final int NEWGAME_COL_LEFT_END = 27;  // cols 0..26
+	public static final int NEWGAME_COL_MID      = 27;
+	public static final int NEWGAME_COL_MID_END  = 54;  // cols 27..53
+	public static final int NEWGAME_COL_RIGHT    = 54;
+	public static final int NEWGAME_COL_RIGHT_END= 80;  // cols 54..79
+	public static final int NEWGAME_COL_FULL_END = 80;  // wide panels
+
+	// Species: 3 categories at y=0, 1 title + 9 items per group → rows 2..10.
+	public static final int NEWGAME_SPECIES_ROW0 = 2;
+	public static final int NEWGAME_SPECIES_ROW1 = 12;  // rows 2..11
+
+	// Background: Warrior 5 items → rows 2..7. Zealot 3 items at y=6 → rows 8..11.
+	// Adventurer 4 items → rows 2..6. Warrior-mage 4 items at y=5 → rows 7..11.
+	// Mage 10 items → rows 2..12.
+	public static final int NEWGAME_BG_WARRIOR_ROW0    = 2,  NEWGAME_BG_WARRIOR_ROW1    = 8;
+	public static final int NEWGAME_BG_ZEALOT_ROW0     = 8,  NEWGAME_BG_ZEALOT_ROW1     = 12;
+	public static final int NEWGAME_BG_ADVENTURER_ROW0 = 2,  NEWGAME_BG_ADVENTURER_ROW1 = 7;
+	public static final int NEWGAME_BG_WARMAGE_ROW0    = 7,  NEWGAME_BG_WARMAGE_ROW1    = 12;
+	public static final int NEWGAME_BG_MAGE_ROW0       = 2,  NEWGAME_BG_MAGE_ROW1       = 13;
+
 	private final List<RegionTermView> splitRegions = new ArrayList<>();
 	private RegionTermView fullView;
 	private RegionTermView skillsView;
 	private LinearLayout splitContainer;
+	// Newgame panel containers. Each holds a vertical stack of
+	// RegionTermViews — those panels are also added to splitRegions so
+	// drawPoint forwards into their fixed terminal rectangles. The
+	// container visibility gates whether the user sees them.
+	private LinearLayout newgameSpeciesContainer;
+	private LinearLayout newgameBackgroundContainer;
+	// Per-category panel refs so we can re-aim each one at the actual
+	// terminal column slice once the upstream Grid widget has settled. The
+	// welcome and sub panels are full-width and don't need adjustment.
+	private RegionTermView ngsSimpleView;
+	private RegionTermView ngsIntermediateView;
+	private RegionTermView ngsAdvancedView;
+	private RegionTermView ngbWarriorView;
+	private RegionTermView ngbZealotView;
+	private RegionTermView ngbAdventurerView;
+	private RegionTermView ngbWarMageView;
+	private RegionTermView ngbMageView;
 	private final Context context;
 
 	private final char[][] terminalShadow = new char[TERMINAL_ROWS][TERMINAL_COLS];
@@ -241,6 +312,104 @@ public class RegionRouter implements TerminalRenderer
 		this.splitContainer = container;
 	}
 
+	public void setNewgameSpeciesContainer(LinearLayout container)
+	{
+		this.newgameSpeciesContainer = container;
+	}
+
+	public void setNewgameBackgroundContainer(LinearLayout container)
+	{
+		this.newgameBackgroundContainer = container;
+	}
+
+	public void setNewgameSpeciesPanels(RegionTermView simple,
+			RegionTermView intermediate, RegionTermView advanced)
+	{
+		this.ngsSimpleView = simple;
+		this.ngsIntermediateView = intermediate;
+		this.ngsAdvancedView = advanced;
+	}
+
+	public void setNewgameBackgroundPanels(RegionTermView warrior,
+			RegionTermView zealot, RegionTermView adventurer,
+			RegionTermView warMage, RegionTermView mage)
+	{
+		this.ngbWarriorView = warrior;
+		this.ngbZealotView = zealot;
+		this.ngbAdventurerView = adventurer;
+		this.ngbWarMageView = warMage;
+		this.ngbMageView = mage;
+	}
+
+	// Find the column where `s` first occurs on `row` of terminalShadow.
+	// Returns -1 if not present. Used to anchor newgame panels to the
+	// actual rendered grid columns (their absolute terminal positions
+	// depend on the upstream Grid's stretch_h distribution and can't be
+	// pinned statically).
+	private int findColInRow(int row, String s)
+	{
+		if (row < 0 || row >= TERMINAL_ROWS)
+			return -1;
+		int len = s.length();
+		if (len == 0 || len > TERMINAL_COLS)
+			return -1;
+		for (int c = 0; c <= TERMINAL_COLS - len; c++)
+		{
+			boolean match = true;
+			for (int i = 0; i < len; i++)
+			{
+				if (terminalShadow[row][c + i] != s.charAt(i))
+				{
+					match = false;
+					break;
+				}
+			}
+			if (match)
+				return c;
+		}
+		return -1;
+	}
+
+	// Scan terminalShadow row 2 for the species group titles
+	// (Simple/Intermediate/Advanced) and re-aim each per-category panel at
+	// the slice spanning [thisTitleCol, nextTitleCol). No-op if any title
+	// is missing — the next frame will retry.
+	private void applyNewgameSpeciesBounds()
+	{
+		if (ngsSimpleView == null || ngsIntermediateView == null
+				|| ngsAdvancedView == null)
+			return;
+		int cSimple = findColInRow(2, "Simple");
+		int cInter  = findColInRow(2, "Intermediate");
+		int cAdv    = findColInRow(2, "Advanced");
+		if (cSimple < 0 || cInter < 0 || cAdv < 0)
+			return;
+		ngsSimpleView.setRegionCols(cSimple, cInter);
+		ngsIntermediateView.setRegionCols(cInter, cAdv);
+		ngsAdvancedView.setRegionCols(cAdv, TERMINAL_COLS);
+	}
+
+	// Background row 2 has only the col-0 group titles — Warrior, Adventurer,
+	// Mage. Zealot (col 0) and Warrior-mage (col 1) sit further down their
+	// columns and share the col-0/col-1 x ranges respectively.
+	private void applyNewgameBackgroundBounds()
+	{
+		if (ngbWarriorView == null || ngbZealotView == null
+				|| ngbAdventurerView == null || ngbWarMageView == null
+				|| ngbMageView == null)
+			return;
+		int cWarrior = findColInRow(2, "Warrior");
+		int cAdv     = findColInRow(2, "Adventurer");
+		int cMage    = findColInRow(2, "Mage");
+		if (cWarrior < 0 || cAdv < 0 || cMage < 0)
+			return;
+		ngbWarriorView.setRegionCols(cWarrior, cAdv);
+		ngbZealotView.setRegionCols(cWarrior, cAdv);
+		ngbAdventurerView.setRegionCols(cAdv, cMage);
+		ngbWarMageView.setRegionCols(cAdv, cMage);
+		ngbMageView.setRegionCols(cMage, TERMINAL_COLS);
+	}
+
 	public void setFontConfig(FontConfig config)
 	{
 		this.fontConfig = config;
@@ -266,7 +435,14 @@ public class RegionRouter implements TerminalRenderer
 		boolean skillsVisible = !splitVisible
 				&& menuType == MenuType.SKILLS
 				&& skillsView != null;
-		boolean fullVisible = !splitVisible && !skillsVisible;
+		boolean newgameSpeciesVisible = !splitVisible
+				&& menuType == MenuType.NEWGAME_SPECIES
+				&& newgameSpeciesContainer != null;
+		boolean newgameBackgroundVisible = !splitVisible
+				&& menuType == MenuType.NEWGAME_BACKGROUND
+				&& newgameBackgroundContainer != null;
+		boolean fullVisible = !splitVisible && !skillsVisible
+				&& !newgameSpeciesVisible && !newgameBackgroundVisible;
 
 		// INVISIBLE (never GONE) keeps layout dimensions stable across
 		// transitions, which prevents the bleedthrough seen previously.
@@ -283,6 +459,21 @@ public class RegionRouter implements TerminalRenderer
 		}
 		if (splitContainer != null)
 			splitContainer.setVisibility(splitVisible ? View.VISIBLE : View.INVISIBLE);
+		if (newgameSpeciesContainer != null)
+			newgameSpeciesContainer.setVisibility(
+					newgameSpeciesVisible ? View.VISIBLE : View.INVISIBLE);
+		if (newgameBackgroundContainer != null)
+			newgameBackgroundContainer.setVisibility(
+					newgameBackgroundVisible ? View.VISIBLE : View.INVISIBLE);
+
+		// Re-aim newgame panels at the actual terminal columns rendered by
+		// the upstream Grid widget (stretch_h means we can't pin them
+		// statically). Done before the panels become visible so the first
+		// drawn frame already has correct slicing.
+		if (newgameSpeciesVisible)
+			applyNewgameSpeciesBounds();
+		if (newgameBackgroundVisible)
+			applyNewgameBackgroundBounds();
 
 		// Apply scale/scroll config to whichever menu view is now active.
 		// fullView and skillsView are mutually exclusive in non-gameplay
@@ -325,6 +516,10 @@ public class RegionRouter implements TerminalRenderer
 		View redrawTarget = null;
 		if (splitVisible && splitContainer != null)
 			redrawTarget = splitContainer;
+		else if (newgameSpeciesVisible && newgameSpeciesContainer != null)
+			redrawTarget = newgameSpeciesContainer;
+		else if (newgameBackgroundVisible && newgameBackgroundContainer != null)
+			redrawTarget = newgameBackgroundContainer;
 		else if (activeMenu != null
 				&& (scaleChanged || activeMenu == skillsView))
 			redrawTarget = activeMenu;
@@ -840,11 +1035,26 @@ public class RegionRouter implements TerminalRenderer
 	// (see res/values/string-array.xml; first entry begins "Launching
 	// game."). DCSS then clears the screen and prints "Hello, welcome to
 	// Dungeon Crawl ...". We match the loading anchor at row 0; if it's
-	// not there, the screen has been overwritten by DCSS → MAINMENU.
+	// not there, the screen has been overwritten by DCSS.
+	//
+	// After "New game" is selected, DCSS shows the species/background
+	// picker with row 0 = "Welcome, %s. Please select your species." or
+	// "...your background.". Both prefixed "Welcome, " so we additionally
+	// require the "species."/"background." token in the same row to
+	// disambiguate from the main menu's "Hello, welcome to Dungeon Crawl"
+	// and from each other.
 	private MenuType detectPregameType()
 	{
-		return matchesAt(0, 0, LOADING_ANCHOR)
-				? MenuType.PREGAME : MenuType.MAINMENU;
+		if (matchesAt(0, 0, LOADING_ANCHOR))
+			return MenuType.PREGAME;
+		if (matchesAt(0, 0, NEWGAME_WELCOME_PREFIX))
+		{
+			if (rowContains(0, NEWGAME_SPECIES_TOKEN))
+				return MenuType.NEWGAME_SPECIES;
+			if (rowContains(0, NEWGAME_BACKGROUND_TOKEN))
+				return MenuType.NEWGAME_BACKGROUND;
+		}
+		return MenuType.MAINMENU;
 	}
 
 	@Override

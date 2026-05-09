@@ -1,0 +1,33 @@
+diff --git a/crawl-ref/source/outer-menu.cc b/crawl-ref/source/outer-menu.cc
+index 293a9204bf..2f555ac267 100644
+--- a/crawl-ref/source/outer-menu.cc
++++ b/crawl-ref/source/outer-menu.cc
+@@ -369,6 +369,28 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
+         }
+     }
+ 
++    // Linear-wrap navigation across columns. DOWN past the bottom of
++    // a column lands on the topmost button of the next column; UP past
++    // the top lands on the bottommost button of the previous column.
++    // Triggers only when the in-column scan above found nothing, so it
++    // never overrides upstream same-column behavior.
++    if (!btn && linear_nav && dx == 0 && (dy == 1 || dy == -1))
++    {
++        const int next_col = fx + dy;
++        if (next_col >= 0 && next_col < m_width)
++        {
++            const int start_y = dy == 1 ? 0 : m_height - 1;
++            for (int y = start_y; y >= 0 && y < m_height; y += dy)
++            {
++                if (m_buttons[y*m_width + next_col])
++                {
++                    btn = m_buttons[y*m_width + next_col];
++                    break;
++                }
++            }
++        }
++    }
++
+     if (btn)
+         scroll_button_into_view(btn);
+     else

@@ -1,0 +1,26 @@
+diff --git a/crawl-ref/source/newgame.cc b/crawl-ref/source/newgame.cc
+index 8ac5d80673..8a4ca70189 100644
+--- a/crawl-ref/source/newgame.cc
++++ b/crawl-ref/source/newgame.cc
+@@ -1185,6 +1185,12 @@ public:
+         m_main_items = make_shared<OuterMenu>(true, 3, 20);
+         m_main_items->menu_id = m_choice_type == C_JOB ?
+             "background-main" : "species-main";
++        // Android: keep the upstream multi-column terminal layout (3 cols
++        // of group titles fit within 24 rows) but make UP/DOWN traverse
++        // every group in reading order so 9-key touch can reach any item
++        // without LEFT/RIGHT. Java samples each group's rectangle into a
++        // separate vertically-stacked panel.
++        m_main_items->linear_nav = true;
+         m_main_items->set_margin_for_crt(1, 0);
+         m_main_items->set_margin_for_sdl(15, 0);
+         m_main_items->descriptions = descriptions;
+@@ -1209,6 +1215,8 @@ public:
+         m_sub_items = make_shared<OuterMenu>(false, 2, 4);
+         m_sub_items->menu_id = m_choice_type == C_JOB ?
+             "background-sub" : "species-sub";
++        // Linear UP/DOWN wrapping in the 2-col sub-options grid as well.
++        m_sub_items->linear_nav = true;
+         m_sub_items->descriptions = descriptions;
+         m_vbox->add_child(m_sub_items);
+         _add_choice_menu_options(m_choice_type, m_ng, m_defaults);

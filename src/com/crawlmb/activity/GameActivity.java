@@ -404,6 +404,144 @@ public class GameActivity extends Activity
 		gamePanel.addView(splitContainer, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
+		// Newgame portrait layout: each species/background category is its
+		// own RegionTermView sampling a fixed terminal rectangle, stacked
+		// vertically in a LinearLayout. Each panel only renders the chars
+		// that DCSS writes within its rect, so the upstream multi-column
+		// terminal layout remains untouched. Containers are INVISIBLE until
+		// RegionRouter detects the matching newgame screen.
+		LinearLayout newgameSpecies = new LinearLayout(this);
+		newgameSpecies.setOrientation(LinearLayout.VERTICAL);
+		newgameSpecies.setVisibility(View.INVISIBLE);
+
+		RegionTermView ngsWelcome = new RegionTermView(this,
+				RegionRouter.NEWGAME_WELCOME_ROW0, RegionRouter.NEWGAME_COL_LEFT,
+				RegionRouter.NEWGAME_WELCOME_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
+		ngsWelcome.setFontScaleMultiplier(fontConfig.portraitNewgameWelcomeFontScale);
+		ngsWelcome.setHorizontalScrollEnabled(fontConfig.portraitNewgameWelcomeScrollable);
+		ngsWelcome.setVerticalScrollEnabled(fontConfig.portraitNewgameWelcomeVScrollable);
+
+		RegionTermView ngsSimple = new RegionTermView(this,
+				RegionRouter.NEWGAME_SPECIES_ROW0, RegionRouter.NEWGAME_COL_LEFT,
+				RegionRouter.NEWGAME_SPECIES_ROW1, RegionRouter.NEWGAME_COL_LEFT_END);
+		ngsSimple.setFontScaleMultiplier(fontConfig.portraitNewgameSpeciesSimpleFontScale);
+		ngsSimple.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		ngsSimple.setHorizontalScrollEnabled(fontConfig.portraitNewgameSpeciesSimpleScrollable);
+		ngsSimple.setVerticalScrollEnabled(fontConfig.portraitNewgameSpeciesSimpleVScrollable);
+
+		RegionTermView ngsIntermediate = new RegionTermView(this,
+				RegionRouter.NEWGAME_SPECIES_ROW0, RegionRouter.NEWGAME_COL_MID,
+				RegionRouter.NEWGAME_SPECIES_ROW1, RegionRouter.NEWGAME_COL_MID_END);
+		ngsIntermediate.setFontScaleMultiplier(fontConfig.portraitNewgameSpeciesIntermediateFontScale);
+		ngsIntermediate.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		ngsIntermediate.setHorizontalScrollEnabled(fontConfig.portraitNewgameSpeciesIntermediateScrollable);
+		ngsIntermediate.setVerticalScrollEnabled(fontConfig.portraitNewgameSpeciesIntermediateVScrollable);
+
+		RegionTermView ngsAdvanced = new RegionTermView(this,
+				RegionRouter.NEWGAME_SPECIES_ROW0, RegionRouter.NEWGAME_COL_RIGHT,
+				RegionRouter.NEWGAME_SPECIES_ROW1, RegionRouter.NEWGAME_COL_RIGHT_END);
+		ngsAdvanced.setFontScaleMultiplier(fontConfig.portraitNewgameSpeciesAdvancedFontScale);
+		ngsAdvanced.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		ngsAdvanced.setHorizontalScrollEnabled(fontConfig.portraitNewgameSpeciesAdvancedScrollable);
+		ngsAdvanced.setVerticalScrollEnabled(fontConfig.portraitNewgameSpeciesAdvancedVScrollable);
+
+		RegionTermView ngsSub = new RegionTermView(this,
+				RegionRouter.NEWGAME_SUB_ROW0, RegionRouter.NEWGAME_COL_LEFT,
+				RegionRouter.NEWGAME_SUB_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
+		ngsSub.setFontScaleMultiplier(fontConfig.portraitNewgameSubFontScale);
+		ngsSub.setHorizontalScrollEnabled(fontConfig.portraitNewgameSubScrollable);
+		ngsSub.setVerticalScrollEnabled(fontConfig.portraitNewgameSubVScrollable);
+
+		newgameSpecies.addView(ngsWelcome, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameSpecies.addView(ngsSimple, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameSpecies.addView(ngsIntermediate, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameSpecies.addView(ngsAdvanced, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameSpecies.addView(ngsSub, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+		gamePanel.addView(newgameSpecies, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+		LinearLayout newgameBackground = new LinearLayout(this);
+		newgameBackground.setOrientation(LinearLayout.VERTICAL);
+		newgameBackground.setVisibility(View.INVISIBLE);
+
+		RegionTermView ngbWelcome = new RegionTermView(this,
+				RegionRouter.NEWGAME_WELCOME_ROW0, RegionRouter.NEWGAME_COL_LEFT,
+				RegionRouter.NEWGAME_WELCOME_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
+		ngbWelcome.setFontScaleMultiplier(fontConfig.portraitNewgameWelcomeFontScale);
+		ngbWelcome.setHorizontalScrollEnabled(fontConfig.portraitNewgameWelcomeScrollable);
+		ngbWelcome.setVerticalScrollEnabled(fontConfig.portraitNewgameWelcomeVScrollable);
+
+		RegionTermView ngbWarrior = new RegionTermView(this,
+				RegionRouter.NEWGAME_BG_WARRIOR_ROW0, RegionRouter.NEWGAME_COL_LEFT,
+				RegionRouter.NEWGAME_BG_WARRIOR_ROW1, RegionRouter.NEWGAME_COL_LEFT_END);
+		ngbWarrior.setFontScaleMultiplier(fontConfig.portraitNewgameBackgroundWarriorFontScale);
+		ngbWarrior.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		ngbWarrior.setHorizontalScrollEnabled(fontConfig.portraitNewgameBackgroundWarriorScrollable);
+		ngbWarrior.setVerticalScrollEnabled(fontConfig.portraitNewgameBackgroundWarriorVScrollable);
+
+		RegionTermView ngbZealot = new RegionTermView(this,
+				RegionRouter.NEWGAME_BG_ZEALOT_ROW0, RegionRouter.NEWGAME_COL_LEFT,
+				RegionRouter.NEWGAME_BG_ZEALOT_ROW1, RegionRouter.NEWGAME_COL_LEFT_END);
+		ngbZealot.setFontScaleMultiplier(fontConfig.portraitNewgameBackgroundZealotFontScale);
+		ngbZealot.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		ngbZealot.setHorizontalScrollEnabled(fontConfig.portraitNewgameBackgroundZealotScrollable);
+		ngbZealot.setVerticalScrollEnabled(fontConfig.portraitNewgameBackgroundZealotVScrollable);
+
+		RegionTermView ngbAdventurer = new RegionTermView(this,
+				RegionRouter.NEWGAME_BG_ADVENTURER_ROW0, RegionRouter.NEWGAME_COL_MID,
+				RegionRouter.NEWGAME_BG_ADVENTURER_ROW1, RegionRouter.NEWGAME_COL_MID_END);
+		ngbAdventurer.setFontScaleMultiplier(fontConfig.portraitNewgameBackgroundAdventurerFontScale);
+		ngbAdventurer.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		ngbAdventurer.setHorizontalScrollEnabled(fontConfig.portraitNewgameBackgroundAdventurerScrollable);
+		ngbAdventurer.setVerticalScrollEnabled(fontConfig.portraitNewgameBackgroundAdventurerVScrollable);
+
+		RegionTermView ngbWarMage = new RegionTermView(this,
+				RegionRouter.NEWGAME_BG_WARMAGE_ROW0, RegionRouter.NEWGAME_COL_MID,
+				RegionRouter.NEWGAME_BG_WARMAGE_ROW1, RegionRouter.NEWGAME_COL_MID_END);
+		ngbWarMage.setFontScaleMultiplier(fontConfig.portraitNewgameBackgroundWarriorMageFontScale);
+		ngbWarMage.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		ngbWarMage.setHorizontalScrollEnabled(fontConfig.portraitNewgameBackgroundWarriorMageScrollable);
+		ngbWarMage.setVerticalScrollEnabled(fontConfig.portraitNewgameBackgroundWarriorMageVScrollable);
+
+		RegionTermView ngbMage = new RegionTermView(this,
+				RegionRouter.NEWGAME_BG_MAGE_ROW0, RegionRouter.NEWGAME_COL_RIGHT,
+				RegionRouter.NEWGAME_BG_MAGE_ROW1, RegionRouter.NEWGAME_COL_RIGHT_END);
+		ngbMage.setFontScaleMultiplier(fontConfig.portraitNewgameBackgroundMageFontScale);
+		ngbMage.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		ngbMage.setHorizontalScrollEnabled(fontConfig.portraitNewgameBackgroundMageScrollable);
+		ngbMage.setVerticalScrollEnabled(fontConfig.portraitNewgameBackgroundMageVScrollable);
+
+		RegionTermView ngbSub = new RegionTermView(this,
+				RegionRouter.NEWGAME_SUB_ROW0, RegionRouter.NEWGAME_COL_LEFT,
+				RegionRouter.NEWGAME_SUB_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
+		ngbSub.setFontScaleMultiplier(fontConfig.portraitNewgameSubFontScale);
+		ngbSub.setHorizontalScrollEnabled(fontConfig.portraitNewgameSubScrollable);
+		ngbSub.setVerticalScrollEnabled(fontConfig.portraitNewgameSubVScrollable);
+
+		newgameBackground.addView(ngbWelcome, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameBackground.addView(ngbWarrior, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameBackground.addView(ngbZealot, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameBackground.addView(ngbAdventurer, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameBackground.addView(ngbWarMage, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameBackground.addView(ngbMage, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameBackground.addView(ngbSub, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+		gamePanel.addView(newgameBackground, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
 		RelativeLayout.LayoutParams gamePanelParams = new RelativeLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
 		gamePanelParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
@@ -422,6 +560,23 @@ public class GameActivity extends Activity
 		router.addRegion(mapView);
 		router.addRegion(hudView);
 		router.addRegion(msgView);
+		router.addRegion(ngsWelcome);
+		router.addRegion(ngsSimple);
+		router.addRegion(ngsIntermediate);
+		router.addRegion(ngsAdvanced);
+		router.addRegion(ngsSub);
+		router.addRegion(ngbWelcome);
+		router.addRegion(ngbWarrior);
+		router.addRegion(ngbZealot);
+		router.addRegion(ngbAdventurer);
+		router.addRegion(ngbWarMage);
+		router.addRegion(ngbMage);
+		router.addRegion(ngbSub);
+		router.setNewgameSpeciesContainer(newgameSpecies);
+		router.setNewgameBackgroundContainer(newgameBackground);
+		router.setNewgameSpeciesPanels(ngsSimple, ngsIntermediate, ngsAdvanced);
+		router.setNewgameBackgroundPanels(ngbWarrior, ngbZealot, ngbAdventurer,
+				ngbWarMage, ngbMage);
 		router.setFontConfig(fontConfig);
 		router.setRedrawRequester(() -> gameKeyListener.nativew.redrawScreen());
 

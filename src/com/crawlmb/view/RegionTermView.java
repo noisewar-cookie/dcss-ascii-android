@@ -26,8 +26,20 @@ public class RegionTermView extends View
 	public static final int MAX_FONT_SIZE = 72;
 	public static final int MIN_FONT_SIZE = 6;
 
-	private final int startRow, startCol, endRow, endCol;
-	private final int regionRows, regionCols;
+	private final int startRow, endRow;
+	private final int regionRows;
+	// startCol/endCol/regionCols are mutable so the router can re-aim a
+	// panel at a different terminal slice once it has scanned the actual
+	// rendered layout (used for newgame species/background pickers, where
+	// the upstream Grid widget's stretch_h means we can't statically pin
+	// column boundaries — we read them off the terminal at detection time).
+	private int startCol, endCol;
+	private int regionCols;
+	// If > 0, autoSizeFontByWidth fits this many cols into the panel's measured
+	// width instead of regionCols — used by newgame category panels so their
+	// glyphs match the full-80-col mainmenu rendering even though the panel
+	// only spans a sub-slice of the terminal.
+	private int fontReferenceCols = 0;
 
 	Typeface tfStd;
 	Typeface tfTiny;
@@ -67,6 +79,34 @@ public class RegionTermView extends View
 		this.regionRows = endRow - startRow;
 		this.regionCols = endCol - startCol;
 		initPaints();
+	}
+
+	// Re-aim this panel at a new terminal column slice. No-op if the bounds
+	// are unchanged. Triggers a re-measure so the bitmap is recreated to
+	// the new width and the font auto-sizes for the new col count.
+	public void setRegionCols(int startCol, int endCol)
+	{
+		if (this.startCol == startCol && this.endCol == endCol)
+			return;
+		this.startCol = startCol;
+		this.endCol = endCol;
+		this.regionCols = endCol - startCol;
+		if (canvas != null)
+			requestLayout();
+	}
+
+	public int getStartCol() { return startCol; }
+	public int getEndCol() { return endCol; }
+
+	// Decouple font sizing from this panel's regionCols so glyphs match a
+	// reference rendering (e.g. the full-80-col mainmenu). 0 = use regionCols.
+	public void setFontReferenceCols(int cols)
+	{
+		if (this.fontReferenceCols == cols)
+			return;
+		this.fontReferenceCols = cols;
+		if (canvas != null)
+			requestLayout();
 	}
 
 	public void setFontScaleMultiplier(float multiplier)
@@ -289,12 +329,13 @@ public class RegionTermView extends View
 		}
 		else
 		{
+			int fitCols = fontReferenceCols > 0 ? fontReferenceCols : regionCols;
 			font_text_size = MIN_FONT_SIZE;
 			do
 			{
 				font_text_size += 1;
 				setFontSize(font_text_size, false);
-			} while (char_width * regionCols <= maxWidth && font_text_size < MAX_FONT_SIZE);
+			} while (char_width * fitCols <= maxWidth && font_text_size < MAX_FONT_SIZE);
 
 			font_text_size -= 1;
 

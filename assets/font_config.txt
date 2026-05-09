@@ -31,12 +31,10 @@ portrait_default_vscrollable=true
 portrait_pregame_font_scale=1.5
 portrait_pregame_scrollable=true
 
-# Portrait: DCSS main menu and character creation flow
-# Shown during: "Hello, welcome to Dungeon Crawl ..." through name prompt,
-# save selection, species/background selection, starting weapon, etc. —
-# i.e. everything DCSS draws before gameplay (HUD) starts.
+# Portrait: DCSS main menu
+# Shown during: "Hello, welcome to Dungeon Crawl ..."
 # Defaults: falls back to portrait_default_* if unset
-portrait_mainmenu_font_scale=1.5
+portrait_mainmenu_font_scale=1.6
 portrait_mainmenu_scrollable=true
 
 # Portrait: map panel
@@ -79,7 +77,7 @@ landscape_font_scale=1.0
 # - portrait_items_scrollable: enable horizontal drag (when content > width)
 # - portrait_items_vscrollable: enable vertical drag (when content > height)
 portrait_items_font_scale=1.5
-portrait_items_scrollable=false
+portrait_items_scrollable=true
 portrait_items_vscrollable=true
 
 # Spell/ability lists: spell list (I), cast (z), memorise (M),
@@ -131,3 +129,63 @@ portrait_levelmap_vscrollable=true
 portrait_vfeatures_font_scale=1.5
 portrait_vfeatures_scrollable=true
 portrait_vfeatures_vscrollable=true
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Newgame species/background screens (portrait)
+# Each category renders into its own vertically-stacked panel that samples a
+# fixed terminal rectangle from the upstream multi-column layout. Categories
+# you don't play with (e.g. Mage if you only ever pick warriors) can be left
+# alone; their panels still render but you won't notice the scale.
+# Detection: row 0 contains "Welcome" + "species." or "background.".
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Each newgame panel has its own scrollable/vscrollable flag. Same semantics
+# as elsewhere: scrollable enables horizontal drag when content is wider than
+# the panel, vscrollable enables vertical drag when content is taller.
+# Defaults: portrait_default_scrollable / portrait_default_vscrollable.
+
+# Welcome row at the top of the screen ("Welcome, %s. Please select your ...")
+# Terminal region: 80 cols x 2 rows  (rows 0-1)
+portrait_newgame_welcome_font_scale=1.4
+portrait_newgame_welcome_scrollable=true
+portrait_newgame_welcome_vscrollable=false
+
+# Species categories. Each samples a sub-slice of the upstream 3-col grid,
+# but the font is sized as if rendering the full 80-col terminal — so a
+# multiplier of 1.5 here matches the mainmenu glyph size.
+# Items per category in 0.34: Simple 9, Intermediate 9, Advanced 9.
+portrait_newgame_species_simple_font_scale=1.5
+portrait_newgame_species_simple_scrollable=true
+portrait_newgame_species_simple_vscrollable=false
+portrait_newgame_species_intermediate_font_scale=1.5
+portrait_newgame_species_intermediate_scrollable=true
+portrait_newgame_species_intermediate_vscrollable=false
+portrait_newgame_species_advanced_font_scale=1.5
+portrait_newgame_species_advanced_scrollable=true
+portrait_newgame_species_advanced_vscrollable=false
+
+# Background categories. The grid lays Warrior+Zealot in col 0,
+# Adventurer+Warrior-mage in col 1, Mage alone in col 2 — so panels for the
+# stacked pairs sample non-overlapping row bands within the same col range.
+# Same 80-col reference rule as the species panels above.
+portrait_newgame_background_warrior_font_scale=1.5
+portrait_newgame_background_warrior_scrollable=true
+portrait_newgame_background_warrior_vscrollable=false
+portrait_newgame_background_zealot_font_scale=1.5
+portrait_newgame_background_zealot_scrollable=true
+portrait_newgame_background_zealot_vscrollable=false
+portrait_newgame_background_adventurer_font_scale=1.5
+portrait_newgame_background_adventurer_scrollable=true
+portrait_newgame_background_adventurer_vscrollable=false
+portrait_newgame_background_warrior_mage_font_scale=1.5
+portrait_newgame_background_warrior_mage_scrollable=true
+portrait_newgame_background_warrior_mage_vscrollable=false
+portrait_newgame_background_mage_font_scale=1.5
+portrait_newgame_background_mage_scrollable=true
+portrait_newgame_background_mage_vscrollable=false
+
+# Sub-options block at the bottom (random/aptitudes/help/space/tab).
+# Terminal region: 80 cols x ~5 rows  (rows ~13-17)
+portrait_newgame_sub_font_scale=1.4
+portrait_newgame_sub_scrollable=true
+portrait_newgame_sub_vscrollable=false
