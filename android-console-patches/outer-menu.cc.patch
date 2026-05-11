@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/outer-menu.cc b/crawl-ref/source/outer-menu.cc
-index 293a9204bf..2f555ac267 100644
+index 293a9204bf..bd1455b0e4 100644
 --- a/crawl-ref/source/outer-menu.cc
 +++ b/crawl-ref/source/outer-menu.cc
 @@ -369,6 +369,28 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
@@ -31,3 +31,65 @@ index 293a9204bf..2f555ac267 100644
      if (btn)
          scroll_button_into_view(btn);
      else
+@@ -376,8 +398,59 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
+         int idx = dx == 0 ? 1+dy : 2-dx; // dx,dy --> CSS direction index
+         if (auto linked = linked_menus[idx].lock())
+         {
+-            int lfx = dx == 0 ? min(fx, linked->m_width-1) : dx < 0 ? linked->m_width : -1;
+-            int lfy = dy == 0 ? min(fy, linked->m_height-1) : dy < 0 ? linked->m_height : -1;
++            int lfx, lfy;
++            // Reading-order continuous navigation: when crossing between
++            // two linear_nav menus vertically, ignore the source column
++            // index and jump to the linked menu's first (DOWN) or last
++            // (UP) button in column-major reading order. This makes the
++            // two menus feel like a single flat list across the boundary
++            // even when the source and target have different column
++            // counts (e.g. 3-col main -> 2-col sub on the newgame
++            // species/background screens). Without this, upstream clamps
++            // fx to linked->m_width-1, so crossing from main_items col 2
++            // (Mage) lands on sub_items col 1 (Random/Tab) instead of
++            // "+ Recommended", and crossing back up from col 0 of
++            // sub_items lands on col 0 of main_items (Warrior/Zealot)
++            // instead of col 2 (Mage).
++            if (dx == 0 && (dy == 1 || dy == -1)
++                && linear_nav && linked->linear_nav)
++            {
++                const int lw = linked->m_width;
++                const int lh = linked->m_height;
++                int tx = -1, ty = -1;
++                if (dy == 1)
++                {
++                    for (int x = 0; x < lw && tx < 0; x++)
++                        for (int y = 0; y < lh; y++)
++                            if (linked->m_buttons[y*lw + x])
++                            { tx = x; ty = y; break; }
++                }
++                else
++                {
++                    for (int x = lw - 1; x >= 0 && tx < 0; x--)
++                        for (int y = lh - 1; y >= 0; y--)
++                            if (linked->m_buttons[y*lw + x])
++                            { tx = x; ty = y; break; }
++                }
++                if (tx >= 0)
++                {
++                    // Position one step "before" target so the inner
++                    // scan's first iteration (nx=fx+dx, ny=fy+dy) lands
++                    // exactly on (tx, ty); limit=1 then terminates.
++                    lfx = tx - dx;
++                    lfy = ty - dy;
++                }
++                else
++                {
++                    lfx = dx == 0 ? min(fx, lw-1) : dx < 0 ? lw : -1;
++                    lfy = dy == 0 ? min(fy, lh-1) : dy < 0 ? lh : -1;
++                }
++            }
++            else
++            {
++                lfx = dx == 0 ? min(fx, linked->m_width-1) : dx < 0 ? linked->m_width : -1;
++                lfy = dy == 0 ? min(fy, linked->m_height-1) : dy < 0 ? linked->m_height : -1;
++            }
+             return linked->move_button_focus(lfx, lfy, dx, dy, 1);
+         }
+     }

@@ -76,6 +76,8 @@ public class GameActivity extends Activity
 	private RegionTermView portraitMsgView = null;
 	private RegionTermView portraitFullView = null;
 	private RegionTermView portraitSkillsView = null;
+	private RegionRouter portraitRouter = null;
+	private RegionTermView[] portraitExtraScrollTargets = null;
 	private View portraitContextHost = null;
 
 	protected Handler handler = null;
@@ -421,36 +423,27 @@ public class GameActivity extends Activity
 		ngsWelcome.setHorizontalScrollEnabled(fontConfig.portraitNewgameWelcomeScrollable);
 		ngsWelcome.setVerticalScrollEnabled(fontConfig.portraitNewgameWelcomeVScrollable);
 
-		RegionTermView ngsSimple = new RegionTermView(this,
+		RegionTermView ngsSimple = makeNewgameCategoryView(
 				RegionRouter.NEWGAME_SPECIES_ROW0, RegionRouter.NEWGAME_COL_LEFT,
 				RegionRouter.NEWGAME_SPECIES_ROW1, RegionRouter.NEWGAME_COL_LEFT_END);
-		ngsSimple.setFontScaleMultiplier(fontConfig.portraitNewgameSpeciesSimpleFontScale);
-		ngsSimple.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
-		ngsSimple.setHorizontalScrollEnabled(fontConfig.portraitNewgameSpeciesSimpleScrollable);
-		ngsSimple.setVerticalScrollEnabled(fontConfig.portraitNewgameSpeciesSimpleVScrollable);
-
-		RegionTermView ngsIntermediate = new RegionTermView(this,
+		RegionTermView ngsIntermediate = makeNewgameCategoryView(
 				RegionRouter.NEWGAME_SPECIES_ROW0, RegionRouter.NEWGAME_COL_MID,
 				RegionRouter.NEWGAME_SPECIES_ROW1, RegionRouter.NEWGAME_COL_MID_END);
-		ngsIntermediate.setFontScaleMultiplier(fontConfig.portraitNewgameSpeciesIntermediateFontScale);
-		ngsIntermediate.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
-		ngsIntermediate.setHorizontalScrollEnabled(fontConfig.portraitNewgameSpeciesIntermediateScrollable);
-		ngsIntermediate.setVerticalScrollEnabled(fontConfig.portraitNewgameSpeciesIntermediateVScrollable);
-
-		RegionTermView ngsAdvanced = new RegionTermView(this,
+		RegionTermView ngsAdvanced = makeNewgameCategoryView(
 				RegionRouter.NEWGAME_SPECIES_ROW0, RegionRouter.NEWGAME_COL_RIGHT,
 				RegionRouter.NEWGAME_SPECIES_ROW1, RegionRouter.NEWGAME_COL_RIGHT_END);
-		ngsAdvanced.setFontScaleMultiplier(fontConfig.portraitNewgameSpeciesAdvancedFontScale);
-		ngsAdvanced.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
-		ngsAdvanced.setHorizontalScrollEnabled(fontConfig.portraitNewgameSpeciesAdvancedScrollable);
-		ngsAdvanced.setVerticalScrollEnabled(fontConfig.portraitNewgameSpeciesAdvancedVScrollable);
 
-		RegionTermView ngsSub = new RegionTermView(this,
-				RegionRouter.NEWGAME_SUB_ROW0, RegionRouter.NEWGAME_COL_LEFT,
-				RegionRouter.NEWGAME_SUB_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
-		ngsSub.setFontScaleMultiplier(fontConfig.portraitNewgameSubFontScale);
-		ngsSub.setHorizontalScrollEnabled(fontConfig.portraitNewgameSubScrollable);
-		ngsSub.setVerticalScrollEnabled(fontConfig.portraitNewgameSubVScrollable);
+		// Sub-options block: three stacked panels per screen — description
+		// (full-width, samples the rows above the sub-items grid), then
+		// subLeft (col-0 cells: +/#/%/?), then subRight (col-1 cells:
+		// */!/Space/Tab with per-row leading-whitespace stripped so they
+		// align under col-0). The router title-scans for "+ - Recommended"
+		// to find where the sub-items grid actually starts (description
+		// height is dynamic) and re-aims via setRegionRows/setRegionCols/
+		// setRowColShift before each frame.
+		RegionTermView ngsDesc = makeNewgameDescView();
+		RegionTermView ngsSubLeft = makeNewgameSubView();
+		RegionTermView ngsSubRight = makeNewgameSubView();
 
 		newgameSpecies.addView(ngsWelcome, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
@@ -460,7 +453,11 @@ public class GameActivity extends Activity
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 		newgameSpecies.addView(ngsAdvanced, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
-		newgameSpecies.addView(ngsSub, new LinearLayout.LayoutParams(
+		newgameSpecies.addView(ngsDesc, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameSpecies.addView(ngsSubLeft, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameSpecies.addView(ngsSubRight, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
 		gamePanel.addView(newgameSpecies, new FrameLayout.LayoutParams(
@@ -477,52 +474,25 @@ public class GameActivity extends Activity
 		ngbWelcome.setHorizontalScrollEnabled(fontConfig.portraitNewgameWelcomeScrollable);
 		ngbWelcome.setVerticalScrollEnabled(fontConfig.portraitNewgameWelcomeVScrollable);
 
-		RegionTermView ngbWarrior = new RegionTermView(this,
+		RegionTermView ngbWarrior = makeNewgameCategoryView(
 				RegionRouter.NEWGAME_BG_WARRIOR_ROW0, RegionRouter.NEWGAME_COL_LEFT,
 				RegionRouter.NEWGAME_BG_WARRIOR_ROW1, RegionRouter.NEWGAME_COL_LEFT_END);
-		ngbWarrior.setFontScaleMultiplier(fontConfig.portraitNewgameBackgroundWarriorFontScale);
-		ngbWarrior.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
-		ngbWarrior.setHorizontalScrollEnabled(fontConfig.portraitNewgameBackgroundWarriorScrollable);
-		ngbWarrior.setVerticalScrollEnabled(fontConfig.portraitNewgameBackgroundWarriorVScrollable);
-
-		RegionTermView ngbZealot = new RegionTermView(this,
+		RegionTermView ngbZealot = makeNewgameCategoryView(
 				RegionRouter.NEWGAME_BG_ZEALOT_ROW0, RegionRouter.NEWGAME_COL_LEFT,
 				RegionRouter.NEWGAME_BG_ZEALOT_ROW1, RegionRouter.NEWGAME_COL_LEFT_END);
-		ngbZealot.setFontScaleMultiplier(fontConfig.portraitNewgameBackgroundZealotFontScale);
-		ngbZealot.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
-		ngbZealot.setHorizontalScrollEnabled(fontConfig.portraitNewgameBackgroundZealotScrollable);
-		ngbZealot.setVerticalScrollEnabled(fontConfig.portraitNewgameBackgroundZealotVScrollable);
-
-		RegionTermView ngbAdventurer = new RegionTermView(this,
+		RegionTermView ngbAdventurer = makeNewgameCategoryView(
 				RegionRouter.NEWGAME_BG_ADVENTURER_ROW0, RegionRouter.NEWGAME_COL_MID,
 				RegionRouter.NEWGAME_BG_ADVENTURER_ROW1, RegionRouter.NEWGAME_COL_MID_END);
-		ngbAdventurer.setFontScaleMultiplier(fontConfig.portraitNewgameBackgroundAdventurerFontScale);
-		ngbAdventurer.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
-		ngbAdventurer.setHorizontalScrollEnabled(fontConfig.portraitNewgameBackgroundAdventurerScrollable);
-		ngbAdventurer.setVerticalScrollEnabled(fontConfig.portraitNewgameBackgroundAdventurerVScrollable);
-
-		RegionTermView ngbWarMage = new RegionTermView(this,
+		RegionTermView ngbWarMage = makeNewgameCategoryView(
 				RegionRouter.NEWGAME_BG_WARMAGE_ROW0, RegionRouter.NEWGAME_COL_MID,
 				RegionRouter.NEWGAME_BG_WARMAGE_ROW1, RegionRouter.NEWGAME_COL_MID_END);
-		ngbWarMage.setFontScaleMultiplier(fontConfig.portraitNewgameBackgroundWarriorMageFontScale);
-		ngbWarMage.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
-		ngbWarMage.setHorizontalScrollEnabled(fontConfig.portraitNewgameBackgroundWarriorMageScrollable);
-		ngbWarMage.setVerticalScrollEnabled(fontConfig.portraitNewgameBackgroundWarriorMageVScrollable);
-
-		RegionTermView ngbMage = new RegionTermView(this,
+		RegionTermView ngbMage = makeNewgameCategoryView(
 				RegionRouter.NEWGAME_BG_MAGE_ROW0, RegionRouter.NEWGAME_COL_RIGHT,
 				RegionRouter.NEWGAME_BG_MAGE_ROW1, RegionRouter.NEWGAME_COL_RIGHT_END);
-		ngbMage.setFontScaleMultiplier(fontConfig.portraitNewgameBackgroundMageFontScale);
-		ngbMage.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
-		ngbMage.setHorizontalScrollEnabled(fontConfig.portraitNewgameBackgroundMageScrollable);
-		ngbMage.setVerticalScrollEnabled(fontConfig.portraitNewgameBackgroundMageVScrollable);
 
-		RegionTermView ngbSub = new RegionTermView(this,
-				RegionRouter.NEWGAME_SUB_ROW0, RegionRouter.NEWGAME_COL_LEFT,
-				RegionRouter.NEWGAME_SUB_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
-		ngbSub.setFontScaleMultiplier(fontConfig.portraitNewgameSubFontScale);
-		ngbSub.setHorizontalScrollEnabled(fontConfig.portraitNewgameSubScrollable);
-		ngbSub.setVerticalScrollEnabled(fontConfig.portraitNewgameSubVScrollable);
+		RegionTermView ngbDesc = makeNewgameDescView();
+		RegionTermView ngbSubLeft = makeNewgameSubView();
+		RegionTermView ngbSubRight = makeNewgameSubView();
 
 		newgameBackground.addView(ngbWelcome, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
@@ -536,7 +506,11 @@ public class GameActivity extends Activity
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 		newgameBackground.addView(ngbMage, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
-		newgameBackground.addView(ngbSub, new LinearLayout.LayoutParams(
+		newgameBackground.addView(ngbDesc, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameBackground.addView(ngbSubLeft, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameBackground.addView(ngbSubRight, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
 		gamePanel.addView(newgameBackground, new FrameLayout.LayoutParams(
@@ -564,21 +538,34 @@ public class GameActivity extends Activity
 		router.addRegion(ngsSimple);
 		router.addRegion(ngsIntermediate);
 		router.addRegion(ngsAdvanced);
-		router.addRegion(ngsSub);
+		router.addRegion(ngsDesc);
+		router.addRegion(ngsSubLeft);
+		router.addRegion(ngsSubRight);
 		router.addRegion(ngbWelcome);
 		router.addRegion(ngbWarrior);
 		router.addRegion(ngbZealot);
 		router.addRegion(ngbAdventurer);
 		router.addRegion(ngbWarMage);
 		router.addRegion(ngbMage);
-		router.addRegion(ngbSub);
+		router.addRegion(ngbDesc);
+		router.addRegion(ngbSubLeft);
+		router.addRegion(ngbSubRight);
 		router.setNewgameSpeciesContainer(newgameSpecies);
 		router.setNewgameBackgroundContainer(newgameBackground);
 		router.setNewgameSpeciesPanels(ngsSimple, ngsIntermediate, ngsAdvanced);
 		router.setNewgameBackgroundPanels(ngbWarrior, ngbZealot, ngbAdventurer,
 				ngbWarMage, ngbMage);
+		router.setNewgameSubPanels(ngsDesc, ngsSubLeft, ngsSubRight,
+				ngbDesc, ngbSubLeft, ngbSubRight);
 		router.setFontConfig(fontConfig);
 		router.setRedrawRequester(() -> gameKeyListener.nativew.redrawScreen());
+		portraitRouter = router;
+		// The newgame desc panels live in their own LinearLayout containers
+		// (newgameSpecies/newgameBackground), so DirectionalTouchView's
+		// default fullView/skillsView/msgView candidate set never picks
+		// them as drag-scroll targets. Register them explicitly so dragging
+		// over the description text scrolls it horizontally.
+		portraitExtraScrollTargets = new RegionTermView[] { ngsDesc, ngbDesc };
 
 		final float maxMapScale = fontConfig.portraitMapFontScale;
 		final float maxHudScale = fontConfig.portraitHudFontScale;
@@ -634,11 +621,58 @@ public class GameActivity extends Activity
 		return router;
 	}
 
+	private RegionTermView makeNewgameCategoryView(int row0, int col0, int row1, int col1)
+	{
+		FontConfig fc = FontConfig.load(getAssets());
+		RegionTermView v = new RegionTermView(this, row0, col0, row1, col1);
+		v.setFontScaleMultiplier(fc.portraitNewgameCategoryFontScale);
+		v.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		v.setHorizontalScrollEnabled(fc.portraitNewgameCategoryScrollable);
+		v.setVerticalScrollEnabled(fc.portraitNewgameCategoryVScrollable);
+		return v;
+	}
+
+	private RegionTermView makeNewgameSubView()
+	{
+		FontConfig fc = FontConfig.load(getAssets());
+		// Initial bounds span the full sub row range across all 80 cols; the
+		// router narrows each panel to its left/right col range once the
+		// upstream sub-items grid is rendered and title-scan resolves the
+		// col-1 anchor.
+		RegionTermView v = new RegionTermView(this,
+				RegionRouter.NEWGAME_SUB_ROW0, RegionRouter.NEWGAME_COL_LEFT,
+				RegionRouter.NEWGAME_SUB_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
+		v.setFontScaleMultiplier(fc.portraitNewgameSubFontScale);
+		v.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		v.setHorizontalScrollEnabled(fc.portraitNewgameSubScrollable);
+		v.setVerticalScrollEnabled(fc.portraitNewgameSubVScrollable);
+		return v;
+	}
+
+	private RegionTermView makeNewgameDescView()
+	{
+		FontConfig fc = FontConfig.load(getAssets());
+		// Description panel — full-width, rendered above the sub-options
+		// grid. Uses its own scale/scroll knobs so the user can enable
+		// horizontal drag-scrolling on the description text independently
+		// of the sub-options panels.
+		RegionTermView v = new RegionTermView(this,
+				RegionRouter.NEWGAME_SUB_ROW0, RegionRouter.NEWGAME_COL_LEFT,
+				RegionRouter.NEWGAME_SUB_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
+		v.setFontScaleMultiplier(fc.portraitNewgameDescFontScale);
+		v.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		v.setHorizontalScrollEnabled(fc.portraitNewgameDescScrollable);
+		v.setVerticalScrollEnabled(fc.portraitNewgameDescVScrollable);
+		return v;
+	}
+
 	private TerminalRenderer buildLandscapeLayout(boolean hapticFeedbackEnabled) {
 		gamePanelId = View.NO_ID;
 		portraitMsgView = null;
 		portraitFullView = null;
 		portraitSkillsView = null;
+		portraitRouter = null;
+		portraitExtraScrollTargets = null;
 		portraitContextHost = null;
 		FontConfig fontConfig = FontConfig.load(getAssets());
 		term = new TermView(this, gameKeyListener);
@@ -704,6 +738,10 @@ public class GameActivity extends Activity
 			view.setMenuView(portraitFullView);
 		if (portraitSkillsView != null)
 			view.setSkillsView(portraitSkillsView);
+		if (portraitRouter != null)
+			view.setRouter(portraitRouter);
+		if (portraitExtraScrollTargets != null)
+			view.setExtraScrollTargets(portraitExtraScrollTargets);
 
 		view.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 		screenLayout.addView(view);
@@ -754,6 +792,19 @@ public class GameActivity extends Activity
 
 		setScreen();
 
+		// When Android resumes the activity from the recents/task switcher,
+		// our view-tree state survives but DCSS only repaints on its own
+		// update cycle — so any single-column remapped panels (skills, the
+		// newgame sub fold) can show stale 1:1 pre-fold content carried over
+		// from before the pause. Ask DCSS to replay the current screen once
+		// after layout settles. Posted so it runs after the resume layout
+		// pass restores any view dimensions.
+		if (gameKeyListener != null && gameKeyListener.nativew != null) {
+			final NativeWrapper nw = gameKeyListener.nativew;
+			View root = findViewById(android.R.id.content);
+			if (root != null)
+				root.post(nw::redrawScreen);
+		}
 	}
 
 	@Override

@@ -247,11 +247,33 @@ public class RegionRouter implements TerminalRenderer
 	private RegionTermView ngbAdventurerView;
 	private RegionTermView ngbWarMageView;
 	private RegionTermView ngbMageView;
+	// Sub-options block: split upstream's "description Switcher above 2-col
+	// sub-items grid" into three panels per screen so the whole block reads
+	// as a single vertical column:
+	//   desc     — full-width, samples the description rows above sub-items
+	//   subLeft  — only the 4 sub-item rows × col-0 ("+/#/%/?")
+	//   subRight — only the 4 sub-item rows × col-1, with per-row shifts
+	//              applied to strip upstream's varying leading whitespace
+	//              ("    *", "    !", "Space", "  Tab") so each row aligns
+	//              flush at panel col 0 under the col-0 column.
+	// Row split between desc and sub items is found at activation by scanning
+	// for the "+ - Recommended" row.
+	private RegionTermView ngsDescView;
+	private RegionTermView ngsSubLeftView;
+	private RegionTermView ngsSubRightView;
+	private RegionTermView ngbDescView;
+	private RegionTermView ngbSubLeftView;
+	private RegionTermView ngbSubRightView;
 	private final Context context;
 
 	private final char[][] terminalShadow = new char[TERMINAL_ROWS][TERMINAL_COLS];
 	private volatile LayoutMode currentMode = LayoutMode.PREGAME;
 	private volatile MenuType currentMenuType = MenuType.DEFAULT;
+
+	public MenuType getCurrentMenuType()
+	{
+		return currentMenuType;
+	}
 	private boolean gameplayEverDetected = false;
 
 	// Set by preStormHint when the next storm transitions GAMEPLAY -> a
@@ -341,6 +363,33 @@ public class RegionRouter implements TerminalRenderer
 		this.ngbMageView = mage;
 	}
 
+	public void setNewgameSubPanels(RegionTermView speciesDesc,
+			RegionTermView speciesLeft, RegionTermView speciesRight,
+			RegionTermView backgroundDesc, RegionTermView backgroundLeft,
+			RegionTermView backgroundRight)
+	{
+		this.ngsDescView = speciesDesc;
+		this.ngsSubLeftView = speciesLeft;
+		this.ngsSubRightView = speciesRight;
+		this.ngbDescView = backgroundDesc;
+		this.ngbSubLeftView = backgroundLeft;
+		this.ngbSubRightView = backgroundRight;
+	}
+
+	// True iff every cell on the row is whitespace or unset.
+	private boolean rowIsBlank(int row)
+	{
+		if (row < 0 || row >= TERMINAL_ROWS)
+			return true;
+		for (int c = 0; c < TERMINAL_COLS; c++)
+		{
+			char ch = terminalShadow[row][c];
+			if (ch != 0 && ch != ' ')
+				return false;
+		}
+		return true;
+	}
+
 	// Find the column where `s` first occurs on `row` of terminalShadow.
 	// Returns -1 if not present. Used to anchor newgame panels to the
 	// actual rendered grid columns (their absolute terminal positions
@@ -387,6 +436,128 @@ public class RegionRouter implements TerminalRenderer
 		ngsSimpleView.setRegionCols(cSimple, cInter);
 		ngsIntermediateView.setRegionCols(cInter, cAdv);
 		ngsAdvancedView.setRegionCols(cAdv, TERMINAL_COLS);
+	}
+
+	// Stack upstream's "description Switcher above 2-col sub-items grid"
+	// into three vertically-aligned panels:
+	//
+	//   desc     full-width, samples rows [NEWGAME_SUB_ROW0, subItemRow)
+	//   subLeft  rows [subItemRow, subItemRow+SUB_GRID_ROWS), col-0 cells
+	//   subRight same row range, col-1 cells with per-row left shifts that
+	//            strip varying upstream indent ("    *", "    !", "Space",
+	//            "  Tab") so every row renders flush at panel col 0.
+	//
+	// Anchors:
+	//   "+ - Recommended"  → row R+0 col-0 cell (defines subItemRow)
+	//   "Space "           → row R+2 col-1 cell (no leading whitespace —
+	//                        the cleanest col-1 anchor since rows 0/1/3
+	//                        have variable space padding)
+	// If subItemRow can't be found, falls back to a single-column desc panel
+	// covering the whole sub block and hides the two grid panels via 0-width
+	// regions; the next frame will retry detection.
+	private static final int SUB_GRID_ROWS = 4;
+
+	private void applyNewgameSubBounds(boolean isSpecies)
+	{
+		RegionTermView desc  = isSpecies ? ngsDescView     : ngbDescView;
+		RegionTermView left  = isSpecies ? ngsSubLeftView  : ngbSubLeftView;
+		RegionTermView right = isSpecies ? ngsSubRightView : ngbSubRightView;
+		if (desc == null || left == null || right == null)
+			return;
+
+		// Find sub_items grid top row by scanning a wide range. The actual
+		// row depends on description Switcher's content height (0 if no
+		// description selected, otherwise 2-3 lines), and on whether the
+		// m_main_items grid has 10 rows (species: 9 items + title) or 11
+		// rows (background: 10 Mage items + title).
+		int subItemRow = -1;
+		int cLeft = -1;
+		for (int r = NEWGAME_SUB_ROW0; r < TERMINAL_ROWS; r++)
+		{
+			int c = findColInRow(r, "+ - Recommended");
+			if (c >= 0)
+			{
+				subItemRow = r;
+				cLeft = c;
+				break;
+			}
+		}
+
+		// Find col-1 cell anchor (Space row has no leading whitespace).
+		int cMid = -1;
+		if (subItemRow >= 0)
+		{
+			for (int r = subItemRow; r < subItemRow + SUB_GRID_ROWS
+					&& r < TERMINAL_ROWS; r++)
+			{
+				int c = findColInRow(r, "Space ");
+				if (c >= 0)
+				{
+					cMid = c;
+					break;
+				}
+			}
+		}
+
+		if (subItemRow < 0 || cLeft < 0 || cMid <= cLeft)
+		{
+			// Detection incomplete — render whole sub block as full-width
+			// description, retry next frame. Hide the grid panels by
+			// collapsing them to zero width (won't draw any chars).
+			desc.setRegionRows(NEWGAME_SUB_ROW0, NEWGAME_SUB_ROW1);
+			desc.setRegionCols(0, TERMINAL_COLS);
+			desc.setRowColShift(null);
+			left.setRegionRows(NEWGAME_SUB_ROW1, NEWGAME_SUB_ROW1);
+			left.setRegionCols(0, 0);
+			left.setRowColShift(null);
+			right.setRegionRows(NEWGAME_SUB_ROW1, NEWGAME_SUB_ROW1);
+			right.setRegionCols(0, 0);
+			right.setRowColShift(null);
+			return;
+		}
+
+		int gridEnd = Math.min(subItemRow + SUB_GRID_ROWS, TERMINAL_ROWS);
+
+		// Description panel: rows above the sub-items grid, full width.
+		// Strip leading blank rows down to exactly one, so the desc panel
+		// always opens with a single blank-row spacer regardless of how
+		// many empty rows upstream stacked above the description text.
+		// Species: m_main_items is 10 rows (9 items + title), its bottom
+		// margin is the only leading blank → 0 stripped, 1 kept. Background:
+		// m_main_items is 11 rows (10 Mage items + title), so both its
+		// bottom margin and descriptions' top margin are blank → 1 stripped,
+		// 1 kept. Either way the user sees one empty row between the last
+		// category item and the description.
+		int descStart = NEWGAME_SUB_ROW0;
+		while (descStart + 1 < subItemRow
+				&& rowIsBlank(descStart) && rowIsBlank(descStart + 1))
+			descStart++;
+		desc.setRegionRows(descStart, subItemRow);
+		desc.setRegionCols(0, TERMINAL_COLS);
+		desc.setRowColShift(null);
+
+		// Sub-items col-0: 4 rows × [cLeft, cMid).
+		left.setRegionRows(subItemRow, gridEnd);
+		left.setRegionCols(cLeft, cMid);
+		left.setRowColShift(null);
+
+		// Sub-items col-1: same rows × [cMid, 80). Compute per-row leading-
+		// whitespace shifts so every row's first non-space char aligns at
+		// panel col 0 (matching col-0's "+/#/%/?" alignment in subLeft).
+		right.setRegionRows(subItemRow, gridEnd);
+		right.setRegionCols(cMid, TERMINAL_COLS);
+		int rows = gridEnd - subItemRow;
+		int[] shifts = new int[rows];
+		for (int i = 0; i < rows; i++)
+		{
+			int row = subItemRow + i;
+			int shift = 0;
+			while (cMid + shift < TERMINAL_COLS
+					&& terminalShadow[row][cMid + shift] == ' ')
+				shift++;
+			shifts[i] = shift;
+		}
+		right.setRowColShift(shifts);
 	}
 
 	// Background row 2 has only the col-0 group titles — Warrior, Adventurer,
@@ -471,9 +642,15 @@ public class RegionRouter implements TerminalRenderer
 		// statically). Done before the panels become visible so the first
 		// drawn frame already has correct slicing.
 		if (newgameSpeciesVisible)
+		{
 			applyNewgameSpeciesBounds();
+			applyNewgameSubBounds(true);
+		}
 		if (newgameBackgroundVisible)
+		{
 			applyNewgameBackgroundBounds();
+			applyNewgameSubBounds(false);
+		}
 
 		// Apply scale/scroll config to whichever menu view is now active.
 		// fullView and skillsView are mutually exclusive in non-gameplay
@@ -880,6 +1057,21 @@ public class RegionRouter implements TerminalRenderer
 
 	private MenuType detectMenuType()
 	{
+		// Newgame species/background picker. After the first gameplay frame,
+		// gameplayEverDetected sticks at true, so a return to the main menu
+		// (e.g. Ctrl+S) classifies as MENU instead of PREGAME — meaning the
+		// newgame screen reached from that main menu lands here, not in
+		// detectPregameType. Check the same anchor so the screen still routes
+		// to NEWGAME_SPECIES/NEWGAME_BACKGROUND on the second-and-later trips
+		// through New Game.
+		if (matchesAt(0, 0, NEWGAME_WELCOME_PREFIX))
+		{
+			if (rowContains(0, NEWGAME_SPECIES_TOKEN))
+				return MenuType.NEWGAME_SPECIES;
+			if (rowContains(0, NEWGAME_BACKGROUND_TOKEN))
+				return MenuType.NEWGAME_BACKGROUND;
+		}
+
 		// Row 0 prefix matches: cheapest, covers all set_title-style menus.
 		// Use rowStartsWith (not matchesAt(0,0,...)) so the leading space
 		// added by Menu::set_title(..., indent=true) doesn't shift the title
@@ -1016,6 +1208,19 @@ public class RegionRouter implements TerminalRenderer
 			if (fullView != null)
 				fullView.post(() -> applyMode(targetMode, targetType));
 		}
+
+		// While in newgame, re-detect sub-items grid bounds every frame.
+		// The description Switcher's height changes when the user navigates
+		// between species/background items (no description ↔ multi-line
+		// description), which shifts the sub-items grid down or up. applyMode
+		// only fires on state transitions, so without this re-check the new
+		// content would land outside the previously-set panel rows. The
+		// setRegionRows / setRegionCols / setRowColShift calls early-return
+		// when bounds are unchanged, so this is a no-op on most frames.
+		if (currentMenuType == MenuType.NEWGAME_SPECIES && fullView != null)
+			fullView.post(() -> applyNewgameSubBounds(true));
+		else if (currentMenuType == MenuType.NEWGAME_BACKGROUND && fullView != null)
+			fullView.post(() -> applyNewgameSubBounds(false));
 
 		if (fullView != null)
 			fullView.postInvalidate();

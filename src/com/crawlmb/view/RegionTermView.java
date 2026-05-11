@@ -26,13 +26,15 @@ public class RegionTermView extends View
 	public static final int MAX_FONT_SIZE = 72;
 	public static final int MIN_FONT_SIZE = 6;
 
-	private final int startRow, endRow;
-	private final int regionRows;
-	// startCol/endCol/regionCols are mutable so the router can re-aim a
-	// panel at a different terminal slice once it has scanned the actual
-	// rendered layout (used for newgame species/background pickers, where
-	// the upstream Grid widget's stretch_h means we can't statically pin
-	// column boundaries — we read them off the terminal at detection time).
+	// startRow/endRow/startCol/endCol/regionRows/regionCols are mutable so
+	// the router can re-aim a panel at a different terminal slice once it
+	// has scanned the actual rendered layout (used for newgame species/
+	// background pickers, where the upstream Grid widget's stretch_h means
+	// we can't statically pin column boundaries — and the description
+	// Switcher's variable height means the sub-items grid's row position is
+	// dynamic too).
+	private int startRow, endRow;
+	private int regionRows;
 	private int startCol, endCol;
 	private int regionCols;
 	// If > 0, autoSizeFontByWidth fits this many cols into the panel's measured
@@ -40,6 +42,12 @@ public class RegionTermView extends View
 	// glyphs match the full-80-col mainmenu rendering even though the panel
 	// only spans a sub-slice of the terminal.
 	private int fontReferenceCols = 0;
+	// Optional per-row col shift applied during drawPoint. Length must equal
+	// regionRows; entry[i] = number of terminal cols to shift row i's content
+	// left when rendering. Used to strip variable leading whitespace from each
+	// row of the newgame sub-items col-1 cells (rows are padded with 0/2/4
+	// spaces in upstream) so all rows render flush at panel col 0.
+	private int[] rowColShift = null;
 
 	Typeface tfStd;
 	Typeface tfTiny;
@@ -95,8 +103,40 @@ public class RegionTermView extends View
 			requestLayout();
 	}
 
+	// Re-aim this panel at a new terminal row slice. Same semantics as
+	// setRegionCols — used by newgame sub panels whose start row depends on
+	// the description Switcher's runtime height.
+	public void setRegionRows(int startRow, int endRow)
+	{
+		if (this.startRow == startRow && this.endRow == endRow)
+			return;
+		this.startRow = startRow;
+		this.endRow = endRow;
+		this.regionRows = endRow - startRow;
+		// rowColShift is sized to the old regionRows; clear so a stale array
+		// can't index out of bounds before the router re-applies it.
+		this.rowColShift = null;
+		if (canvas != null)
+			requestLayout();
+	}
+
 	public int getStartCol() { return startCol; }
 	public int getEndCol() { return endCol; }
+
+	// Set per-row col shift for drawPoint. Length must equal regionRows;
+	// pass null to clear. See rowColShift field comment.
+	public void setRowColShift(int[] shifts)
+	{
+		if (shifts != null && shifts.length != regionRows)
+		{
+			Log.w(TAG, "setRowColShift length " + shifts.length
+					+ " != regionRows " + regionRows + ", ignoring");
+			return;
+		}
+		this.rowColShift = shifts;
+		// No need to requestLayout; shifts only affect drawPoint placement.
+		// The next storm's drawPoints will use the new shifts directly.
+	}
 
 	// Decouple font sizing from this panel's regionCols so glyphs match a
 	// reference rendering (e.g. the full-80-col mainmenu). 0 = use regionCols.
@@ -285,6 +325,16 @@ public class RegionTermView extends View
 
 		int localR = r - startRow;
 		int localC = c - startCol;
+		// Apply per-row left shift if configured. Chars in the stripped range
+		// (cols at the start of the row that we want to drop) get a negative
+		// localC and are skipped. This collapses upstream's variable indent
+		// so each row renders flush at panel col 0.
+		if (rowColShift != null && localR >= 0 && localR < rowColShift.length)
+		{
+			localC -= rowColShift[localR];
+			if (localC < 0)
+				return;
+		}
 
 		float x = localC * char_width;
 		float y = localR * char_height;

@@ -59,30 +59,16 @@ public class FontConfig
     public final float portraitNewgameWelcomeFontScale;
     public final boolean portraitNewgameWelcomeScrollable;
     public final boolean portraitNewgameWelcomeVScrollable;
-    public final float portraitNewgameSpeciesSimpleFontScale;
-    public final boolean portraitNewgameSpeciesSimpleScrollable;
-    public final boolean portraitNewgameSpeciesSimpleVScrollable;
-    public final float portraitNewgameSpeciesIntermediateFontScale;
-    public final boolean portraitNewgameSpeciesIntermediateScrollable;
-    public final boolean portraitNewgameSpeciesIntermediateVScrollable;
-    public final float portraitNewgameSpeciesAdvancedFontScale;
-    public final boolean portraitNewgameSpeciesAdvancedScrollable;
-    public final boolean portraitNewgameSpeciesAdvancedVScrollable;
-    public final float portraitNewgameBackgroundWarriorFontScale;
-    public final boolean portraitNewgameBackgroundWarriorScrollable;
-    public final boolean portraitNewgameBackgroundWarriorVScrollable;
-    public final float portraitNewgameBackgroundZealotFontScale;
-    public final boolean portraitNewgameBackgroundZealotScrollable;
-    public final boolean portraitNewgameBackgroundZealotVScrollable;
-    public final float portraitNewgameBackgroundAdventurerFontScale;
-    public final boolean portraitNewgameBackgroundAdventurerScrollable;
-    public final boolean portraitNewgameBackgroundAdventurerVScrollable;
-    public final float portraitNewgameBackgroundWarriorMageFontScale;
-    public final boolean portraitNewgameBackgroundWarriorMageScrollable;
-    public final boolean portraitNewgameBackgroundWarriorMageVScrollable;
-    public final float portraitNewgameBackgroundMageFontScale;
-    public final boolean portraitNewgameBackgroundMageScrollable;
-    public final boolean portraitNewgameBackgroundMageVScrollable;
+    // One shared knob set for all 8 category panels (species
+    // simple/intermediate/advanced + background warrior/zealot/adventurer/
+    // warrior-mage/mage). They render the same kind of content at the same
+    // glyph size, so per-category scale isn't useful in practice.
+    public final float portraitNewgameCategoryFontScale;
+    public final boolean portraitNewgameCategoryScrollable;
+    public final boolean portraitNewgameCategoryVScrollable;
+    public final float portraitNewgameDescFontScale;
+    public final boolean portraitNewgameDescScrollable;
+    public final boolean portraitNewgameDescVScrollable;
     public final float portraitNewgameSubFontScale;
     public final boolean portraitNewgameSubScrollable;
     public final boolean portraitNewgameSubVScrollable;
@@ -135,36 +121,18 @@ public class FontConfig
         float ngDefault = this.portraitPregameFontScale;
         boolean ngHDefault = this.portraitDefaultScrollable;
         boolean ngVDefault = this.portraitDefaultVScrollable;
-        this.portraitNewgameWelcomeFontScale            = getFloat(props, "portrait_newgame_welcome_font_scale", ngDefault);
-        this.portraitNewgameWelcomeScrollable           = getBool (props, "portrait_newgame_welcome_scrollable", ngHDefault);
-        this.portraitNewgameWelcomeVScrollable          = getBool (props, "portrait_newgame_welcome_vscrollable", ngVDefault);
-        this.portraitNewgameSpeciesSimpleFontScale      = getFloat(props, "portrait_newgame_species_simple_font_scale", ngDefault);
-        this.portraitNewgameSpeciesSimpleScrollable     = getBool (props, "portrait_newgame_species_simple_scrollable", ngHDefault);
-        this.portraitNewgameSpeciesSimpleVScrollable    = getBool (props, "portrait_newgame_species_simple_vscrollable", ngVDefault);
-        this.portraitNewgameSpeciesIntermediateFontScale= getFloat(props, "portrait_newgame_species_intermediate_font_scale", ngDefault);
-        this.portraitNewgameSpeciesIntermediateScrollable=getBool (props, "portrait_newgame_species_intermediate_scrollable", ngHDefault);
-        this.portraitNewgameSpeciesIntermediateVScrollable=getBool(props, "portrait_newgame_species_intermediate_vscrollable", ngVDefault);
-        this.portraitNewgameSpeciesAdvancedFontScale    = getFloat(props, "portrait_newgame_species_advanced_font_scale", ngDefault);
-        this.portraitNewgameSpeciesAdvancedScrollable   = getBool (props, "portrait_newgame_species_advanced_scrollable", ngHDefault);
-        this.portraitNewgameSpeciesAdvancedVScrollable  = getBool (props, "portrait_newgame_species_advanced_vscrollable", ngVDefault);
-        this.portraitNewgameBackgroundWarriorFontScale  = getFloat(props, "portrait_newgame_background_warrior_font_scale", ngDefault);
-        this.portraitNewgameBackgroundWarriorScrollable = getBool (props, "portrait_newgame_background_warrior_scrollable", ngHDefault);
-        this.portraitNewgameBackgroundWarriorVScrollable= getBool (props, "portrait_newgame_background_warrior_vscrollable", ngVDefault);
-        this.portraitNewgameBackgroundZealotFontScale   = getFloat(props, "portrait_newgame_background_zealot_font_scale", ngDefault);
-        this.portraitNewgameBackgroundZealotScrollable  = getBool (props, "portrait_newgame_background_zealot_scrollable", ngHDefault);
-        this.portraitNewgameBackgroundZealotVScrollable = getBool (props, "portrait_newgame_background_zealot_vscrollable", ngVDefault);
-        this.portraitNewgameBackgroundAdventurerFontScale=getFloat(props, "portrait_newgame_background_adventurer_font_scale", ngDefault);
-        this.portraitNewgameBackgroundAdventurerScrollable=getBool(props, "portrait_newgame_background_adventurer_scrollable", ngHDefault);
-        this.portraitNewgameBackgroundAdventurerVScrollable=getBool(props,"portrait_newgame_background_adventurer_vscrollable", ngVDefault);
-        this.portraitNewgameBackgroundWarriorMageFontScale=getFloat(props,"portrait_newgame_background_warrior_mage_font_scale", ngDefault);
-        this.portraitNewgameBackgroundWarriorMageScrollable=getBool(props,"portrait_newgame_background_warrior_mage_scrollable", ngHDefault);
-        this.portraitNewgameBackgroundWarriorMageVScrollable=getBool(props,"portrait_newgame_background_warrior_mage_vscrollable", ngVDefault);
-        this.portraitNewgameBackgroundMageFontScale     = getFloat(props, "portrait_newgame_background_mage_font_scale", ngDefault);
-        this.portraitNewgameBackgroundMageScrollable    = getBool (props, "portrait_newgame_background_mage_scrollable", ngHDefault);
-        this.portraitNewgameBackgroundMageVScrollable   = getBool (props, "portrait_newgame_background_mage_vscrollable", ngVDefault);
-        this.portraitNewgameSubFontScale                = getFloat(props, "portrait_newgame_sub_font_scale", ngDefault);
-        this.portraitNewgameSubScrollable               = getBool (props, "portrait_newgame_sub_scrollable", ngHDefault);
-        this.portraitNewgameSubVScrollable              = getBool (props, "portrait_newgame_sub_vscrollable", ngVDefault);
+        this.portraitNewgameWelcomeFontScale     = getFloat(props, "portrait_newgame_welcome_font_scale", ngDefault);
+        this.portraitNewgameWelcomeScrollable    = getBool (props, "portrait_newgame_welcome_scrollable", ngHDefault);
+        this.portraitNewgameWelcomeVScrollable   = getBool (props, "portrait_newgame_welcome_vscrollable", ngVDefault);
+        this.portraitNewgameCategoryFontScale    = getFloat(props, "portrait_newgame_category_font_scale", ngDefault);
+        this.portraitNewgameCategoryScrollable   = getBool (props, "portrait_newgame_category_scrollable", ngHDefault);
+        this.portraitNewgameCategoryVScrollable  = getBool (props, "portrait_newgame_category_vscrollable", ngVDefault);
+        this.portraitNewgameDescFontScale        = getFloat(props, "portrait_newgame_desc_font_scale", ngDefault);
+        this.portraitNewgameDescScrollable       = getBool (props, "portrait_newgame_desc_scrollable", ngHDefault);
+        this.portraitNewgameDescVScrollable      = getBool (props, "portrait_newgame_desc_vscrollable", ngVDefault);
+        this.portraitNewgameSubFontScale         = getFloat(props, "portrait_newgame_sub_font_scale", ngDefault);
+        this.portraitNewgameSubScrollable        = getBool (props, "portrait_newgame_sub_scrollable", ngHDefault);
+        this.portraitNewgameSubVScrollable       = getBool (props, "portrait_newgame_sub_vscrollable", ngVDefault);
     }
 
     public static FontConfig load(AssetManager assets)

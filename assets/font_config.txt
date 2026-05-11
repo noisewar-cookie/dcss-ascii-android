@@ -150,42 +150,25 @@ portrait_newgame_welcome_font_scale=1.4
 portrait_newgame_welcome_scrollable=true
 portrait_newgame_welcome_vscrollable=false
 
-# Species categories. Each samples a sub-slice of the upstream 3-col grid,
-# but the font is sized as if rendering the full 80-col terminal — so a
-# multiplier of 1.5 here matches the mainmenu glyph size.
-# Items per category in 0.34: Simple 9, Intermediate 9, Advanced 9.
-portrait_newgame_species_simple_font_scale=1.5
-portrait_newgame_species_simple_scrollable=true
-portrait_newgame_species_simple_vscrollable=false
-portrait_newgame_species_intermediate_font_scale=1.5
-portrait_newgame_species_intermediate_scrollable=true
-portrait_newgame_species_intermediate_vscrollable=false
-portrait_newgame_species_advanced_font_scale=1.5
-portrait_newgame_species_advanced_scrollable=true
-portrait_newgame_species_advanced_vscrollable=false
+# All species/background category panels share one knob set. Each samples a
+# sub-slice of the upstream multi-column grid, but the font is sized as if
+# rendering the full 80-col terminal — so a multiplier of 1.5 here matches
+# the mainmenu glyph size.
+portrait_newgame_category_font_scale=1.5
+portrait_newgame_category_scrollable=true
+portrait_newgame_category_vscrollable=false
 
-# Background categories. The grid lays Warrior+Zealot in col 0,
-# Adventurer+Warrior-mage in col 1, Mage alone in col 2 — so panels for the
-# stacked pairs sample non-overlapping row bands within the same col range.
-# Same 80-col reference rule as the species panels above.
-portrait_newgame_background_warrior_font_scale=1.5
-portrait_newgame_background_warrior_scrollable=true
-portrait_newgame_background_warrior_vscrollable=false
-portrait_newgame_background_zealot_font_scale=1.5
-portrait_newgame_background_zealot_scrollable=true
-portrait_newgame_background_zealot_vscrollable=false
-portrait_newgame_background_adventurer_font_scale=1.5
-portrait_newgame_background_adventurer_scrollable=true
-portrait_newgame_background_adventurer_vscrollable=false
-portrait_newgame_background_warrior_mage_font_scale=1.5
-portrait_newgame_background_warrior_mage_scrollable=true
-portrait_newgame_background_warrior_mage_vscrollable=false
-portrait_newgame_background_mage_font_scale=1.5
-portrait_newgame_background_mage_scrollable=true
-portrait_newgame_background_mage_vscrollable=false
+# Description text shown above the sub-options (selected species/background
+# description). Rendered into its own full-width panel that samples the
+# rows between the category grid and the sub-options grid. Often wider than
+# the screen, so horizontal scrolling is typically wanted.
+portrait_newgame_desc_font_scale=1.4
+portrait_newgame_desc_scrollable=true
+portrait_newgame_desc_vscrollable=false
 
-# Sub-options block at the bottom (random/aptitudes/help/space/tab).
-# Terminal region: 80 cols x ~5 rows  (rows ~13-17)
+# Sub-options block at the bottom (random/aptitudes/help/space/tab). The
+# upstream 2-col grid is split into two stacked panels (left col then right
+# col) so the 8 prompts read as a single vertical list.
 portrait_newgame_sub_font_scale=1.4
 portrait_newgame_sub_scrollable=true
 portrait_newgame_sub_vscrollable=false

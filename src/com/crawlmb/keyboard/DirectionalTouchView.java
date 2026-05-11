@@ -12,6 +12,7 @@ import com.crawlmb.keylistener.GameKeyListener;
 import com.crawlmb.PassThroughListener;
 import com.crawlmb.Preferences;
 import com.crawlmb.keylistener.KeyListener;
+import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
 
 public class DirectionalTouchView extends View implements  GestureDetector.OnGestureListener, ScaleGestureDetector.OnScaleGestureListener
@@ -24,6 +25,8 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	private View messageView;
 	private RegionTermView menuView;
 	private RegionTermView skillsView;
+	private RegionTermView[] extraScrollTargets = null;
+	private RegionRouter router;
 	private View activeForwardTarget = null;
 	private boolean targetAreaTouch = false;
 	private boolean forwardingToTarget = false;
@@ -85,6 +88,21 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		this.skillsView = view;
 	}
 
+	public void setRouter(RegionRouter router)
+	{
+		this.router = router;
+	}
+
+	// Register additional RegionTermView panels (newgame welcome / category
+	// / desc / sub-options) as drag-scroll forwarding targets. Eligibility
+	// is still checked per-touch via isScrollEnabled() and visibility, so
+	// passing every newgame panel is safe — only ones that are both VISIBLE
+	// and have a scroll axis enabled will be picked.
+	public void setExtraScrollTargets(RegionTermView... targets)
+	{
+		this.extraScrollTargets = targets;
+	}
+
 	// Returns the currently-eligible drag-scroll forwarding target whose
 	// bounds contain this touch, or null if none. Eligibility = view is
 	// VISIBLE and (for RegionTermView) at least one scroll axis is enabled.
@@ -95,12 +113,25 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	{
 		if (e == null)
 			return null;
-		View[] candidates = { messageView, menuView, skillsView };
+		int extras = extraScrollTargets == null ? 0 : extraScrollTargets.length;
+		View[] candidates = new View[3 + extras];
+		candidates[0] = messageView;
+		candidates[1] = menuView;
+		candidates[2] = skillsView;
+		for (int i = 0; i < extras; i++)
+			candidates[3 + i] = extraScrollTargets[i];
 		for (View v : candidates)
 		{
 			if (v == null)
 				continue;
-			if (v.getVisibility() != View.VISIBLE)
+			// isShown() walks ancestors; necessary because the newgame
+			// desc panels live inside species/background container
+			// LinearLayouts that the router toggles INVISIBLE. The desc
+			// view's own visibility stays VISIBLE, so a plain
+			// getVisibility() check picks ngsDesc even when the user is
+			// on the background screen, forwarding drags to an empty
+			// off-screen panel instead of ngbDesc.
+			if (!v.isShown())
 				continue;
 			if (v instanceof RegionTermView
 					&& !((RegionTermView) v).isScrollEnabled())
@@ -152,7 +183,7 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	}
 
 	@Override
-	public boolean onSingleTapUp(MotionEvent event) 
+	public boolean onSingleTapUp(MotionEvent event)
 	{
 		if (!Preferences.getEnableTouch())
 			return false;
@@ -164,6 +195,21 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		int r, c;
 		c = (x * 3) / getWidth();
 		r = (y * 3) / getHeight();
+
+		// On the newgame species/background screens the upstream menu is
+		// a 3-col grid but we render it as a stacked single-column list,
+		// so a horizontal tap maps to a column the user can't see and
+		// jumps the selection to a seemingly random species/background.
+		// Drop the left/middle/right column distinction here: only
+		// up/down direction keys are forwarded; horizontal taps are
+		// ignored.
+		if (router != null
+				&& (router.getCurrentMenuType() == RegionRouter.MenuType.NEWGAME_SPECIES
+					|| router.getCurrentMenuType() == RegionRouter.MenuType.NEWGAME_BACKGROUND)
+				&& c != 1)
+		{
+			return true;
+		}
 
 		int key = (2 - r) * 3 + c + 1;
 
