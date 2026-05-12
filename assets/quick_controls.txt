@@ -1,9 +1,9 @@
-_________________________________________________
+__________________________________________________
 
  QUICK CONTROLS
     2-Finger Long Press = app menu
      ? = help
-    ?? = default keymap ("<>" to page)
+    ?? = default keymap ("<>" to scroll)
 
  Game screen 9-grid touch overlay:
      ↖ | ↑ | ↗
@@ -23,4 +23,21 @@ _________________________________________________
     z/I/M = cast / list / Memorize spells
 
  Check help (?) for full controls list.
-_________________________________________________
+
+ * NEW PLAYERS *
+    If it's your first time playing DCSS,
+    know that it's the hardest yet fairest RPG
+    ever made. There's a BIG learning curve!
+
+    Start with a tough, easy combo like a
+    Minotaur or Troll Fighter.
+
+    Explore cautiously, examine everything,
+    and don't be afraid to run from danger.
+
+    Use your items to survive, don't hoard!
+
+    Focus on training useful skills, and
+    try to survive until you reach the Temple
+    with powerful Gods to worship. GOOD LUCK!
+__________________________________________________

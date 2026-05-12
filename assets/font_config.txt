@@ -47,7 +47,7 @@ portrait_mainmenu_scrollable=true
 portrait_quickcontrols_font_scale=1.6
 portrait_quickcontrols_scrollable=false
 portrait_quickcontrols_vscrollable=true
-portrait_quickcontrols_font_color=606060
+portrait_quickcontrols_font_color=707070
 
 # Portrait: map panel
 # Shown during: gameplay — top portion, dungeon viewport
