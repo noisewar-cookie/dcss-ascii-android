@@ -24,6 +24,7 @@ import android.content.pm.ActivityInfo;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.ContextMenu;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
@@ -57,10 +58,19 @@ import com.crawlmb.GameThread;
 import com.crawlmb.NativeWrapper;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
+import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
 import com.crawlmb.view.TerminalRenderer;
 import com.crawlmb.view.TermView;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 public class GameActivity extends Activity
 {
@@ -353,8 +363,43 @@ public class GameActivity extends Activity
 		fullView.setFontScaleMultiplier(fontConfig.portraitDefaultFontScale);
 		fullView.setGameStartTrigger(handler);
 		portraitFullView = fullView;
-		gamePanel.addView(fullView, new FrameLayout.LayoutParams(
+
+		// Quick Controls panel: app-only static info shown below the DCSS
+		// main menu. Sits in a vertical LinearLayout with fullView so the
+		// panel's slot always starts at fullView's bottom and stretches down
+		// to the keyboard top — regardless of mainmenu font scale changes.
+		// The LinearLayout replaces the direct fullView add to gamePanel; it
+		// stays as the only FrameLayout child responsible for the "menu"
+		// layer, with skills/split/newgame siblings layered on top as before.
+		// Grid is 80 cols (matches fullView's reference width so glyph size
+		// is consistent at the same font scale) and exactly enough rows for
+		// the loaded content — sizing rows to content avoids trailing empty
+		// rows that would otherwise appear as whitespace when scrolling.
+		// loadQuickControls() prepends one blank line so there's a visual gap
+		// between the main menu and the start of the panel.
+		String[] qcLines = loadQuickControls();
+		int qcRows = Math.max(1, qcLines.length);
+		QuickControlsView quickControlsView = new QuickControlsView(this, qcRows, 80);
+		quickControlsView.setFontScaleMultiplier(fontConfig.portraitQuickControlsFontScale);
+		quickControlsView.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		quickControlsView.setHorizontalScrollEnabled(fontConfig.portraitQuickControlsScrollable);
+		quickControlsView.setVerticalScrollEnabled(fontConfig.portraitQuickControlsVScrollable);
+		quickControlsView.setFontColor(fontConfig.portraitQuickControlsFontColor);
+		quickControlsView.setVisibility(View.INVISIBLE);
+		quickControlsView.setLines(qcLines);
+
+		LinearLayout menuStack = new LinearLayout(this);
+		menuStack.setOrientation(LinearLayout.VERTICAL);
+		menuStack.addView(fullView, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		// height=0 + weight=1 → quickControlsView claims all space left over
+		// after fullView's WRAP_CONTENT. Combined with verticalScrollEnabled,
+		// content taller than the slot scrolls within the slot rather than
+		// pushing the panel past the keyboard.
+		menuStack.addView(quickControlsView, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, 0, 1.0f));
+		gamePanel.addView(menuStack, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
 		// Skills menu view: 41 rows tall. The 24 source rows expand to 41
 		// after folding the second skill column underneath the first — the
@@ -530,6 +575,7 @@ public class GameActivity extends Activity
 		RegionRouter router = new RegionRouter(this);
 		router.setFullView(fullView);
 		router.setSkillsView(skillsView);
+		router.setQuickControlsView(quickControlsView);
 		router.setSplitContainer(splitContainer);
 		router.addRegion(mapView);
 		router.addRegion(hudView);
@@ -564,8 +610,13 @@ public class GameActivity extends Activity
 		// (newgameSpecies/newgameBackground), so DirectionalTouchView's
 		// default fullView/skillsView/msgView candidate set never picks
 		// them as drag-scroll targets. Register them explicitly so dragging
-		// over the description text scrolls it horizontally.
-		portraitExtraScrollTargets = new RegionTermView[] { ngsDesc, ngbDesc };
+		// over the description text scrolls it horizontally. Same applies
+		// to quickControlsView — it lives in menuStack, isn't fullView/
+		// skillsView/msgView, so without this registration drags over the
+		// QC panel are swallowed by DirectionalTouchView's 9-grid tap
+		// handler and the panel never scrolls.
+		portraitExtraScrollTargets = new RegionTermView[] {
+				ngsDesc, ngbDesc, quickControlsView };
 
 		final float maxMapScale = fontConfig.portraitMapFontScale;
 		final float maxHudScale = fontConfig.portraitHudFontScale;
@@ -664,6 +715,35 @@ public class GameActivity extends Activity
 		v.setHorizontalScrollEnabled(fc.portraitNewgameDescScrollable);
 		v.setVerticalScrollEnabled(fc.portraitNewgameDescVScrollable);
 		return v;
+	}
+
+	// Read assets/quick_controls.txt and return one entry per line with tabs
+	// expanded to 4 spaces. Returns an empty array on I/O failure so the
+	// panel still measures normally; the user sees a blank QC area rather
+	// than a crash. UTF-8 because the file contains directional arrow chars
+	// outside ASCII.
+	private String[] loadQuickControls()
+	{
+		final String QUICK_CONTROLS_ASSET = "quick_controls.txt";
+		final String TAB = "    ";
+		List<String> lines = new ArrayList<>();
+		// Leading blank row provides a visual gap between the main menu's
+		// last line and the start of the quick-controls content.
+		lines.add("");
+		try (InputStream is = getAssets().open(QUICK_CONTROLS_ASSET);
+				BufferedReader br = new BufferedReader(
+						new InputStreamReader(is, StandardCharsets.UTF_8)))
+		{
+			String line;
+			while ((line = br.readLine()) != null)
+				lines.add(line.replace("\t", TAB));
+		}
+		catch (IOException e)
+		{
+			Log.w("GameActivity", "Could not load " + QUICK_CONTROLS_ASSET
+					+ ": " + e.getMessage());
+		}
+		return lines.toArray(new String[0]);
 	}
 
 	private TerminalRenderer buildLandscapeLayout(boolean hapticFeedbackEnabled) {

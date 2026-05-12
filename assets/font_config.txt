@@ -37,6 +37,18 @@ portrait_pregame_scrollable=true
 portrait_mainmenu_font_scale=1.6
 portrait_mainmenu_scrollable=true
 
+# Portrait: Quick Controls panel
+# An app-only static panel rendered below the main menu (between the
+# fullView terminal and the virtual keyboard). Content is loaded once from
+# assets/quick_controls.txt — DCSS never writes to it. Shown only while the
+# main menu ("Hello, welcome to Dungeon Crawl ...") is active.
+# Defaults: 1.6 / scroll on / vscroll on (content is typically taller than
+# the panel slot at this scale).
+portrait_quickcontrols_font_scale=1.6
+portrait_quickcontrols_scrollable=false
+portrait_quickcontrols_vscrollable=true
+portrait_quickcontrols_font_color=606060
+
 # Portrait: map panel
 # Shown during: gameplay — top portion, dungeon viewport
 # Terminal region: 37 cols x 17 rows  (terminal cols 0-36, rows 0-16)

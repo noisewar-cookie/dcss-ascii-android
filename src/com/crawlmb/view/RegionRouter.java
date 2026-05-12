@@ -193,6 +193,12 @@ public class RegionRouter implements TerminalRenderer
 	private static final String NEWGAME_SPECIES_TOKEN = "species.";
 	private static final String NEWGAME_BACKGROUND_TOKEN = "background.";
 
+	// DCSS main menu greeting. menu.cc renders "Hello, welcome to Dungeon
+	// Crawl Stone Soup <version>." at row 0 col 0 of the main menu shown at
+	// app start and after Ctrl+S returns from gameplay. Distinct from the
+	// newgame "Welcome..." (no "Hello," prefix), so this anchor is unique.
+	private static final String MAINMENU_ANCHOR = "Hello, welcome to Dungeon Crawl";
+
 	// Newgame panel rectangles. Hardcoded to upstream 0.34 layout —
 	// m_main_items is OuterMenu(true, 3, 20) with set_margin_for_crt(1, 0),
 	// so the welcome row sits at row 0, content starts at row 2 after the
@@ -229,6 +235,12 @@ public class RegionRouter implements TerminalRenderer
 	private final List<RegionTermView> splitRegions = new ArrayList<>();
 	private RegionTermView fullView;
 	private RegionTermView skillsView;
+	// App-only static panel shown only while the DCSS main menu is active.
+	// Sits in a LinearLayout sibling-pair with fullView so its slot expands
+	// to fill the gap between fullView's bottom and the virtual keyboard.
+	// Visibility is toggled here from applyMode; content is preloaded by
+	// GameActivity from assets/quick_controls.txt.
+	private View quickControlsView;
 	private LinearLayout splitContainer;
 	// Newgame panel containers. Each holds a vertical stack of
 	// RegionTermViews — those panels are also added to splitRegions so
@@ -322,6 +334,11 @@ public class RegionRouter implements TerminalRenderer
 	public void setSkillsView(RegionTermView view)
 	{
 		this.skillsView = view;
+	}
+
+	public void setQuickControlsView(View view)
+	{
+		this.quickControlsView = view;
 	}
 
 	public RegionTermView getSkillsView()
@@ -636,6 +653,21 @@ public class RegionRouter implements TerminalRenderer
 		if (newgameBackgroundContainer != null)
 			newgameBackgroundContainer.setVisibility(
 					newgameBackgroundVisible ? View.VISIBLE : View.INVISIBLE);
+		// Quick Controls panel: only visible while the DCSS main menu is on
+		// screen. fullVisible alone is not enough — every other in-game menu
+		// (inventory, overview, etc.) is also "full" and the QC panel must
+		// stay hidden during those. INVISIBLE preserves the LinearLayout slot
+		// so fullView's measured position doesn't shift when toggling state.
+		if (quickControlsView != null)
+		{
+			boolean qcVisible = fullVisible && menuType == MenuType.MAINMENU;
+			quickControlsView.setVisibility(qcVisible ? View.VISIBLE : View.INVISIBLE);
+			// INVISIBLE↔VISIBLE only calls invalidate(); the view's existing
+			// bitmap (rendered during the last measure pass) is intact, so
+			// invalidate() is enough to surface it.
+			if (qcVisible)
+				quickControlsView.invalidate();
+		}
 
 		// Re-aim newgame panels at the actual terminal columns rendered by
 		// the upstream Grid widget (stretch_h means we can't pin them
@@ -1057,20 +1089,16 @@ public class RegionRouter implements TerminalRenderer
 
 	private MenuType detectMenuType()
 	{
-		// Newgame species/background picker. After the first gameplay frame,
-		// gameplayEverDetected sticks at true, so a return to the main menu
-		// (e.g. Ctrl+S) classifies as MENU instead of PREGAME — meaning the
-		// newgame screen reached from that main menu lands here, not in
-		// detectPregameType. Check the same anchor so the screen still routes
-		// to NEWGAME_SPECIES/NEWGAME_BACKGROUND on the second-and-later trips
-		// through New Game.
-		if (matchesAt(0, 0, NEWGAME_WELCOME_PREFIX))
-		{
-			if (rowContains(0, NEWGAME_SPECIES_TOKEN))
-				return MenuType.NEWGAME_SPECIES;
-			if (rowContains(0, NEWGAME_BACKGROUND_TOKEN))
-				return MenuType.NEWGAME_BACKGROUND;
-		}
+		// Pregame-style screens reachable from MENU mode after the first
+		// gameplay frame: once gameplayEverDetected sticks at true,
+		// detectMode() returns MENU (not PREGAME) for every non-gameplay
+		// frame, so Ctrl+S → main menu and Ctrl+S → New Game both arrive
+		// here instead of detectPregameType. Share the anchor helper so any
+		// new pregame screen added in the future works from both flows
+		// without needing to be duplicated across detect functions.
+		MenuType pregame = detectPregameAnchor();
+		if (pregame != null)
+			return pregame;
 
 		// Row 0 prefix matches: cheapest, covers all set_title-style menus.
 		// Use rowStartsWith (not matchesAt(0,0,...)) so the leading space
@@ -1252,6 +1280,32 @@ public class RegionRouter implements TerminalRenderer
 	{
 		if (matchesAt(0, 0, LOADING_ANCHOR))
 			return MenuType.PREGAME;
+		MenuType anchor = detectPregameAnchor();
+		if (anchor != null)
+			return anchor;
+		// Pregame fallthrough: an unrecognized non-loading screen. The
+		// character-naming prompt at the end of the newgame flow is one
+		// such screen — its row 0 doesn't match MAINMENU_ANCHOR or any
+		// newgame token. Returning MAINMENU here misclassified naming as
+		// the main menu, which in turn made the Quick Controls panel show
+		// during character naming. DEFAULT is the safe catch-all: gives
+		// the screen portraitDefaultFontScale and keeps the QC panel
+		// (gated on MAINMENU specifically) hidden.
+		return MenuType.DEFAULT;
+	}
+
+	// Specific pregame-style screen anchors (excluding the loading screen,
+	// which is only ever shown pre-gameplay and so doesn't need to be
+	// detectable from MENU mode). Returns null when no anchor matches so
+	// callers can apply their own fallback — detectPregameType falls
+	// through to MAINMENU, detectMenuType falls through to its own
+	// in-game-menu anchors. Centralizing these anchors here means any
+	// future pregame screen added to this helper is automatically detected
+	// from both pregame-mode and post-gameplay menu-mode flows.
+	private MenuType detectPregameAnchor()
+	{
+		if (matchesAt(0, 0, MAINMENU_ANCHOR))
+			return MenuType.MAINMENU;
 		if (matchesAt(0, 0, NEWGAME_WELCOME_PREFIX))
 		{
 			if (rowContains(0, NEWGAME_SPECIES_TOKEN))
@@ -1259,7 +1313,7 @@ public class RegionRouter implements TerminalRenderer
 			if (rowContains(0, NEWGAME_BACKGROUND_TOKEN))
 				return MenuType.NEWGAME_BACKGROUND;
 		}
-		return MenuType.MAINMENU;
+		return null;
 	}
 
 	@Override

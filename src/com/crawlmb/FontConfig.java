@@ -26,6 +26,10 @@ public class FontConfig
     public final boolean portraitPregameScrollable;
     public final float portraitMainmenuFontScale;
     public final boolean portraitMainmenuScrollable;
+    public final float portraitQuickControlsFontScale;
+    public final boolean portraitQuickControlsScrollable;
+    public final boolean portraitQuickControlsVScrollable;
+    public final int portraitQuickControlsFontColor;
     public final float portraitItemsFontScale;
     public final boolean portraitItemsScrollable;
     public final boolean portraitItemsVScrollable;
@@ -89,6 +93,13 @@ public class FontConfig
         this.portraitPregameScrollable = getBool (props, "portrait_pregame_scrollable", this.portraitDefaultScrollable);
         this.portraitMainmenuFontScale = getFloat(props, "portrait_mainmenu_font_scale", this.portraitDefaultFontScale);
         this.portraitMainmenuScrollable= getBool (props, "portrait_mainmenu_scrollable", this.portraitDefaultScrollable);
+        this.portraitQuickControlsFontScale  = getFloat(props, "portrait_quickcontrols_font_scale", 1.6f);
+        this.portraitQuickControlsScrollable = getBool (props, "portrait_quickcontrols_scrollable", true);
+        this.portraitQuickControlsVScrollable= getBool (props, "portrait_quickcontrols_vscrollable", true);
+        // Default 0xFFC0C0C0 matches DCSS LIGHTGRAY (see colourMap in
+        // android-console-patches/libandroid.cc), the color of most main-
+        // menu prompts including "Enter your name:".
+        this.portraitQuickControlsFontColor  = getColor(props, "portrait_quickcontrols_font_color", 0xFFC0C0C0);
         this.portraitItemsFontScale    = getFloat(props, "portrait_items_font_scale", this.portraitDefaultFontScale);
         this.portraitItemsScrollable   = getBool (props, "portrait_items_scrollable", this.portraitDefaultScrollable);
         this.portraitItemsVScrollable  = getBool (props, "portrait_items_vscrollable", false);
@@ -180,6 +191,33 @@ public class FontConfig
         catch (NumberFormatException e)
         {
             Log.w(TAG, "Invalid value for " + key + ": " + val);
+            return def;
+        }
+    }
+
+    // Parse "RRGGBB", "#RRGGBB", "0xRRGGBB", or full 8-digit ARGB. Returns
+    // an int suitable for android.graphics.Color (alpha forced to 0xFF when
+    // only 6 hex digits supplied — the rendering surface is opaque).
+    private static int getColor(Properties props, String key, int def)
+    {
+        String val = props.getProperty(key);
+        if (val == null)
+            return def;
+        String t = val.trim();
+        if (t.startsWith("#"))
+            t = t.substring(1);
+        else if (t.startsWith("0x") || t.startsWith("0X"))
+            t = t.substring(2);
+        try
+        {
+            long parsed = Long.parseLong(t, 16);
+            if (t.length() <= 6)
+                parsed |= 0xFF000000L;
+            return (int) parsed;
+        }
+        catch (NumberFormatException e)
+        {
+            Log.w(TAG, "Invalid color for " + key + ": " + val);
             return def;
         }
     }

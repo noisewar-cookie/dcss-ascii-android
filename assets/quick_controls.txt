@@ -1,0 +1,26 @@
+_________________________________________________
+
+ QUICK CONTROLS
+    2-Finger Long Press = app menu
+     ? = help
+    ?? = default keymap ("<>" to page)
+
+ Game screen 9-grid touch overlay:
+     ↖ | ↑ | ↗
+    ---+---+---  Tap to move / attack
+     ← | ↻ | →   Center tap waits a turn
+    ---+---+---  Drag to scroll text
+     ↙ | ↓ | ↘
+
+    Tab / o = auto-fight / auto-explore
+    ./5 = wait a turn / long rest
+      i = inventory
+      m = skills training
+    w/W = wield / Wear armor
+    g/d = get / drop
+    r/q = read scroll / quaff potion
+    f/Q = fire / Quiver
+    z/I/M = cast / list / Memorize spells
+
+ Check help (?) for full controls list.
+_________________________________________________
