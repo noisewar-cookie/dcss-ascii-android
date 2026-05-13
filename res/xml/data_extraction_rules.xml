@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Data extraction rules (API 31+). Mirrors backup_rules.xml. Two sections:
+    cloud-backup    → Auto Backup to Google Drive (quota 25MB)
+    device-transfer → device-to-device migration (no quota)
+  Both exclude the regenerable extracted asset tree.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="dat/" />
+        <exclude domain="file" path="docs/" />
+        <exclude domain="file" path="dat-hash.txt" />
+        <exclude domain="file" path="version.txt" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="dat/" />
+        <exclude domain="file" path="docs/" />
+        <exclude domain="file" path="dat-hash.txt" />
+        <exclude domain="file" path="version.txt" />
+    </device-transfer>
+</data-extraction-rules>

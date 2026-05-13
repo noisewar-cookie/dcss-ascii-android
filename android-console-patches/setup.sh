@@ -67,6 +67,13 @@ for f in crawl_manual.txt aptitudes.txt quickstart.txt macros_guide.txt options_
 done
 echo ""
 
+# ── Step 3b2: Sync upstream LICENSE into assets ──
+# GPL-2.0+ compliance: ship the license text alongside the binary in the APK.
+# Sourced from the submodule so upstream bumps refresh it automatically.
+echo "Syncing LICENSE into assets..."
+cp -v "$PROJECT_DIR/android-crawl-console/LICENSE" "$PROJECT_DIR/assets/LICENSE.txt"
+echo ""
+
 # ── Step 3c: Compute content hash of assets/dat/ ──
 # SplashActivity reads this and compares to the installed copy in filesDir.
 # If they match, dat/ is not re-extracted on launch — preserving file mtimes

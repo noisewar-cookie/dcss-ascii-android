@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto Backup rules (legacy, API 23-30). Default behavior is "back up
+  everything in filesDir, databases, shared_prefs, and externalFilesDir
+  except cacheDir / noBackupFilesDir". Excludes below drop the bundled
+  game data we re-extract on every install — restoring it would conflict
+  with dat-hash gating and waste backup quota.
+-->
+<full-backup-content>
+    <exclude domain="file" path="dat/" />
+    <exclude domain="file" path="docs/" />
+    <exclude domain="file" path="dat-hash.txt" />
+    <exclude domain="file" path="version.txt" />
+</full-backup-content>
