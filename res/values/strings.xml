@@ -29,7 +29,13 @@
     <string name="copying_files">Copying files...</string>
     <string name="files_copied_successfully">Files copied successfully</string>
     <string name="error_copying_files">Error copying files</string>
-    <string name="backup_not_found_in_folder">No backup folder found in the selected location.</string>
+    <string name="error_nothing_to_backup">Nothing to back up</string>
+    <string name="error_backup_empty_or_invalid">Backup file is empty or invalid</string>
+    <string name="saves_backup_filename">crawl-saves-backup.zip</string>
+    <string name="morgue_backup_filename">crawl-morgue-backup.zip</string>
+    <string name="backup_config_files">Backup config files</string>
+    <string name="restore_config_files">Restore config files</string>
+    <string name="config_backup_filename">crawl-config-backup.zip</string>
 
     <string name="preferences_vibrate_title">Vibrate</string>
     <string name="preferences_vibrate_summary">Enable or disable vibration in game</string>

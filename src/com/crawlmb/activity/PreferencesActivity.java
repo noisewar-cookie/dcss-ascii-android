@@ -34,8 +34,6 @@ import android.util.Log;
 import android.view.WindowManager;
 import android.widget.Toast;
 
-import androidx.documentfile.provider.DocumentFile;
-
 import com.crawlmb.EditConfigFilePreference;
 import com.crawlmb.Paths;
 import com.crawlmb.Preferences;
@@ -52,183 +50,12 @@ import java.io.OutputStream;
 public class PreferencesActivity extends PreferenceActivity implements
         OnSharedPreferenceChangeListener {
 
-    // Copies a directory tree between an internal File location and a
-    // user-chosen Storage Access Framework tree (Uri). Used for save/morgue
-    // backup and restore. The user-chosen tree is the *parent* — backup
-    // creates a "saves" or "morgue" subdir under it; restore reads the same
-    // subdir name back out. This mirrors the previous EditText UX where
-    // users typed a parent path.
-    // Enums live at the enclosing-class level because Java < 16 disallows
-    // static (and thus implicitly-static) declarations inside non-static
-    // inner classes. SafCopyTask is non-static so it can call showDialog /
-    // removeDialog / setResult / finish on the activity directly.
-    private enum CopyDirection { BACKUP, RESTORE }
+    // Backup/restore for saves, morgue, and config files uses a single
+    // user-chosen .zip via SAF. Backup writes a zip of a directory tree;
+    // restore extracts it back. Enum lives at the enclosing-class level
+    // because Java < 16 disallows static declarations inside non-static
+    // inner classes; ZipBackupTask is non-static for activity access.
     private enum CopyResult { SUCCESS, ERROR_IO, ERROR_NOT_FOUND }
-
-    private final class SafCopyTask extends AsyncTask<Void, Void, CopyResult> {
-        private static final String TAG = "SafCopyTask";
-
-        private final CopyDirection direction;
-        private final Uri treeUri;
-        private final File localDir;
-        private final String childName;
-        private final boolean reloadCrawlOnSuccess;
-
-        SafCopyTask(CopyDirection direction, Uri treeUri, File localDir,
-                String childName, boolean reloadCrawlOnSuccess) {
-            this.direction = direction;
-            this.treeUri = treeUri;
-            this.localDir = localDir;
-            this.childName = childName;
-            this.reloadCrawlOnSuccess = reloadCrawlOnSuccess;
-        }
-
-        @Override
-        protected void onPreExecute() {
-            showDialog(DIALOG_COPY_FILES_PROGRESS);
-        }
-
-        @Override
-        protected CopyResult doInBackground(Void... v) {
-            DocumentFile tree = DocumentFile.fromTreeUri(
-                    PreferencesActivity.this, treeUri);
-            if (tree == null)
-                return CopyResult.ERROR_IO;
-            try {
-                if (direction == CopyDirection.BACKUP) {
-                    DocumentFile existing = tree.findFile(childName);
-                    if (existing != null && !existing.delete())
-                        return CopyResult.ERROR_IO;
-                    DocumentFile destChild = tree.createDirectory(childName);
-                    if (destChild == null)
-                        return CopyResult.ERROR_IO;
-                    copyFileTreeToSaf(localDir, destChild);
-                } else {
-                    DocumentFile srcChild = tree.findFile(childName);
-                    if (srcChild == null || !srcChild.isDirectory())
-                        return CopyResult.ERROR_NOT_FOUND;
-                    deleteRecursive(localDir);
-                    if (!localDir.mkdirs() && !localDir.isDirectory())
-                        return CopyResult.ERROR_IO;
-                    copySafTreeToFile(srcChild, localDir);
-                }
-                return CopyResult.SUCCESS;
-            } catch (IOException ex) {
-                Log.e(TAG, "Copy failed: " + ex);
-                return CopyResult.ERROR_IO;
-            }
-        }
-
-        private void copyFileTreeToSaf(File src, DocumentFile destDir)
-                throws IOException {
-            File[] kids = src.listFiles();
-            if (kids == null)
-                return;
-            for (File kid : kids) {
-                if (kid.isDirectory()) {
-                    DocumentFile sub = destDir.createDirectory(kid.getName());
-                    if (sub == null)
-                        throw new IOException(
-                                "createDirectory failed: " + kid.getName());
-                    copyFileTreeToSaf(kid, sub);
-                } else {
-                    DocumentFile out = destDir.createFile(
-                            "application/octet-stream", kid.getName());
-                    if (out == null)
-                        throw new IOException(
-                                "createFile failed: " + kid.getName());
-                    InputStream in = null;
-                    OutputStream os = null;
-                    try {
-                        in = new FileInputStream(kid);
-                        os = getContentResolver().openOutputStream(out.getUri());
-                        if (os == null)
-                            throw new IOException("openOutputStream null");
-                        streamCopy(in, os);
-                    } finally {
-                        closeQuietly(in);
-                        closeQuietly(os);
-                    }
-                }
-            }
-        }
-
-        private void copySafTreeToFile(DocumentFile srcDir, File destDir)
-                throws IOException {
-            for (DocumentFile kid : srcDir.listFiles()) {
-                String name = kid.getName();
-                if (name == null)
-                    continue;
-                File destChild = new File(destDir, name);
-                if (kid.isDirectory()) {
-                    if (!destChild.mkdirs() && !destChild.isDirectory())
-                        throw new IOException("mkdir failed: " + name);
-                    copySafTreeToFile(kid, destChild);
-                } else {
-                    InputStream in = null;
-                    OutputStream os = null;
-                    try {
-                        in = getContentResolver().openInputStream(kid.getUri());
-                        if (in == null)
-                            throw new IOException("openInputStream null");
-                        os = new FileOutputStream(destChild);
-                        streamCopy(in, os);
-                    } finally {
-                        closeQuietly(in);
-                        closeQuietly(os);
-                    }
-                }
-            }
-        }
-
-        private void streamCopy(InputStream in, OutputStream out)
-                throws IOException {
-            byte[] buf = new byte[8192];
-            int len;
-            while ((len = in.read(buf)) > 0)
-                out.write(buf, 0, len);
-        }
-
-        private void closeQuietly(java.io.Closeable c) {
-            if (c == null)
-                return;
-            try { c.close(); } catch (IOException ignored) {}
-        }
-
-        private void deleteRecursive(File f) {
-            if (f.isDirectory()) {
-                File[] kids = f.listFiles();
-                if (kids != null)
-                    for (File k : kids)
-                        deleteRecursive(k);
-            }
-            f.delete();
-        }
-
-        @Override
-        protected void onPostExecute(CopyResult r) {
-            removeDialog(DIALOG_COPY_FILES_PROGRESS);
-            int toastRes;
-            switch (r) {
-                case SUCCESS:
-                    toastRes = R.string.files_copied_successfully;
-                    break;
-                case ERROR_NOT_FOUND:
-                    toastRes = R.string.backup_not_found_in_folder;
-                    break;
-                default:
-                    toastRes = R.string.error_copying_files;
-            }
-            Toast.makeText(PreferencesActivity.this, toastRes,
-                    Toast.LENGTH_LONG).show();
-            if (r == CopyResult.SUCCESS && reloadCrawlOnSuccess) {
-                Intent resultIntent = new Intent();
-                resultIntent.putExtra("reloadCrawl", true);
-                setResult(RESULT_OK, resultIntent);
-                finish();
-            }
-        }
-    }
 
     private static final int DIALOG_COPY_FILES_PROGRESS = 0;
 
@@ -251,45 +78,62 @@ public class PreferencesActivity extends PreferenceActivity implements
         addBackupRestorePreferences();
     }
 
-    // Tap a backup/restore preference -> launch the system folder picker
-    // (ACTION_OPEN_DOCUMENT_TREE). The chosen Uri comes back via
-    // onActivityResult, identified by request code, and is handed to a
-    // SafCopyTask. No storage permissions needed; the picker grant scopes
-    // access to that one folder for this session.
+    // Tap a backup/restore preference -> launch a single-file SAF picker
+    // (ACTION_CREATE_DOCUMENT for backup, ACTION_OPEN_DOCUMENT for restore).
+    // The chosen Uri comes back via onActivityResult, identified by request
+    // code, and is handed to a ZipBackupTask. No storage permissions needed.
     private static final int REQ_BACKUP_SAVES = 1001;
     private static final int REQ_RESTORE_SAVES = 1002;
     private static final int REQ_BACKUP_MORGUE = 1003;
     private static final int REQ_RESTORE_MORGUE = 1004;
+    private static final int REQ_BACKUP_CONFIG = 1005;
+    private static final int REQ_RESTORE_CONFIG = 1006;
 
     private void addBackupRestorePreferences() {
-        addPickerPreference("morgue", R.string.backup_morgue_directory,
-                REQ_BACKUP_MORGUE);
-        addPickerPreference("morgue", R.string.restore_morgue_directory,
-                REQ_RESTORE_MORGUE);
-        addPickerPreference("saveFiles", R.string.backup_save_directory,
-                REQ_BACKUP_SAVES);
-        addPickerPreference("saveFiles", R.string.restore_save_directory,
-                REQ_RESTORE_SAVES);
+        addZipPreference("configFiles", R.string.backup_config_files,
+                REQ_BACKUP_CONFIG, R.string.config_backup_filename, true);
+        addZipPreference("configFiles", R.string.restore_config_files,
+                REQ_RESTORE_CONFIG, 0, false);
+        addZipPreference("morgue", R.string.backup_morgue_directory,
+                REQ_BACKUP_MORGUE, R.string.morgue_backup_filename, true);
+        addZipPreference("morgue", R.string.restore_morgue_directory,
+                REQ_RESTORE_MORGUE, 0, false);
+        addZipPreference("saveFiles", R.string.backup_save_directory,
+                REQ_BACKUP_SAVES, R.string.saves_backup_filename, true);
+        addZipPreference("saveFiles", R.string.restore_save_directory,
+                REQ_RESTORE_SAVES, 0, false);
     }
 
-    private void addPickerPreference(String categoryKey, int titleRes,
-            final int requestCode) {
+    private void addZipPreference(String categoryKey, int titleRes,
+            final int requestCode, final int suggestedNameRes,
+            final boolean isBackup) {
         Preference p = new Preference(this);
         p.setTitle(titleRes);
         p.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference pref) {
-                launchFolderPicker(requestCode);
+                if (isBackup)
+                    launchCreateDocument(requestCode, suggestedNameRes);
+                else
+                    launchOpenDocument(requestCode);
                 return true;
             }
         });
         ((PreferenceCategory) findPreference(categoryKey)).addPreference(p);
     }
 
-    private void launchFolderPicker(int requestCode) {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
-                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+    private void launchCreateDocument(int requestCode, int suggestedNameRes) {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/zip");
+        intent.putExtra(Intent.EXTRA_TITLE, getString(suggestedNameRes));
+        startActivityForResult(intent, requestCode);
+    }
+
+    private void launchOpenDocument(int requestCode) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/zip");
         startActivityForResult(intent, requestCode);
     }
 
@@ -304,25 +148,196 @@ public class PreferencesActivity extends PreferenceActivity implements
             return;
         File savesDir = new File(getFilesDir(), "saves");
         File morgueDir = Paths.getMorgueDir(this);
+        File settingsDir = Paths.getSettingsDir(this);
         switch (requestCode) {
             case REQ_BACKUP_SAVES:
-                new SafCopyTask(CopyDirection.BACKUP, uri,
-                        savesDir, "saves", false).execute();
+                new ZipBackupTask(true, uri, savesDir, null, false).execute();
                 break;
             case REQ_RESTORE_SAVES:
                 // reload Crawl after restore so the running game picks up
                 // the new save state.
-                new SafCopyTask(CopyDirection.RESTORE, uri,
-                        savesDir, "saves", true).execute();
+                new ZipBackupTask(false, uri, savesDir, null, true).execute();
                 break;
             case REQ_BACKUP_MORGUE:
-                new SafCopyTask(CopyDirection.BACKUP, uri,
-                        morgueDir, "morgue", false).execute();
+                new ZipBackupTask(true, uri, morgueDir, null, false).execute();
                 break;
             case REQ_RESTORE_MORGUE:
-                new SafCopyTask(CopyDirection.RESTORE, uri,
-                        morgueDir, "morgue", false).execute();
+                new ZipBackupTask(false, uri, morgueDir, null, false).execute();
                 break;
+            case REQ_BACKUP_CONFIG:
+                new ZipBackupTask(true, uri, settingsDir,
+                        configAllowlist(), false).execute();
+                break;
+            case REQ_RESTORE_CONFIG:
+                new ZipBackupTask(false, uri, settingsDir,
+                        configAllowlist(), false).execute();
+                break;
+        }
+    }
+
+    private java.util.Set<String> configAllowlist() {
+        java.util.Set<String> set = new java.util.HashSet<>();
+        for (String n : getResources().getStringArray(R.array.config_files))
+            set.add(n + ".txt");
+        return set;
+    }
+
+    // Zips a directory tree to a user-chosen .zip, or extracts a .zip back
+    // into a directory tree. If allowlist is non-null, restore skips zip
+    // entries whose path isn't in the set (used for config restore to keep
+    // tampered zips from dropping foreign files into settings/). Backup
+    // ignores allowlist — it always zips everything under baseDir.
+    private final class ZipBackupTask extends AsyncTask<Void, Void, CopyResult> {
+        private static final String TAG = "ZipBackupTask";
+        private final boolean isBackup;
+        private final Uri uri;
+        private final File baseDir;
+        private final java.util.Set<String> restoreAllowlist;
+        private final boolean reloadCrawlOnSuccess;
+
+        ZipBackupTask(boolean isBackup, Uri uri, File baseDir,
+                java.util.Set<String> restoreAllowlist,
+                boolean reloadCrawlOnSuccess) {
+            this.isBackup = isBackup;
+            this.uri = uri;
+            this.baseDir = baseDir;
+            this.restoreAllowlist = restoreAllowlist;
+            this.reloadCrawlOnSuccess = reloadCrawlOnSuccess;
+        }
+
+        @Override
+        protected void onPreExecute() {
+            showDialog(DIALOG_COPY_FILES_PROGRESS);
+        }
+
+        @Override
+        protected CopyResult doInBackground(Void... voids) {
+            try {
+                return isBackup ? zipTree() : unzipTree();
+            } catch (IOException ex) {
+                Log.e(TAG, (isBackup ? "Backup" : "Restore") + " failed", ex);
+                return CopyResult.ERROR_IO;
+            }
+        }
+
+        private CopyResult zipTree() throws IOException {
+            if (!baseDir.exists() || !baseDir.isDirectory())
+                return CopyResult.ERROR_NOT_FOUND;
+            OutputStream os = getContentResolver().openOutputStream(uri);
+            if (os == null)
+                return CopyResult.ERROR_IO;
+            java.util.zip.ZipOutputStream zip = null;
+            int[] written = {0};
+            try {
+                zip = new java.util.zip.ZipOutputStream(os);
+                walkAndZip(baseDir, "", zip, written);
+            } finally {
+                if (zip != null) zip.close();
+                else os.close();
+            }
+            return written[0] > 0
+                    ? CopyResult.SUCCESS : CopyResult.ERROR_NOT_FOUND;
+        }
+
+        private void walkAndZip(File dir, String relPath,
+                java.util.zip.ZipOutputStream zip, int[] written)
+                throws IOException {
+            File[] kids = dir.listFiles();
+            if (kids == null)
+                return;
+            byte[] buf = new byte[8192];
+            for (File kid : kids) {
+                String entryName = relPath.isEmpty()
+                        ? kid.getName() : relPath + "/" + kid.getName();
+                if (kid.isDirectory()) {
+                    walkAndZip(kid, entryName, zip, written);
+                } else if (kid.isFile()) {
+                    zip.putNextEntry(new java.util.zip.ZipEntry(entryName));
+                    FileInputStream in = new FileInputStream(kid);
+                    try {
+                        int n;
+                        while ((n = in.read(buf)) != -1)
+                            zip.write(buf, 0, n);
+                    } finally {
+                        in.close();
+                    }
+                    zip.closeEntry();
+                    written[0]++;
+                }
+            }
+        }
+
+        private CopyResult unzipTree() throws IOException {
+            if (!baseDir.exists())
+                baseDir.mkdirs();
+            String basePath = baseDir.getCanonicalPath() + File.separator;
+            InputStream is = getContentResolver().openInputStream(uri);
+            if (is == null)
+                return CopyResult.ERROR_IO;
+            int read = 0;
+            java.util.zip.ZipInputStream zip = null;
+            try {
+                zip = new java.util.zip.ZipInputStream(is);
+                byte[] buf = new byte[8192];
+                java.util.zip.ZipEntry e;
+                while ((e = zip.getNextEntry()) != null) {
+                    String entryName = e.getName();
+                    if (e.isDirectory())
+                        continue;
+                    if (restoreAllowlist != null
+                            && !restoreAllowlist.contains(entryName))
+                        continue;
+                    File dest = new File(baseDir, entryName);
+                    // Zip-slip guard: reject entries that escape baseDir.
+                    if (!dest.getCanonicalPath().startsWith(basePath))
+                        continue;
+                    File parent = dest.getParentFile();
+                    if (parent != null && !parent.exists())
+                        parent.mkdirs();
+                    FileOutputStream out = new FileOutputStream(dest, false);
+                    try {
+                        int n;
+                        while ((n = zip.read(buf)) != -1)
+                            out.write(buf, 0, n);
+                    } finally {
+                        out.close();
+                    }
+                    zip.closeEntry();
+                    read++;
+                }
+            } finally {
+                if (zip != null) zip.close();
+                else is.close();
+            }
+            return read > 0 ? CopyResult.SUCCESS : CopyResult.ERROR_NOT_FOUND;
+        }
+
+        @Override
+        protected void onPostExecute(CopyResult r) {
+            removeDialog(DIALOG_COPY_FILES_PROGRESS);
+            int toastRes;
+            switch (r) {
+                case SUCCESS:
+                    toastRes = isBackup
+                            ? R.string.files_copied_successfully
+                            : R.string.files_copied_successfully;
+                    break;
+                case ERROR_NOT_FOUND:
+                    toastRes = isBackup
+                            ? R.string.error_nothing_to_backup
+                            : R.string.error_backup_empty_or_invalid;
+                    break;
+                default:
+                    toastRes = R.string.error_copying_files;
+            }
+            Toast.makeText(PreferencesActivity.this, toastRes,
+                    Toast.LENGTH_LONG).show();
+            if (r == CopyResult.SUCCESS && reloadCrawlOnSuccess) {
+                Intent resultIntent = new Intent();
+                resultIntent.putExtra("reloadCrawl", true);
+                setResult(RESULT_OK, resultIntent);
+                finish();
+            }
         }
     }
 

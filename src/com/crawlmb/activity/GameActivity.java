@@ -208,18 +208,12 @@ public class GameActivity extends Activity
 		synchronized (GameKeyListener.progress_lock) {
 			// Log.d("Crawl","rebuildViews");
 
-			int orient = Preferences.getOrientation();
-			switch (orient) {
-			case 0: // sensor
-				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);
-				break;
-			case 1: // portrait
-				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-				break;
-			case 2: // landscape
-				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-				break;
-			}
+			// Portrait-only for now. Landscape support is retained in code
+			// (buildLandscapeLayout, Preferences.getLandscapeKeyboard, etc.)
+			// for future re-enable, but the orientation picker is hidden in
+			// preferences.xml and the stored crawl.orientation pref is ignored
+			// here.
+			setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
 			if (screenLayout != null)
 				screenLayout.removeAllViews();
@@ -273,25 +267,11 @@ public class GameActivity extends Activity
 			boolean hapticFeedbackEnabled = Preferences
 					.getHapticFeedbackEnabled();
 
-			TerminalRenderer renderer;
-			boolean isPortrait = Preferences.isScreenPortraitOrientation();
-
-			if (isPortrait)
-			{
-				renderer = buildPortraitLayout(hapticFeedbackEnabled);
-			}
-			else
-			{
-				renderer = buildLandscapeLayout(hapticFeedbackEnabled);
-			}
-
+			// Portrait-only: stored isScreenPortraitOrientation() pref ignored.
+			TerminalRenderer renderer = buildPortraitLayout(hapticFeedbackEnabled);
 			gameKeyListener.link(renderer, handler);
 
-			String keyboardType;
-			if (isPortrait)
-				keyboardType = Preferences.getPortraitKeyboard();
-			else
-				keyboardType = Preferences.getLandscapeKeyboard();
+			String keyboardType = Preferences.getPortraitKeyboard();
 
 			String[] keyboards = getResources().getStringArray(
 					R.array.virtualKeyboardValues);

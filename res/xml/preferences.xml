@@ -13,13 +13,17 @@
 	   android:defaultValue="true" 
 	   android:title="@string/preferences_fullscreen_title"
 	   android:summary="@string/preferences_fullscreen_summary" />
-	<ListPreference 
+	<!-- Orientation picker hidden; app is locked to portrait. Underlying
+	     code/strings retained for future landscape re-enable.
+	<ListPreference
 	   android:key="crawl.orientation"
-	   android:defaultValue="0" 
+	   android:defaultValue="0"
 	   android:title="@string/preferences_orientation_title"
-	   android:summary="@string/preferences_orientation_summary" 
+	   android:summary="@string/preferences_orientation_summary"
 	   android:entries="@array/orientationDescriptions"
 	   android:entryValues="@array/orientations" />
+	-->
+
 	<CheckBoxPreference 
 	   android:key="crawl.skipsplash"
 	   android:defaultValue="false" 
@@ -244,13 +248,16 @@
 	   android:entries="@array/virtualKeyboards"
 	   android:entryValues="@array/virtualKeyboardValues"
 	   android:defaultValue="@string/portraitkb.default"/>
-	<ListPreference 
+	<!-- Landscape keyboard picker hidden; portrait-only for now.
+	<ListPreference
 	   android:key="crawl.landscapekb"
 	   android:title="@string/preferences_landscapekb_title"
 	   android:summary="@string/preferences_landscapekb_summary"
 	   android:entries="@array/virtualKeyboards"
 	   android:entryValues="@array/virtualKeyboardValues"
 	   android:defaultValue="@string/landscapekb.default"/>
+	-->
+
 	<CheckBoxPreference 
 	   android:key="crawl.enabletouch"
 	   android:defaultValue="true" 

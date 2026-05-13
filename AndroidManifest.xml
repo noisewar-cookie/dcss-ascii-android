@@ -19,6 +19,7 @@
         <activity
             android:name=".activity.SplashActivity"
             android:configChanges="orientation|keyboardHidden"
+            android:screenOrientation="portrait"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -28,33 +29,39 @@
         <activity
             android:name=".activity.GameActivity"
             android:configChanges="keyboardHidden"
+            android:screenOrientation="portrait"
             android:launchMode="singleTask"
             >
         </activity>
         <activity
             android:name=".activity.HelpActivity"
-            android:label="@string/app_name" 
+            android:label="@string/app_name"
+            android:screenOrientation="portrait"
             android:windowSoftInputMode="stateHidden"
             >
         </activity>
         <activity
             android:name=".activity.CharacterFilesActivity"
-            android:label="@string/morgue" 
+            android:label="@string/morgue"
+            android:screenOrientation="portrait"
             android:windowSoftInputMode="stateHidden">
         </activity>
         <activity
             android:name=".ConfigEditor"
             android:theme="@style/Theme.Crawl.Editor"
+            android:screenOrientation="portrait"
             android:windowSoftInputMode="stateHidden"
             android:label="Config Editor">
         </activity>
         <activity
             android:name=".CharFileViewer"
             android:theme="@android:style/Theme.Light"
+            android:screenOrientation="portrait"
             android:windowSoftInputMode="stateHidden"
             android:label="Character File Viewer">
         </activity>
         <activity android:name=".activity.PreferencesActivity"
+            android:screenOrientation="portrait"
             android:exported="false">
             <intent-filter>
                 <action android:name="org.angdroid.angband.PREF" />
@@ -63,6 +70,7 @@
         </activity>
         <activity android:name=".activity.CustomKeyboardActivity"
             android:theme="@style/Theme.Crawl.CustomKeyboard"
+            android:screenOrientation="portrait"
             android:windowSoftInputMode="stateHidden"
             android:label="Customize keyboard">
         </activity>
