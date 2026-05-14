@@ -36,12 +36,20 @@ import com.crawlmb.R;
 
 public class SplashActivity extends Activity {
     public static final String TAG = SplashActivity.class.getName();
+    // Intent extra forwarded to GameActivity: true when this launch ran
+    // InstallProgramTask (first install or asset hash mismatch). GameActivity
+    // uses it to decide whether to show the in-game loading message overlay —
+    // skipped on cached launches where DCSS init is fast enough to not warrant
+    // it.
+    public static final String EXTRA_ASSETS_FRESHLY_INSTALLED =
+            "com.crawlmb.assets_freshly_installed";
     private static final int INSTALL_DIALOG_ID = 0;
     private static final int WARNING_DIALOG_ID = 1;
     private ProgressDialog installDialog;
     private int versionCode = -1;
     private String versionName;
     private boolean updating = false;
+    private boolean assetsFreshlyInstalled = false;
 
     /**
      * Called when the activity is first created.
@@ -79,6 +87,7 @@ public class SplashActivity extends Activity {
         if (saveDir.exists()) {
             updating = true;
         }
+        assetsFreshlyInstalled = true;
         new InstallProgramTask().execute();
     }
 
@@ -296,6 +305,7 @@ public class SplashActivity extends Activity {
         @Override
         public void run() {
             Intent intent = new Intent(SplashActivity.this, GameActivity.class);
+            intent.putExtra(EXTRA_ASSETS_FRESHLY_INSTALLED, assetsFreshlyInstalled);
             startActivity(intent);
             finish();
         }

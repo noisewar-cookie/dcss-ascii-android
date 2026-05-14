@@ -1,7 +1,5 @@
 package com.crawlmb;
 
-import android.graphics.Color;
-
 import com.crawlmb.keylistener.GameKeyListener;
 import com.crawlmb.view.TerminalRenderer;
 
@@ -26,21 +24,6 @@ public class NativeWrapper
 		String settingsDir = Paths.getSettingsDir(ctx).getPath();
 		String morgueDir = Paths.getMorgueDir(ctx).getPath();
 		initGame(dataDir, settingsDir, morgueDir);
-	}
-
-	private void showLoadingMessage()
-	{
-		synchronized (display_lock)
-		{
-            String[] loadingMessageArray = renderer.getResources().getStringArray(R.array.loading_message_array);
-            for (int i = 0; i < loadingMessageArray.length; i++){
-            	String loadingMessageLine = loadingMessageArray[i];
-				for (int j = 0; j < loadingMessageLine.length(); j++){
-					renderer.drawPoint(i, j, loadingMessageLine.charAt(j), Color.WHITE, Color.BLACK, false);
-				}
-			}
-			renderer.postInvalidate();
-		}
 	}
 
 	public native void initGame(String dataDir, String settingsDir, String morgueDir);
@@ -72,9 +55,7 @@ public class NativeWrapper
 		// Log.d(TAG, "onGameStart()");
 		synchronized (display_lock)
 		{
-			boolean result = renderer.onGameStart();
-			showLoadingMessage();
-			return result;
+			return renderer.onGameStart();
 		}
 	}
 

@@ -584,6 +584,8 @@ public class GameActivity extends Activity
 		router.setNewgameSubPanels(ngsDesc, ngsSubLeft, ngsSubRight,
 				ngbDesc, ngbSubLeft, ngbSubRight);
 		router.setFontConfig(fontConfig);
+		router.setShowLoadingMessage(getIntent().getBooleanExtra(
+				SplashActivity.EXTRA_ASSETS_FRESHLY_INSTALLED, false));
 		router.setRedrawRequester(() -> gameKeyListener.nativew.redrawScreen());
 		portraitRouter = router;
 		// The newgame desc panels live in their own LinearLayout containers

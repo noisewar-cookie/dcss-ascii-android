@@ -2,11 +2,13 @@ package com.crawlmb.view;
 
 import android.content.Context;
 import android.content.res.Resources;
+import android.graphics.Color;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.LinearLayout;
 
 import com.crawlmb.FontConfig;
+import com.crawlmb.R;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -91,6 +93,18 @@ public class RegionRouter implements TerminalRenderer
 	// "Pick up what? ... (_ for help)" or, for a single-stack pile, "Select
 	// pick up quantity by entering a number, then select the item".
 	// Inscribe ('{') uses "Inscribe which item?" via prompt_invent_item.
+	//
+	// Scroll-driven item-pick menus from item-use.cc: scroll of identify
+	// ("Identify which item?"), enchant weapon ("Enchant which weapon?"),
+	// enchant armour ("Enchant which item?"), brand weapon ("Brand which
+	// weapon?"). The brand prefix also covers Okawaru's Finesse-equivalent
+	// brand ability in god-abil.cc.
+	// Adjust slots ('=') uses two prompts back to back: "Adjust which item?"
+	// then "Adjust to which letter?" — both share the "Adjust " prefix.
+	// "Zap which item?" is evoke.cc's wand prompt; "Uncurse and destroy
+	// which item?" is Ashenzari's curse ability.
+	// AcquireMenu emits "Choose an item to acquire." (regular acquirement,
+	// Okawaru/Trog gifts) or "Choose a gizmo to assemble." (Coglin gizmo).
 	private static final String[] ITEMS_ROW0_PREFIXES = {
 		"Inventory:",
 		"Gear:",
@@ -113,7 +127,16 @@ public class RegionRouter implements TerminalRenderer
 		"Drink which",
 		"Read which",
 		"Evoke which",
+		"Zap which item",
 		"Inscribe which",
+		"Adjust ",
+		"Identify which item",
+		"Enchant which weapon",
+		"Enchant which item",
+		"Brand which weapon",
+		"Uncurse and destroy which item",
+		"Choose an item to acquire",
+		"Choose a gizmo to assemble",
 		"Welcome to ",
 		"Items not yet recognised",
 		"Recognised items",
@@ -175,7 +198,8 @@ public class RegionRouter implements TerminalRenderer
 	// Loading screen anchor: the first item of loading_message_array starts
 	// with this exact string. Lets us distinguish the static load screen
 	// (PREGAME) from DCSS's "Hello, welcome..." main menu (MAINMENU).
-	private static final String LOADING_ANCHOR = "Launching game";
+	// Keep in sync with res/values/string-array.xml's first <item>.
+	private static final String LOADING_ANCHOR = "PLEASE WAIT...";
 
 	// Newgame screen anchors. newgame.cc emits "Welcome, %s. Please select
 	// your species." / "...your background." into row 0 (formatted_string,
@@ -315,6 +339,12 @@ public class RegionRouter implements TerminalRenderer
 	private FontConfig fontConfig;
 	private ScrollStateListener scrollStateListener;
 	private Runnable redrawRequester;
+	// True only when SplashActivity ran InstallProgramTask on this launch
+	// (first install or dat-hash mismatch). On cached launches DCSS init is
+	// fast enough that the static "PLEASE WAIT..." overlay is unnecessary
+	// noise; skipping it shaves a frame and avoids briefly showing stale text
+	// before the main menu paints.
+	private boolean showLoadingMessage = false;
 
 	public RegionRouter(Context context)
 	{
@@ -617,6 +647,11 @@ public class RegionRouter implements TerminalRenderer
 		this.redrawRequester = r;
 	}
 
+	public void setShowLoadingMessage(boolean show)
+	{
+		this.showLoadingMessage = show;
+	}
+
 	private void applyMode(LayoutMode mode, MenuType menuType)
 	{
 		boolean splitVisible = (mode == LayoutMode.GAMEPLAY);
@@ -735,6 +770,48 @@ public class RegionRouter implements TerminalRenderer
 
 		if (redrawRequester != null && redrawTarget != null)
 			scheduleRedrawAfterLayout(redrawTarget);
+	}
+
+	// One-shot OnGlobalLayoutListener that draws the loading message into
+	// fullView after the post-applyMode layout pass settles. drawing earlier
+	// (e.g. directly in NativeWrapper.onGameStart pre-fix) landed chars in a
+	// bitmap that applyMode was about to recreate at the pregame scale,
+	// leaving a blank surface until DCSS rendered its main menu.
+	private void scheduleLoadingMessageDraw()
+	{
+		if (fullView == null)
+			return;
+		final ViewTreeObserver vto = fullView.getViewTreeObserver();
+		vto.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener()
+		{
+			@Override
+			public void onGlobalLayout()
+			{
+				ViewTreeObserver o = fullView.getViewTreeObserver();
+				if (o.isAlive())
+					o.removeOnGlobalLayoutListener(this);
+				drawLoadingMessage();
+			}
+		});
+		// Force a layout pass so the listener is guaranteed to fire even when
+		// applyMode's setFontScaleMultiplier was a no-op (scale already at the
+		// pregame value from a previous game session).
+		fullView.requestLayout();
+	}
+
+	private void drawLoadingMessage()
+	{
+		String[] lines = context.getResources()
+				.getStringArray(R.array.loading_message_array);
+		int rowCount = Math.min(lines.length, TERMINAL_ROWS);
+		for (int r = 0; r < rowCount; r++)
+		{
+			String line = lines[r];
+			int colCount = Math.min(line.length(), TERMINAL_COLS);
+			for (int c = 0; c < colCount; c++)
+				drawPoint(r, c, line.charAt(c), Color.WHITE, Color.BLACK, false);
+		}
+		postInvalidate();
 	}
 
 	private void scheduleRedrawAfterLayout(final View target)
@@ -856,7 +933,7 @@ public class RegionRouter implements TerminalRenderer
 	public boolean onGameStart()
 	{
 		currentMode = LayoutMode.PREGAME;
-		currentMenuType = MenuType.DEFAULT;
+		currentMenuType = MenuType.PREGAME;
 		gameplayEverDetected = false;
 		skillsHeaderRow = -1;
 		skillsLeftCol = -1;
@@ -866,7 +943,21 @@ public class RegionRouter implements TerminalRenderer
 				terminalShadow[i][j] = 0;
 
 		if (fullView != null)
-			fullView.post(() -> applyMode(LayoutMode.PREGAME, MenuType.PREGAME));
+		{
+			fullView.post(() ->
+			{
+				applyMode(LayoutMode.PREGAME, MenuType.PREGAME);
+				// applyMode's setFontScaleMultiplier(pregameScale) triggers a
+				// layout pass that recreates fullView's bitmap blank. Schedule
+				// the loading-message draw to run after that pass settles, so
+				// the chars land in the final-size bitmap instead of the
+				// initial 1.0x-scale bitmap that's about to be discarded.
+				// Skipped on cached launches (assets already extracted) where
+				// DCSS init is fast and the overlay is unnecessary.
+				if (showLoadingMessage)
+					scheduleLoadingMessageDraw();
+			});
+		}
 
 		boolean allOk = true;
 		if (fullView != null && !fullView.onGameStart())
