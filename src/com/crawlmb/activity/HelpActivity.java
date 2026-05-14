@@ -20,12 +20,12 @@ package com.crawlmb.activity;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.view.WindowManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
+import com.crawlmb.WindowCompatAdapter;
 
 public class HelpActivity extends Activity
 {
@@ -33,7 +33,12 @@ public class HelpActivity extends Activity
 	public void onCreate(Bundle b)
 	{
 		super.onCreate(b);
+		WindowCompatAdapter.applyEdgeToEdge(this);
 		setContentView(R.layout.help);
+		// Plain content screen with no inset handling of its own — keep the
+		// WebView clear of the system bars now that the window is edge-to-edge.
+		WindowCompatAdapter.padRootForSystemBars(
+				findViewById(android.R.id.content));
 		this.setTitle(String.format("Crawl: Help"));
 		WebView help = (WebView) findViewById(R.id.help_text);
 
@@ -51,13 +56,7 @@ public class HelpActivity extends Activity
 
 		SharedPreferences pref = getSharedPreferences(Preferences.NAME, MODE_PRIVATE);
 
-		if (pref.getBoolean(Preferences.KEY_FULLSCREEN, true))
-		{
-			getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-		}
-		else
-		{
-			getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-		}
+		WindowCompatAdapter.applyFullscreen(this,
+				pref.getBoolean(Preferences.KEY_FULLSCREEN, true));
 	}
 }

@@ -31,13 +31,13 @@ import android.preference.PreferenceActivity;
 import android.preference.PreferenceCategory;
 import android.preference.PreferenceScreen;
 import android.util.Log;
-import android.view.WindowManager;
 import android.widget.Toast;
 
 import com.crawlmb.EditConfigFilePreference;
 import com.crawlmb.Paths;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
+import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.keymap.KeyMapPreference;
 
 import java.io.File;
@@ -62,10 +62,17 @@ public class PreferencesActivity extends PreferenceActivity implements
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        WindowCompatAdapter.applyEdgeToEdge(this);
         getPreferenceManager().setSharedPreferencesName(Preferences.NAME);
 
         // Load the preferences from an XML resource
         addPreferencesFromResource(R.xml.preferences);
+
+        // Plain content screen with no inset handling of its own — keep the
+        // preference list clear of the system bars now that the window is
+        // edge-to-edge.
+        WindowCompatAdapter.padRootForSystemBars(
+                findViewById(android.R.id.content));
 
         setHelpIntent();
 
@@ -396,11 +403,8 @@ public class PreferencesActivity extends PreferenceActivity implements
         SharedPreferences pref = getSharedPreferences(Preferences.NAME,
                 MODE_PRIVATE);
 
-        if (pref.getBoolean(Preferences.KEY_FULLSCREEN, true)) {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        } else {
-            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        }
+        WindowCompatAdapter.applyFullscreen(this,
+                pref.getBoolean(Preferences.KEY_FULLSCREEN, true));
     }
 
     @Override

@@ -58,6 +58,7 @@ import com.crawlmb.GameThread;
 import com.crawlmb.NativeWrapper;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
+import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
@@ -89,6 +90,12 @@ public class GameActivity extends Activity
 	private RegionRouter portraitRouter = null;
 	private RegionTermView[] portraitExtraScrollTargets = null;
 	private View portraitContextHost = null;
+	// Inset targets, populated per rebuildViews(). The window is edge-to-edge
+	// on every OS version (see WindowCompatAdapter), so the safe-area insets
+	// must be distributed across these children rather than padding
+	// screenLayout as a whole — see the inset listener in rebuildViews().
+	private View portraitKeyboardView = null;
+	private View portraitDirectionalView = null;
 
 	protected Handler handler = null;
 
@@ -97,6 +104,11 @@ public class GameActivity extends Activity
 		super.onCreate(savedInstanceState);
 
 		// Log.d("Crawl", "onCreate");
+
+		// Force the API 35 edge-to-edge window model on every OS version so
+		// the inset listener in rebuildViews() receives the same real insets
+		// it gets on Android 15. No-op on API 35+.
+		WindowCompatAdapter.applyEdgeToEdge(this);
 
 		if (gameKeyListener == null) {
 			gameKeyListener = new GameKeyListener();
@@ -218,6 +230,8 @@ public class GameActivity extends Activity
 			if (screenLayout != null)
 				screenLayout.removeAllViews();
 			screenLayout = new RelativeLayout(this);
+			portraitKeyboardView = null;
+			portraitDirectionalView = null;
 
 			ViewCompat.setOnApplyWindowInsetsListener(screenLayout, (v, windowInsets) -> {
 				Insets base = windowInsets.getInsets(
@@ -245,22 +259,58 @@ public class GameActivity extends Activity
 						}
 					}
 
-					// Rounded corner safe area (API 31+)
-					if (VERSION.SDK_INT >= VERSION_CODES.S)
+					// Rounded-corner safe area, API 35+ only. API 35 forces
+					// edge-to-edge, so content draws into the physical display
+					// corners and the corner arc clips the outermost glyphs
+					// (e.g. the top of the "H" in the menu). Gated to 35+
+					// deliberately: applying it on API 33 — where the adapter
+					// opts into edge-to-edge but the platform reports corners
+					// differently — shifted every screen ~1 column, and API 33
+					// and below already render correctly without it.
+					if (VERSION.SDK_INT >= VERSION_CODES.VANILLA_ICE_CREAM)
 					{
-						int tl = cornerRadius(platform, android.view.RoundedCorner.POSITION_TOP_LEFT);
-						int tr = cornerRadius(platform, android.view.RoundedCorner.POSITION_TOP_RIGHT);
-						int bl = cornerRadius(platform, android.view.RoundedCorner.POSITION_BOTTOM_LEFT);
-						int br = cornerRadius(platform, android.view.RoundedCorner.POSITION_BOTTOM_RIGHT);
-						double f = 1.0 - Math.sqrt(2.0) / 2.0;
-						top = Math.max(top, (int) Math.ceil(Math.max(tl, tr) * f));
-						bottom = Math.max(bottom, (int) Math.ceil(Math.max(bl, br) * f));
-						left = Math.max(left, (int) Math.ceil(Math.max(tl, bl) * f));
-						right = Math.max(right, (int) Math.ceil(Math.max(tr, br) * f));
+						int tl = cornerRadius(platform,
+								android.view.RoundedCorner.POSITION_TOP_LEFT);
+						int tr = cornerRadius(platform,
+								android.view.RoundedCorner.POSITION_TOP_RIGHT);
+						int bl = cornerRadius(platform,
+								android.view.RoundedCorner.POSITION_BOTTOM_LEFT);
+						int br = cornerRadius(platform,
+								android.view.RoundedCorner.POSITION_BOTTOM_RIGHT);
+						left = Math.max(left, Math.max(tl, bl));
+						top = Math.max(top, Math.max(tl, tr));
+						right = Math.max(right, Math.max(tr, br));
+						bottom = Math.max(bottom, Math.max(bl, br));
 					}
 				}
 
-				v.setPadding(left, top, right, bottom);
+				// Distribute the safe-area insets per-child instead of padding
+				// screenLayout as a whole. The crawl keyboard is a fixed-size
+				// KeyboardView whose key grid can't reflow to a narrower width
+				// — shrinking its space just clips the rightmost keys and the
+				// bottom row. So when it's present it keeps the full window
+				// width and absorbs only the bottom inset as its own bottom
+				// padding (empty space below the keys, over the nav bar); the
+				// game area takes top/left/right and already sits ABOVE the
+				// keyboard. With no crawl keyboard the game panel reaches the
+				// window bottom and takes the bottom inset itself.
+				View keyboard = portraitKeyboardView;
+				View gameArea = screenLayout.findViewById(gamePanelId);
+				if (keyboard != null)
+				{
+					keyboard.setPadding(0, 0, 0, bottom);
+					if (gameArea != null)
+						gameArea.setPadding(left, top, right, 0);
+					if (portraitDirectionalView != null)
+						portraitDirectionalView.setPadding(left, top, right, 0);
+				}
+				else
+				{
+					if (gameArea != null)
+						gameArea.setPadding(left, top, right, bottom);
+					if (portraitDirectionalView != null)
+						portraitDirectionalView.setPadding(left, top, right, bottom);
+				}
 				return WindowInsetsCompat.CONSUMED;
 			});
 
@@ -282,6 +332,7 @@ public class GameActivity extends Activity
 				virtualKeyboard.virtualKeyboardView
 						.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 				screenLayout.addView(virtualKeyboard.virtualKeyboardView);
+				portraitKeyboardView = virtualKeyboard.virtualKeyboardView;
 
 				// Constrain game panel to sit above keyboard
 				if (gamePanelId != View.NO_ID)
@@ -648,6 +699,19 @@ public class GameActivity extends Activity
 						hudView.setFontScaleMultiplier(Math.max(MIN_FONT_SCALE,
 								curHudScale * ratio));
 						splitContainer.requestLayout();
+
+						// The font-scale change recreates mapView/hudView's
+						// bitmaps blank in onMeasure. DCSS only repaints dirty
+						// cells, so without an explicit redraw the HUD stays
+						// blank until a stat changes (mapView recovers on its
+						// own because the map repaints every turn). Ask DCSS to
+						// replay the current screen once the relayout settles.
+						splitContainer.post(() ->
+						{
+							if (gameKeyListener != null
+									&& gameKeyListener.nativew != null)
+								gameKeyListener.nativew.redrawScreen();
+						});
 					}
 				});
 
@@ -807,6 +871,7 @@ public class GameActivity extends Activity
 
 		view.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 		screenLayout.addView(view);
+		portraitDirectionalView = view;
 	}
 
 	public void toggleKeyboard() {
@@ -890,20 +955,20 @@ public class GameActivity extends Activity
 	}
 
 	public void setScreen() {
-		if (Preferences.getFullScreen()) {
-			getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-		} else {
-			getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-		}
+		WindowCompatAdapter.applyFullscreen(this, Preferences.getFullScreen());
+	}
+
+	// Radius of one display corner, or 0 if the device reports none. Only
+	// called from the API 35+ branch of the inset listener.
+	@android.annotation.SuppressLint("NewApi")
+	private static int cornerRadius(android.view.WindowInsets insets, int position)
+	{
+		android.view.RoundedCorner corner = insets.getRoundedCorner(position);
+		return corner == null ? 0 : corner.getRadius();
 	}
 
 	public Handler getHandler() {
 		return handler;
-	}
-
-	private static int cornerRadius(android.view.WindowInsets insets, int position) {
-		android.view.RoundedCorner c = insets.getRoundedCorner(position);
-		return c != null ? c.getRadius() : 0;
 	}
 
 	private static class GameHandler extends Handler {
