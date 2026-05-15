@@ -24,6 +24,8 @@ __________________________________________________
 
  Check help (?) for full controls list.
 
+__________________________________________________
+
  * NEW PLAYERS *
     If it's your first time playing DCSS,
     know that it's the hardest yet fairest RPG
@@ -40,4 +42,5 @@ __________________________________________________
     Focus on training useful skills, and
     try to survive until you reach the Temple
     with powerful Gods to worship. GOOD LUCK!
+
 __________________________________________________

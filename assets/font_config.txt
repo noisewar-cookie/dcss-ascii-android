@@ -143,7 +143,7 @@ portrait_travel_vscrollable=true
 # Dungeon level map (Shift+X)
 # Shown during: the level overview / travel map. Detected by the
 # "(Press ? for help)" marker drawn at the right of the title row.
-portrait_levelmap_font_scale=1.8
+portrait_levelmap_font_scale=2.25
 portrait_levelmap_scrollable=true
 portrait_levelmap_vscrollable=true
 
@@ -170,7 +170,7 @@ portrait_vfeatures_vscrollable=true
 
 # Welcome row at the top of the screen ("Welcome, %s. Please select your ...")
 # Terminal region: 80 cols x 2 rows  (rows 0-1)
-portrait_newgame_welcome_font_scale=1.4
+portrait_newgame_welcome_font_scale=1.6
 portrait_newgame_welcome_scrollable=true
 portrait_newgame_welcome_vscrollable=false
 
@@ -186,13 +186,13 @@ portrait_newgame_category_vscrollable=false
 # description). Rendered into its own full-width panel that samples the
 # rows between the category grid and the sub-options grid. Often wider than
 # the screen, so horizontal scrolling is typically wanted.
-portrait_newgame_desc_font_scale=1.4
+portrait_newgame_desc_font_scale=1.6
 portrait_newgame_desc_scrollable=true
 portrait_newgame_desc_vscrollable=false
 
 # Sub-options block at the bottom (random/aptitudes/help/space/tab). The
 # upstream 2-col grid is split into two stacked panels (left col then right
 # col) so the 8 prompts read as a single vertical list.
-portrait_newgame_sub_font_scale=1.4
+portrait_newgame_sub_font_scale=1.6
 portrait_newgame_sub_scrollable=true
 portrait_newgame_sub_vscrollable=false
