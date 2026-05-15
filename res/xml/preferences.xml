@@ -268,11 +268,17 @@
 	   android:defaultValue="true"
 	   android:title="@string/preferences_keyboard_arrows_title"
 	   android:summary="@string/preferences_keyboard_arrows_summary"/>
-	<CheckBoxPreference 
+	<CheckBoxPreference
        android:key="crawl.hapticfeedbackenabled"
-       android:defaultValue="true" 
+       android:defaultValue="true"
        android:title="@string/preferences_haptic_feedback_title"
        android:summary="@string/preferences_haptic_feedback_summary"/>
+	<EditTextPreference
+	   android:key="crawl.touchdirectionrepeat"
+	   android:defaultValue="150"
+	   android:title="Touch Direction Repeat"
+	   android:summary="Set a delay to repeat grid taps on hold."
+	   android:inputType="number" />
 	<!--Not using this right now, but might in the future -->
 	<!--ListPreference
 	   android:title="Center screen tap"

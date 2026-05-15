@@ -310,7 +310,19 @@ public class RegionRouter implements TerminalRenderer
 	{
 		return currentMenuType;
 	}
-	private boolean gameplayEverDetected = false;
+	// Static so the "have we ever seen gameplay" signal survives across
+	// RegionRouter recreations. rebuildViews() constructs a new RegionRouter
+	// on every Activity onStart (including sleep/wake), and a fresh instance
+	// starts with this flag false. detectMode() falls back to PREGAME when
+	// no HUD is on screen AND this flag is false — which misclassifies any
+	// menu open at sleep time (LEVELMAP, inventory, spells, etc.) as PREGAME
+	// on resume, costing the menu its configured font scale until the user
+	// returns to gameplay and the flag flips again. Static = process-lifetime,
+	// which matches reality: if the process is still alive, gameplay state
+	// the C++ side reaches across resumes is unchanged. Process death (full
+	// kill) resets the class state to false on next class load, which is
+	// correct for a true cold start.
+	private static boolean gameplayEverDetected = false;
 
 	// Set by preStormHint when the next storm transitions GAMEPLAY -> a
 	// non-gameplay frame. Read by drawPoint to skip forwarding to
@@ -652,8 +664,35 @@ public class RegionRouter implements TerminalRenderer
 		this.showLoadingMessage = show;
 	}
 
+	// Zero drag-scroll offsets on every panel that can scroll. applyMode is
+	// the single choke point for screen transitions, so doing this here means
+	// no panel re-opens at its prior offset (msg log staying scrolled after
+	// visiting inventory, inventory keeping its prior position on re-entry,
+	// etc).
+	private void resetAllScroll()
+	{
+		for (RegionTermView region : splitRegions)
+			region.resetScroll();
+		if (fullView != null)
+			fullView.resetScroll();
+		if (skillsView != null)
+			skillsView.resetScroll();
+		if (quickControlsView instanceof RegionTermView)
+			((RegionTermView) quickControlsView).resetScroll();
+		RegionTermView[] ng = {
+				ngsSimpleView, ngsIntermediateView, ngsAdvancedView,
+				ngbWarriorView, ngbZealotView, ngbAdventurerView,
+				ngbWarMageView, ngbMageView,
+				ngsDescView, ngsSubLeftView, ngsSubRightView,
+				ngbDescView, ngbSubLeftView, ngbSubRightView };
+		for (RegionTermView v : ng)
+			if (v != null)
+				v.resetScroll();
+	}
+
 	private void applyMode(LayoutMode mode, MenuType menuType)
 	{
+		resetAllScroll();
 		boolean splitVisible = (mode == LayoutMode.GAMEPLAY);
 		boolean skillsVisible = !splitVisible
 				&& menuType == MenuType.SKILLS
@@ -934,7 +973,10 @@ public class RegionRouter implements TerminalRenderer
 	{
 		currentMode = LayoutMode.PREGAME;
 		currentMenuType = MenuType.PREGAME;
-		gameplayEverDetected = false;
+		// Intentionally NOT resetting gameplayEverDetected here — it's a
+		// process-lifetime static (see field declaration). Resetting it on
+		// every nativew.resize() (which routes through here) would re-break
+		// menu detection after sleep/wake.
 		skillsHeaderRow = -1;
 		skillsLeftCol = -1;
 		skillsRightCol = -1;

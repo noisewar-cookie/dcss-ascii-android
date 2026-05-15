@@ -33,6 +33,68 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	private float downX, downY;
 	private int touchSlop;
 
+	// Map panel pinch-zoom (portrait). A scale gesture whose focal point
+	// starts over mapView zooms the rendered bitmap inside the panel — the
+	// panel's measured size doesn't change, so content past its edges is
+	// clipped. Zoom is stepped through three fixed levels [1.0, step1, step2]
+	// and zoom-in only — pinch-out advances one level, pinch-in retreats one
+	// level. Exactly one step fires per pinch gesture (regardless of how far
+	// the fingers spread), so reaching step2 from the default takes two
+	// separate pinch-out gestures. Zoom is session-only: mapZoomLevel resets
+	// to 0 every time the view is wired.
+	private RegionTermView mapView;
+	private float mapZoomStep1 = 1.25f;
+	private float mapZoomStep2 = 1.5f;
+	private int mapZoomLevel = 0;
+	private float mapZoomAnchorSpan = 0f;
+	private boolean scalingMap = false;
+	private boolean mapZoomStepFiredThisPinch = false;
+	private static final float MAP_ZOOM_STEP_RATIO = 1.12f;
+
+	// 9-grid hold: holding a direction cell past HOLD_INITIAL_DELAY_MS starts
+	// repeating that direction every touchRepeatInterval ms (0 = disabled).
+	// Holding the center cell instead fires a one-shot long rest ('5'). A
+	// fired hold suppresses the release tap so the action isn't doubled.
+	private static final int HOLD_INITIAL_DELAY_MS = 400;
+	private int gridHoldCell = 0;
+	private float gridHoldX, gridHoldY;
+	private boolean gridHoldFired = false;
+	private int touchRepeatInterval = 0;
+	private final Runnable gridHoldStart = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			if (gridHoldCell == 0)
+				return;
+			gridHoldFired = true;
+			performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+			if (gridHoldCell == 5)
+			{
+				// Long rest: DCSS's default CMD_REST binding is the '5' key.
+				// The console port has no command channel, so we send the
+				// keystroke; this breaks only if the user rebinds '5'.
+				keyListener.addKey('5', 0);
+				return;
+			}
+			sendGridDirection(gridHoldCell);
+			if (touchRepeatInterval > 0)
+				postDelayed(gridHoldRepeat, touchRepeatInterval);
+		}
+	};
+	private final Runnable gridHoldRepeat = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			if (gridHoldCell == 0 || gridHoldCell == 5)
+				return;
+			sendGridDirection(gridHoldCell);
+			if (touchRepeatInterval > 0)
+				postDelayed(gridHoldRepeat, touchRepeatInterval);
+		}
+	};
+
 	// Two-finger long-press state. Single-finger long-press is disabled
 	// because it collides with single-finger drag-scroll on the msg/menu
 	// panels. Two fingers held still for the long-press timeout opens the
@@ -101,6 +163,19 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	public void setExtraScrollTargets(RegionTermView... targets)
 	{
 		this.extraScrollTargets = targets;
+	}
+
+	// Wire the map panel as a pinch-zoom target. step1/step2 are the two
+	// zoom-in levels above the default (1.0). One pinch-out advances to
+	// step1, a second pinch-out advances to step2; pinch-in reverses one
+	// level per gesture. Zoom is applied as a content-scale transform in
+	// RegionTermView.onDraw, so no DCSS redraw is needed — only an invalidate.
+	public void setMapZoom(RegionTermView mapView, float step1, float step2)
+	{
+		this.mapView = mapView;
+		this.mapZoomStep1 = step1;
+		this.mapZoomStep2 = step2;
+		this.mapZoomLevel = 0;
 	}
 
 	// Returns the currently-eligible drag-scroll forwarding target whose
@@ -185,6 +260,13 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	@Override
 	public boolean onSingleTapUp(MotionEvent event)
 	{
+		if (gridHoldFired)
+		{
+			// A hold action (direction repeat or long rest) already fired
+			// for this touch — swallow the release tap so it isn't doubled.
+			gridHoldFired = false;
+			return true;
+		}
 		if (!Preferences.getEnableTouch())
 			return false;
 		performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
@@ -203,52 +285,90 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		// Drop the left/middle/right column distinction here: only
 		// up/down direction keys are forwarded; horizontal taps are
 		// ignored.
-		if (router != null
-				&& (router.getCurrentMenuType() == RegionRouter.MenuType.NEWGAME_SPECIES
-					|| router.getCurrentMenuType() == RegionRouter.MenuType.NEWGAME_BACKGROUND)
-				&& c != 1)
-		{
+		if (isNewgameColumnIgnored(c))
 			return true;
-		}
 
-		int key = (2 - r) * 3 + c + 1;
-
-		switch (key)
-		{
-		case 1:
-			key = GameKeyListener.KEY_C1;
-			break;
-		case 2:
-			key = GameKeyListener.KEY_DOWN;
-			break;
-		case 3:
-			key = GameKeyListener.KEY_C3;
-			break;
-		case 4:
-			key = GameKeyListener.KEY_LEFT;
-			break;
-		case 5: 
-		   key = GameKeyListener.KEY_B2;
-		   break; 
-		case 6:
-			key = GameKeyListener.KEY_RIGHT;
-			break;
-		case 7:
-			key = GameKeyListener.KEY_A1;
-			break;
-		case 8:
-			key = GameKeyListener.KEY_UP;
-			break;
-		case 9:
-			key = GameKeyListener.KEY_A3;
-			break;
-		default:
-			break;
-		}
-
-		keyListener.addDirectionKey(key);
+		keyListener.addDirectionKey(cellToKey((2 - r) * 3 + c + 1));
 
 		return true;
+	}
+
+	// Map a 9-grid cell (1 = bottom-left ... 9 = top-right) to its curses
+	// keypad keycode. Center (5) = KEY_B2 (wait a turn on a plain tap).
+	private static int cellToKey(int cell)
+	{
+		switch (cell)
+		{
+		case 1: return GameKeyListener.KEY_C1;
+		case 2: return GameKeyListener.KEY_DOWN;
+		case 3: return GameKeyListener.KEY_C3;
+		case 4: return GameKeyListener.KEY_LEFT;
+		case 5: return GameKeyListener.KEY_B2;
+		case 6: return GameKeyListener.KEY_RIGHT;
+		case 7: return GameKeyListener.KEY_A1;
+		case 8: return GameKeyListener.KEY_UP;
+		case 9: return GameKeyListener.KEY_A3;
+		default: return 0;
+		}
+	}
+
+	// Queue the direction key for a 9-grid cell. Center (5) is handled by
+	// callers (tap = wait, hold = long rest) and is skipped here.
+	private void sendGridDirection(int cell)
+	{
+		if (cell == 5)
+			return;
+		int key = cellToKey(cell);
+		if (key != 0)
+			keyListener.addDirectionKey(key);
+	}
+
+	// True when a horizontal tap column must be ignored: the newgame
+	// species/background pickers render as a single column, so only the
+	// middle column (c == 1) is meaningful.
+	private boolean isNewgameColumnIgnored(int c)
+	{
+		return router != null
+				&& (router.getCurrentMenuType() == RegionRouter.MenuType.NEWGAME_SPECIES
+					|| router.getCurrentMenuType() == RegionRouter.MenuType.NEWGAME_BACKGROUND)
+				&& c != 1;
+	}
+
+	// Begin tracking a potential 9-grid hold for this touch. Schedules the
+	// hold action (direction repeat, or center long rest) at
+	// HOLD_INITIAL_DELAY_MS. Directional repeat is only armed when a non-zero
+	// repeat interval is configured; the center long-rest hold is always
+	// armed.
+	private void startGridHold(MotionEvent event)
+	{
+		cancelGridHold();
+		if (!Preferences.getEnableTouch())
+			return;
+		int w = getWidth();
+		int h = getHeight();
+		if (w == 0 || h == 0)
+			return;
+		int c = ((int) event.getX() * 3) / w;
+		int r = ((int) event.getY() * 3) / h;
+		if (c < 0 || c > 2 || r < 0 || r > 2)
+			return;
+		if (isNewgameColumnIgnored(c))
+			return;
+		int cell = (2 - r) * 3 + c + 1;
+		touchRepeatInterval = Preferences.getTouchDirectionRepeat();
+		if (cell != 5 && touchRepeatInterval <= 0)
+			return;
+		gridHoldCell = cell;
+		gridHoldX = event.getX();
+		gridHoldY = event.getY();
+		postDelayed(gridHoldStart, HOLD_INITIAL_DELAY_MS);
+	}
+
+	private void cancelGridHold()
+	{
+		gridHoldCell = 0;
+		removeCallbacks(gridHoldStart);
+		removeCallbacks(gridHoldRepeat);
 	}
 	
 	@Override
@@ -270,7 +390,22 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			twoFingerArmed = false;
 			twoFingerLongPressFired = false;
 			removeCallbacks(twoFingerLongPressFire);
+			gridHoldFired = false;
+			// Arm the hold even when the touch starts over a drag-scroll
+			// target: hold and drag are mutually exclusive in practice
+			// because the ACTION_MOVE slop check below cancels the hold as
+			// soon as the finger moves far enough to be a real scroll.
+			// Letting the hold arm here means hold-to-repeat also works
+			// over scrollable menus (e.g. holding 'up' to keep paging
+			// inventory) and over the level map panel (where fullView is
+			// registered as a scroll target).
+			startGridHold(event);
 		}
+
+		// A second finger means a pinch/two-finger gesture, never a 9-grid
+		// hold — cancel any pending hold so it can't fire mid-pinch.
+		if (actionMasked == MotionEvent.ACTION_POINTER_DOWN)
+			cancelGridHold();
 
 		// Two-finger long-press: arm when a second finger touches down,
 		// disarm if either finger moves beyond touch slop or any finger
@@ -309,6 +444,17 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		{
 			twoFingerArmed = false;
 			removeCallbacks(twoFingerLongPressFire);
+		}
+
+		// A drag beyond touch slop is a scroll/swipe, not a hold — drop any
+		// pending 9-grid hold so it doesn't fire after the finger moved off
+		// the original cell.
+		if (gridHoldCell != 0 && actionMasked == MotionEvent.ACTION_MOVE)
+		{
+			float gdx = event.getX() - gridHoldX;
+			float gdy = event.getY() - gridHoldY;
+			if (gdx * gdx + gdy * gdy > touchSlop * touchSlop)
+				cancelGridHold();
 		}
 
 		// After the menu opens, swallow remaining gesture events until
@@ -359,6 +505,10 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		{
 			targetAreaTouch = false;
 			activeForwardTarget = null;
+			// Drop the timers but keep gridHoldFired — onSingleTapUp (fired
+			// from the gestureDetector call below) needs it to decide
+			// whether to swallow this release.
+			cancelGridHold();
 		}
 		if (action == MotionEvent.ACTION_UP)
 			passThroughListener.savePosition();
@@ -382,18 +532,89 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
   @Override
   public boolean onScale(ScaleGestureDetector detector)
   {
+    if (scalingMap)
+    {
+      // One step per pinch gesture: once a step has fired this pinch we
+      // ignore further span changes until the user lifts and pinches again.
+      if (!mapZoomStepFiredThisPinch && mapZoomAnchorSpan > 0f)
+      {
+        float ratio = detector.getCurrentSpan() / mapZoomAnchorSpan;
+        if (ratio >= MAP_ZOOM_STEP_RATIO)
+        {
+          if (applyMapZoomStep(+1))
+            mapZoomStepFiredThisPinch = true;
+        }
+        else if (ratio <= 1f / MAP_ZOOM_STEP_RATIO)
+        {
+          if (applyMapZoomStep(-1))
+            mapZoomStepFiredThisPinch = true;
+        }
+      }
+      return true;
+    }
     return passThroughListener.onScale(detector);
   }
 
   @Override
   public boolean onScaleBegin(ScaleGestureDetector detector)
   {
+    cancelGridHold();
+    scalingMap = isOverMapView(detector.getFocusX(), detector.getFocusY());
+    if (scalingMap)
+    {
+      mapZoomAnchorSpan = detector.getCurrentSpan();
+      mapZoomStepFiredThisPinch = false;
+      return true;
+    }
     return passThroughListener.onScaleBegin(detector);
   }
 
   @Override
   public void onScaleEnd(ScaleGestureDetector detector)
   {
+    scalingMap = false;
+    mapZoomAnchorSpan = 0f;
+    mapZoomStepFiredThisPinch = false;
+  }
+
+  // True when (focusX, focusY) — in this view's coordinate space — falls
+  // within the visible map panel's on-screen bounds.
+  private boolean isOverMapView(float focusX, float focusY)
+  {
+    if (mapView == null || !mapView.isShown())
+      return false;
+    int[] mapLoc = new int[2];
+    mapView.getLocationOnScreen(mapLoc);
+    int[] myLoc = new int[2];
+    getLocationOnScreen(myLoc);
+    float screenX = focusX + myLoc[0];
+    float screenY = focusY + myLoc[1];
+    return screenX >= mapLoc[0] && screenX < mapLoc[0] + mapView.getWidth()
+        && screenY >= mapLoc[1] && screenY < mapLoc[1] + mapView.getHeight();
+  }
+
+  // Step the map zoom one level in the given direction (+1 = zoom in,
+  // -1 = zoom out) through the fixed level list [1.0, step1, step2].
+  // Zoom-in only: clamped to [0, 2]. Returns true when the level actually
+  // changed (so callers can mark the pinch's step as consumed).
+  private boolean applyMapZoomStep(int direction)
+  {
+    if (mapView == null)
+      return false;
+    int next = mapZoomLevel + direction;
+    if (next < 0)
+      next = 0;
+    else if (next > 2)
+      next = 2;
+    if (next == mapZoomLevel)
+      return false;
+    mapZoomLevel = next;
+    float factor = mapZoomLevel == 0 ? 1.0f
+        : mapZoomLevel == 1 ? mapZoomStep1
+        : mapZoomStep2;
+    performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+    mapView.setContentZoom(factor);
+    return true;
   }
 
 }

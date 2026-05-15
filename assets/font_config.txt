@@ -54,9 +54,21 @@ portrait_quickcontrols_font_color=707070
 # Terminal region: 37 cols x 17 rows  (terminal cols 0-36, rows 0-16)
 portrait_map_font_scale=0.85
 
-# Portrait: map horizontal shift in terminal columns (positive = right)
-# 0 = left-aligned, 2 = shifted 2 cols right (roughly centers the dungeon view)
-portrait_map_offset_cols=4
+# Portrait: map horizontal nudge in terminal columns (positive = right)
+# The map panel is auto-centered within the screen, so 0 is centered.
+# Use this only to bias the centering (e.g. +1 to shift one col right).
+portrait_map_offset_cols=0
+
+# Portrait: map pinch-zoom levels (zoom-in only)
+# The map panel has three fixed zoom levels: 1.00 (default), step1, step2.
+# Each pinch-out gesture advances one level (default → step1 → step2);
+# each pinch-in gesture retreats one level. Exactly one step fires per
+# pinch — reaching step2 from the default requires two separate pinch-out
+# gestures. The pinch scales rendered content around the panel center
+# without resizing the panel, so zoom-in crops at the panel edges. Zoom
+# is session-only (resets on app restart).
+portrait_map_zoom_step1=1.27
+portrait_map_zoom_step2=1.50
 
 # Portrait: HUD panel
 # Shown during: gameplay — top portion, health/stats (right side of terminal)
@@ -88,13 +100,13 @@ landscape_font_scale=1.0
 # inscribe ({), quiver (Shift+Q)
 # - portrait_items_scrollable: enable horizontal drag (when content > width)
 # - portrait_items_vscrollable: enable vertical drag (when content > height)
-portrait_items_font_scale=1.5
+portrait_items_font_scale=1.6
 portrait_items_scrollable=true
 portrait_items_vscrollable=true
 
 # Spell/ability lists: spell list (I), cast (z), memorise (M),
 # abilities (a), mutations (A)
-portrait_spells_font_scale=1.5
+portrait_spells_font_scale=1.6
 portrait_spells_scrollable=true
 portrait_spells_vscrollable=true
 
@@ -109,29 +121,29 @@ portrait_overview_scrollable=true
 # screen taller; vertical scrolling is needed at most font scales.
 # - portrait_skills_scrollable: enable horizontal drag (when content > width)
 # - portrait_skills_vscrollable: enable vertical drag (when content > height)
-portrait_skills_font_scale=1.5
+portrait_skills_font_scale=1.6
 portrait_skills_scrollable=true
 portrait_skills_vscrollable=false
 
 # Religion screen (^)
-portrait_religion_font_scale=1.4
+portrait_religion_font_scale=1.5
 portrait_religion_scrollable=true
 
 # Hi-score screen (end of game)
-portrait_hiscores_font_scale=1.4
+portrait_hiscores_font_scale=1.5
 portrait_hiscores_scrollable=true
 
 # Stash search results (Ctrl+F → match found)
 # Shown during: the menu listing matching items/features after a search.
 # Detected by the "[toggle:" marker in the title row.
-portrait_travel_font_scale=1.5
+portrait_travel_font_scale=1.6
 portrait_travel_scrollable=true
 portrait_travel_vscrollable=true
 
 # Dungeon level map (Shift+X)
 # Shown during: the level overview / travel map. Detected by the
 # "(Press ? for help)" marker drawn at the right of the title row.
-portrait_levelmap_font_scale=1.75
+portrait_levelmap_font_scale=1.8
 portrait_levelmap_scrollable=true
 portrait_levelmap_vscrollable=true
 

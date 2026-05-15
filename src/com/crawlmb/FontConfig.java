@@ -17,6 +17,8 @@ public class FontConfig
     public final boolean portraitDefaultVScrollable;
     public final float portraitMapFontScale;
     public final int portraitMapOffsetCols;
+    public final float portraitMapZoomStep1;
+    public final float portraitMapZoomStep2;
     public final float portraitHudFontScale;
     public final int portraitHudOffsetCols;
     public final float portraitMsgFontScale;
@@ -83,7 +85,9 @@ public class FontConfig
         this.portraitDefaultScrollable = getBool (props, "portrait_default_scrollable", true);
         this.portraitDefaultVScrollable= getBool (props, "portrait_default_vscrollable", true);
         this.portraitMapFontScale      = getFloat(props, "portrait_map_font_scale", 1.0f);
-        this.portraitMapOffsetCols     = getInt  (props, "portrait_map_offset_cols", 2);
+        this.portraitMapOffsetCols     = getInt  (props, "portrait_map_offset_cols", 0);
+        this.portraitMapZoomStep1      = getFloat(props, "portrait_map_zoom_step1", 1.25f);
+        this.portraitMapZoomStep2      = getFloat(props, "portrait_map_zoom_step2", 1.5f);
         this.portraitHudFontScale      = getFloat(props, "portrait_hud_font_scale", 1.0f);
         this.portraitHudOffsetCols     = getInt  (props, "portrait_hud_offset_cols", 0);
         this.portraitMsgFontScale      = getFloat(props, "portrait_msg_font_scale", 1.5f);

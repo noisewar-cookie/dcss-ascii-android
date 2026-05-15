@@ -41,6 +41,7 @@ final public class Preferences
 
 	private static final String KEY_HAPTICFEEDBACKENABLED = "crawl.hapticfeedbackenabled";
 	private static final String KEY_KEYBOARDARROWSENABLED = "crawl.keyboardarrowsenabled";
+	private static final String KEY_TOUCHDIRECTIONREPEAT = "crawl.touchdirectionrepeat";
 
     private static SharedPreferences sharedPreferences;
 	private static int fontSize = 17;
@@ -224,6 +225,21 @@ final public class Preferences
 
 	public static boolean getKeyboardArrowsEnabled(){
 		return sharedPreferences.getBoolean(KEY_KEYBOARDARROWSENABLED, true);
+	}
+
+	// Repeat interval (ms) for held 9-grid direction taps. 0 disables the
+	// hold-to-repeat feature. Stored as a string by EditTextPreference.
+	public static int getTouchDirectionRepeat()
+	{
+		String val = sharedPreferences.getString(KEY_TOUCHDIRECTIONREPEAT, "250");
+		try
+		{
+			return Math.max(0, Integer.parseInt(val.trim()));
+		}
+		catch (NumberFormatException e)
+		{
+			return 250;
+		}
 	}
 
     public static SharedPreferences getCurrentKeyboardPreferences(Context context, KeyboardType keyboardType){

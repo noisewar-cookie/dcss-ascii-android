@@ -87,6 +87,8 @@ public class GameActivity extends Activity
 	private RegionTermView portraitMsgView = null;
 	private RegionTermView portraitFullView = null;
 	private RegionTermView portraitSkillsView = null;
+	private RegionTermView portraitMapView = null;
+	private FontConfig portraitFontConfig = null;
 	private RegionRouter portraitRouter = null;
 	private RegionTermView[] portraitExtraScrollTargets = null;
 	private View portraitContextHost = null;
@@ -385,6 +387,7 @@ public class GameActivity extends Activity
 	private TerminalRenderer buildPortraitLayout(boolean hapticFeedbackEnabled) {
 		term = null;
 		FontConfig fontConfig = FontConfig.load(getAssets());
+		portraitFontConfig = fontConfig;
 
 		FrameLayout gamePanel = new FrameLayout(this);
 		gamePanel.setId(View.generateViewId());
@@ -457,7 +460,14 @@ public class GameActivity extends Activity
 				RegionRouter.MAP_START_ROW, RegionRouter.MAP_START_COL,
 				RegionRouter.MAP_END_ROW, RegionRouter.MAP_END_COL);
 		mapView.setFontScaleMultiplier(fontConfig.portraitMapFontScale);
+		mapView.setCenterHorizontally(true);
+		// DCSS only draws the dungeon view in cols 0-32 (33 cols); the map
+		// region samples through col 36 so the empty cols 33-36 sit between
+		// it and the HUD. Center on the visible 33 cols so the trailing
+		// whitespace doesn't bias the dungeon view to the left.
+		mapView.setCenterContentCols(33);
 		mapView.setOffsetCols(fontConfig.portraitMapOffsetCols);
+		portraitMapView = mapView;
 
 		RegionTermView hudView = new RegionTermView(this,
 				RegionRouter.HUD_START_ROW, RegionRouter.HUD_START_COL,
@@ -797,6 +807,8 @@ public class GameActivity extends Activity
 		portraitMsgView = null;
 		portraitFullView = null;
 		portraitSkillsView = null;
+		portraitMapView = null;
+		portraitFontConfig = null;
 		portraitRouter = null;
 		portraitExtraScrollTargets = null;
 		portraitContextHost = null;
@@ -868,6 +880,10 @@ public class GameActivity extends Activity
 			view.setRouter(portraitRouter);
 		if (portraitExtraScrollTargets != null)
 			view.setExtraScrollTargets(portraitExtraScrollTargets);
+		if (portraitMapView != null && portraitFontConfig != null)
+			view.setMapZoom(portraitMapView,
+					portraitFontConfig.portraitMapZoomStep1,
+					portraitFontConfig.portraitMapZoomStep2);
 
 		view.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 		screenLayout.addView(view);

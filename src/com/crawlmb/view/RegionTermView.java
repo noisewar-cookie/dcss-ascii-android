@@ -67,7 +67,17 @@ public class RegionTermView extends View
 	private boolean triggerGameStart = false;
 
 	private float fontScaleMultiplier = 1.0f;
+	// Content zoom applied at draw time only — scales the rendered bitmap
+	// around the panel center without changing the panel's measured size, so
+	// content beyond the panel's bounds is clipped by the view rather than
+	// resizing siblings. Used by the map panel pinch zoom.
+	private float contentZoom = 1.0f;
 	private boolean centerHorizontally = false;
+	// When centering, treat the bitmap as this many cols wide instead of
+	// regionCols. Lets a panel whose region includes trailing whitespace
+	// (e.g. the map's cols 33-36 between dungeon view and HUD) center on
+	// the visible content rather than the padded bitmap. 0 = use regionCols.
+	private int centerContentCols = 0;
 	private int drawOffsetX = 0;
 	private int offsetCols = 0;
 
@@ -166,6 +176,19 @@ public class RegionTermView extends View
 		return fontScaleMultiplier;
 	}
 
+	public void setContentZoom(float zoom)
+	{
+		if (this.contentZoom == zoom)
+			return;
+		this.contentZoom = zoom;
+		invalidate();
+	}
+
+	public float getContentZoom()
+	{
+		return contentZoom;
+	}
+
 	public boolean isHorizontalScrollEnabled()
 	{
 		return horizontalScrollEnabled;
@@ -174,6 +197,17 @@ public class RegionTermView extends View
 	public boolean isVerticalScrollEnabled()
 	{
 		return verticalScrollEnabled;
+	}
+
+	// Zero the drag-scroll offsets and repaint. Called by RegionRouter on
+	// every screen transition so a panel never re-opens at its prior offset.
+	public void resetScroll()
+	{
+		if (scrollOffsetX == 0 && scrollOffsetY == 0)
+			return;
+		scrollOffsetX = 0;
+		scrollOffsetY = 0;
+		invalidate();
 	}
 
 	public boolean isScrollEnabled()
@@ -279,6 +313,11 @@ public class RegionTermView extends View
 		this.centerHorizontally = center;
 	}
 
+	public void setCenterContentCols(int cols)
+	{
+		this.centerContentCols = cols;
+	}
+
 	public void setOffsetCols(int cols)
 	{
 		this.offsetCols = cols;
@@ -305,7 +344,22 @@ public class RegionTermView extends View
 	@Override
 	protected void onDraw(Canvas canvas)
 	{
-		if (bitmap != null)
+		if (bitmap == null)
+			return;
+		if (contentZoom != 1.0f)
+		{
+			// Scale around the panel's geometric center so the dungeon view
+			// roughly stays put around the player's typical position. View
+			// clipping handles overflow when zoom > 1 — that's the intended
+			// "crop to panel" behavior.
+			canvas.save();
+			canvas.scale(contentZoom, contentZoom,
+					getWidth() / 2f, getHeight() / 2f);
+			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX,
+					-scrollOffsetY, null);
+			canvas.restore();
+		}
+		else
 		{
 			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX,
 					-scrollOffsetY, null);
@@ -486,7 +540,10 @@ public class RegionTermView extends View
 
 		if (centerHorizontally)
 		{
-			drawOffsetX = Math.max(0, (width - canvas_width) / 2);
+			int contentWidth = centerContentCols > 0
+					? centerContentCols * char_width
+					: canvas_width;
+			drawOffsetX = (width - contentWidth) / 2;
 		}
 		else
 		{

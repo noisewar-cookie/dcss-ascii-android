@@ -17,6 +17,9 @@ keystore.properties
 *.swp
 *.swo
 
+# JVM heap dumps (Gradle daemon OOM postmortems)
+*.hprof
+
 # Claude Code / local docs
 CLAUDE.md
 progress.md
