@@ -4,6 +4,8 @@ An unofficial ASCII port of [Dungeon Crawl Stone Soup](https://crawl.develz.org/
 
 This is a fork of [michaelbarlow7/dungeon-crawl-android](https://github.com/michaelbarlow7/dungeon-crawl-android), updated from DCSS 0.29.1 to **0.34.1**. Full credit to Michael Barlow for the original Android console port and JNI adapter architecture.
 
+Full disclosure, LLM AI code was used extensively for this project. The context engineering md files were not included in order to keep the repo clean, and because local project setups, tooling, and MCP used can differ dramatically. The goal of this project is to create the closest ASCII console experience of DCSS on mobile, and will make every effort to constrain AI code changes to just the wrapper, and avoid changing the core game source included in the submodule.
+
 
 ## Architecture
 
@@ -18,7 +20,6 @@ This is an **ASCII/console** port — no tiles, no SDL2, no OpenGL. The game ren
 - `src/com/crawlmb/` — Java/Android UI layer (keyboard, preferences, game activity)
 - `assets/` — Bundled crawl data files (dat/, docs/, settings/)
 
-## Building
 
 ### Prerequisites
 
