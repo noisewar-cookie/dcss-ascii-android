@@ -192,15 +192,47 @@ public class SplashActivity extends Activity {
     private void setBackground() {
         int backgroundResource;
         int[] backgroundResources = {
+                R.drawable.title_anon_octopus_wizard,
+                R.drawable.title_arbituhhh_tesu,
+                R.drawable.title_baconkid_duvessa_dowan,
+                R.drawable.title_baconkid_gastronok,
+                R.drawable.title_baconkid_mnoleg,
+                R.drawable.title_benadryl_antaeus,
+                R.drawable.title_benadryl_oni,
+                R.drawable.title_cws_minotauros,
                 R.drawable.title_denzi_dragon,
                 R.drawable.title_denzi_evil_mage,
                 R.drawable.title_denzi_invasion,
                 R.drawable.title_denzi_kitchen_duty,
                 R.drawable.title_denzi_summoner,
                 R.drawable.title_denzi_undead_warrior,
+                R.drawable.title_e_m_fields,
                 R.drawable.title_firemage,
+                R.drawable.title_froggy_goodgod_tengu_gold,
+                R.drawable.title_froggy_jiyva_felid,
+                R.drawable.title_froggy_natasha_and_boris,
+                R.drawable.title_froggy_rune_and_run_failed_on_dis,
+                R.drawable.title_froggy_thunder_fist_nikola,
+                R.drawable.title_gompami_kohu_xbow,
+                R.drawable.title_kaonedong_ignis_the_dying_flame,
+                R.drawable.title_kaonedong_menkaure_prince_of_dust,
+                R.drawable.title_king7artist_eustachio,
+                R.drawable.title_lemurrobot_gozag_vaults,
+                R.drawable.title_micah_c_ereshkigal,
+                R.drawable.title_nibiki_octopode,
                 R.drawable.title_omndra_zot_demon,
-                R.drawable.title_shadyamish_octm
+                R.drawable.title_peileppe_bloax_eye,
+                R.drawable.title_philosopheropposite_palentonga_paladin,
+                R.drawable.title_ploomutoo_ijyb,
+                R.drawable.title_pooryurik_knight,
+                R.drawable.title_psiweapon_kiku,
+                R.drawable.title_psiweapon_roxanne,
+                R.drawable.title_sastrei_chei,
+                R.drawable.title_shadyamish_octm,
+                R.drawable.title_spinningbird_djinn_sears_gnolls,
+                R.drawable.title_white_noise_entering_the_dungeon,
+                R.drawable.title_white_noise_grabbing_the_orb,
+                R.drawable.title_ylam_formicid_shrikes
         };
         Random generator = new Random();
         backgroundResource = backgroundResources[generator.nextInt(backgroundResources.length)];

@@ -6,21 +6,21 @@ __________________________________________________
     ?? = default keymap ("<>" to scroll)
 
  Game screen 9-grid touch overlay:
-     ↖ | ↑ | ↗
-    ---+---+---  Tap to move / attack
-     ← | ↻ | →   Center tap waits a turn
-    ---+---+---  Drag to scroll text
-     ↙ | ↓ | ↘
+     ↖ | ↑ | ↗   • Pinch to zoom map
+    ---+---+---  • Tap or hold to move / attack
+     ← | ↻ | →   • Tap center to wait a turn
+    ---+---+---  • Hold center to rest
+     ↙ | ↓ | ↘   • Drag to scroll text
 
     Tab / o = auto-fight / auto-explore
-    ./5 = wait a turn / long rest
-      i = inventory
-      m = skills training
-    w/W = wield / Wear armor
-    g/d = get / drop
-    r/q = read scroll / quaff potion
-    f/Q = fire / Quiver
-    z/I/M = cast / list / Memorize spells
+        ./5 = wait a turn / long rest
+          i = inventory
+          m = skills training
+        w/W = wield / Wear armor
+        g/d = get / drop
+        r/q = read scroll / quaff potion
+        f/Q = fire / Quiver
+      z/I/M = cast / list / Memorize spells
 
  Check help (?) for full controls list.
 
@@ -35,7 +35,7 @@ __________________________________________________
     Minotaur or Troll Fighter.
 
     Explore cautiously, examine everything,
-    and don't be afraid to run from danger.
+    and be ready to run from danger.
 
     Use your items to survive, don't hoard!
 

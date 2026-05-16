@@ -1,1 +1,0 @@
-- First release of app on F-Droid, version 0.29.1

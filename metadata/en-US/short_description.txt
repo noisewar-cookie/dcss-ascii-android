@@ -1,1 +1,1 @@
-An ASCII port of Dungeon Crawl: Stone Soup.
+Android ASCII port of Dungeon Crawl Stone Soup. Offline, no ads.

@@ -74,6 +74,21 @@ echo "Syncing LICENSE into assets..."
 cp -v "$PROJECT_DIR/android-crawl-console/LICENSE" "$PROJECT_DIR/assets/LICENSE.txt"
 echo ""
 
+# ── Step 3b3: Sync title_*.png splash images into res/drawable ──
+# SplashActivity randomly picks one of these as the startup background. Upstream
+# adds new ones each release (see TITLEIMGS in source/Makefile). Filenames are
+# lowercased on copy because Android resource IDs require [a-z0-9_.] only.
+echo "Syncing title_*.png splash images into res/drawable..."
+TILES_SRC="$PROJECT_DIR/android-crawl-console/crawl-ref/source/dat/tiles"
+DRAWABLE_DST="$PROJECT_DIR/res/drawable"
+for src in "$TILES_SRC"/title_*.png; do
+    name="$(basename "$src" .png)"
+    lower="$(echo "$name" | tr '[:upper:]' '[:lower:]')"
+    cp "$src" "$DRAWABLE_DST/$lower.png"
+done
+echo "  $(ls "$DRAWABLE_DST"/title_*.png | wc -l) title images in res/drawable/"
+echo ""
+
 # ── Step 3c: Compute content hash of assets/dat/ ──
 # SplashActivity reads this and compares to the installed copy in filesDir.
 # If they match, dat/ is not re-extracted on launch — preserving file mtimes
