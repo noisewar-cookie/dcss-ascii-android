@@ -1,0 +1,15 @@
+diff --git a/crawl-ref/source/viewgeom.cc b/crawl-ref/source/viewgeom.cc
+index b03d1dab69..93a5bceb9f 100644
+--- a/crawl-ref/source/viewgeom.cc
++++ b/crawl-ref/source/viewgeom.cc
+@@ -19,7 +19,9 @@
+ // define VIEW_MIN_WIDTH defined elsewhere
+ // define VIEW_MAX_WIDTH use Options.view_max_width
+ #define HUD_WIDTH  42
+-#define HUD_HEIGHT 13
++// Shrunk 13 → 11: caps status-light wrap at 2 rows and shifts mlist up.
++// HUD rows 0-10 (stats + 2 status rows), mlist rows 11-14.
++#define HUD_HEIGHT 11
+ #define MSG_MAX_HEIGHT Options.msg_max_height
+ #define MLIST_MIN_HEIGHT Options.mlist_min_height
+ #define MLIST_MIN_WIDTH 25  // non-inline layout only

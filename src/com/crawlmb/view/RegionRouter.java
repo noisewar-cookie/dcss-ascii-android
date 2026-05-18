@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Color;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.LinearLayout;
 
@@ -42,7 +43,9 @@ public class RegionRouter implements TerminalRenderer
 
 	// 0-based region boundaries for the 80x24 inline layout
 	public static final int HUD_START_ROW = 0;
-	public static final int HUD_END_ROW = 17;
+	// Trimmed 17 → 15: rows 1-10 stats/wp/qv, 11-14 status lights.
+	// Frees 2 rows for the map; overflow past row 14 is clipped.
+	public static final int HUD_END_ROW = 15;
 	public static final int HUD_START_COL = 37;
 	public static final int HUD_END_COL = 80;
 
@@ -265,7 +268,7 @@ public class RegionRouter implements TerminalRenderer
 	// Visibility is toggled here from applyMode; content is preloaded by
 	// GameActivity from assets/quick_controls.txt.
 	private View quickControlsView;
-	private LinearLayout splitContainer;
+	private ViewGroup splitContainer;
 	// Newgame panel containers. Each holds a vertical stack of
 	// RegionTermViews — those panels are also added to splitRegions so
 	// drawPoint forwards into their fixed terminal rectangles. The
@@ -388,7 +391,7 @@ public class RegionRouter implements TerminalRenderer
 		return skillsView;
 	}
 
-	public void setSplitContainer(LinearLayout container)
+	public void setSplitContainer(ViewGroup container)
 	{
 		this.splitContainer = container;
 	}

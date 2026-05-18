@@ -452,13 +452,16 @@ public class GameActivity extends Activity
 		gamePanel.addView(skillsView, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
-		LinearLayout splitContainer = new LinearLayout(this);
-		splitContainer.setOrientation(LinearLayout.VERTICAL);
+		// msg anchored to bottom, hud above msg, map fills the remaining
+		// gap from the top. Only the map/HUD seam can overlap; the
+		// onGlobalLayout listener below shrinks map font to resolve it.
+		RelativeLayout splitContainer = new RelativeLayout(this);
 		splitContainer.setVisibility(View.INVISIBLE);
 
 		RegionTermView mapView = new RegionTermView(this,
 				RegionRouter.MAP_START_ROW, RegionRouter.MAP_START_COL,
 				RegionRouter.MAP_END_ROW, RegionRouter.MAP_END_COL);
+		mapView.setId(View.generateViewId());
 		mapView.setFontScaleMultiplier(fontConfig.portraitMapFontScale);
 		mapView.setCenterHorizontally(true);
 		// DCSS only draws the dungeon view in cols 0-32 (33 cols); the map
@@ -472,25 +475,36 @@ public class GameActivity extends Activity
 		RegionTermView hudView = new RegionTermView(this,
 				RegionRouter.HUD_START_ROW, RegionRouter.HUD_START_COL,
 				RegionRouter.HUD_END_ROW, RegionRouter.HUD_END_COL);
+		hudView.setId(View.generateViewId());
 		hudView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
 		hudView.setOffsetCols(fontConfig.portraitHudOffsetCols);
 
 		RegionTermView msgView = new RegionTermView(this,
 				RegionRouter.MSG_START_ROW, RegionRouter.MSG_START_COL,
 				RegionRouter.MSG_END_ROW, RegionRouter.MSG_END_COL);
+		msgView.setId(View.generateViewId());
 		msgView.setFontScaleMultiplier(fontConfig.portraitMsgFontScale);
 		msgView.setHorizontalScrollEnabled(true);
 		portraitMsgView = msgView;
 
-		splitContainer.addView(mapView, new LinearLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
-		splitContainer.addView(hudView, new LinearLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
-		splitContainer.addView(msgView, new LinearLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		RelativeLayout.LayoutParams msgParams = new RelativeLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+		msgParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+		splitContainer.addView(msgView, msgParams);
+
+		RelativeLayout.LayoutParams hudParams = new RelativeLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+		hudParams.addRule(RelativeLayout.ABOVE, msgView.getId());
+		splitContainer.addView(hudView, hudParams);
+
+		RelativeLayout.LayoutParams mapParams = new RelativeLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+		mapParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+		mapParams.addRule(RelativeLayout.ABOVE, hudView.getId());
+		splitContainer.addView(mapView, mapParams);
 
 		gamePanel.addView(splitContainer, new FrameLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
 		// Newgame portrait layout: each species/background category is its
 		// own RegionTermView sampling a fixed terminal rectangle, stacked
@@ -661,15 +675,19 @@ public class GameActivity extends Activity
 		portraitExtraScrollTargets = new RegionTermView[] {
 				ngsDesc, ngbDesc, quickControlsView };
 
-		final float maxMapScale = fontConfig.portraitMapFontScale;
-		final float maxHudScale = fontConfig.portraitHudFontScale;
 		final float MIN_FONT_SCALE = 0.3f;
-		final int MAX_ADJUST_ATTEMPTS = 5;
+		// Below this, char_height rounding swallows the delta or thrashes.
+		final float MIN_SCALE_DELTA = 0.01f;
 
 		gamePanel.getViewTreeObserver().addOnGlobalLayoutListener(
 				new ViewTreeObserver.OnGlobalLayoutListener()
 				{
-					private int attempts = 0;
+					// Re-run only when gamePanel/hud/msg height changes.
+					// RegionTermView's mirror repaints after the bitmap
+					// recreate, so no DCSS redraw is needed.
+					private int lastAvailable = -1;
+					private int lastHudH = -1;
+					private int lastMsgH = -1;
 
 					@Override
 					public void onGlobalLayout()
@@ -678,50 +696,37 @@ public class GameActivity extends Activity
 							return;
 
 						int available = gamePanel.getHeight();
-						if (available <= 0)
-							return;
-
-						int mapH = mapView.getMeasuredHeight();
 						int hudH = hudView.getMeasuredHeight();
 						int msgH = msgView.getMeasuredHeight();
-						int total = mapH + hudH + msgH;
+						if (available <= 0 || hudH <= 0 || msgH <= 0)
+							return;
 
-						if (total <= available)
+						// Idempotent: only recompute when an input changed.
+						if (available == lastAvailable
+								&& hudH == lastHudH && msgH == lastMsgH)
+							return;
+						lastAvailable = available;
+						lastHudH = hudH;
+						lastMsgH = msgH;
+
+						int mapTarget = available - hudH - msgH;
+						if (mapTarget <= 0)
+							return;
+						int mapH = mapView.getMeasuredHeight();
+						if (mapH <= mapTarget)
 							return;
 
 						float curMapScale = mapView.getFontScaleMultiplier();
-						float curHudScale = hudView.getFontScaleMultiplier();
-						if (curMapScale <= MIN_FONT_SCALE
-								&& curHudScale <= MIN_FONT_SCALE)
-							return;
-						if (attempts >= MAX_ADJUST_ATTEMPTS)
+						if (curMapScale <= MIN_FONT_SCALE)
 							return;
 
-						attempts++;
-						int mapHudCurrent = mapH + hudH;
-						int mapHudTarget = available - msgH;
-						if (mapHudCurrent <= 0 || mapHudTarget <= 0)
+						// -1px margin absorbs char_height integer rounding.
+						float ratio = (mapTarget - 1f) / mapH;
+						float newScale = Math.max(MIN_FONT_SCALE,
+								curMapScale * ratio);
+						if (curMapScale - newScale < MIN_SCALE_DELTA)
 							return;
-
-						float ratio = (float) mapHudTarget / mapHudCurrent;
-						mapView.setFontScaleMultiplier(Math.max(MIN_FONT_SCALE,
-								curMapScale * ratio));
-						hudView.setFontScaleMultiplier(Math.max(MIN_FONT_SCALE,
-								curHudScale * ratio));
-						splitContainer.requestLayout();
-
-						// The font-scale change recreates mapView/hudView's
-						// bitmaps blank in onMeasure. DCSS only repaints dirty
-						// cells, so without an explicit redraw the HUD stays
-						// blank until a stat changes (mapView recovers on its
-						// own because the map repaints every turn). Ask DCSS to
-						// replay the current screen once the relayout settles.
-						splitContainer.post(() ->
-						{
-							if (gameKeyListener != null
-									&& gameKeyListener.nativew != null)
-								gameKeyListener.nativew.redrawScreen();
-						});
+						mapView.setFontScaleMultiplier(newScale);
 					}
 				});
 

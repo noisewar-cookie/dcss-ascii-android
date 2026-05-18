@@ -56,6 +56,18 @@ public class RegionTermView extends View
 	Paint fore;
 	Paint back;
 
+	// Mirror of every drawn cell (pre-rowColShift). Replayed into a fresh
+	// bitmap on font-scale/region-rebind so content survives without a DCSS
+	// re-emit. cellChar[r][c] == 0 means "never written" and is skipped.
+	private char[][] cellChar;
+	private int[][] cellFg;
+	private int[][] cellBg;
+	private int mirrorRows = 0;
+	private int mirrorCols = 0;
+	// Guards bitmap/canvas/mirror against the drawPoint (game thread) vs
+	// onMeasure/clear (UI thread) race.
+	private final Object renderLock = new Object();
+
 	public int canvas_width = 0;
 	public int canvas_height = 0;
 
@@ -379,10 +391,29 @@ public class RegionTermView extends View
 
 		int localR = r - startRow;
 		int localC = c - startCol;
-		// Apply per-row left shift if configured. Chars in the stripped range
-		// (cols at the start of the row that we want to drop) get a negative
-		// localC and are skipped. This collapses upstream's variable indent
-		// so each row renders flush at panel col 0.
+
+		synchronized (renderLock)
+		{
+			// Record before drawing so the cell survives a bitmap recreate.
+			// Mirror uses pre-shift coords; rowColShift only affects render.
+			if (cellChar != null
+					&& localR >= 0 && localR < mirrorRows
+					&& localC >= 0 && localC < mirrorCols)
+			{
+				cellChar[localR][localC] = ch;
+				cellFg[localR][localC] = fcolor;
+				cellBg[localR][localC] = bcolor;
+			}
+			drawCellLocked(localR, localC, ch, fcolor, bcolor, extendedErase);
+		}
+	}
+
+	// Caller must hold renderLock. Applies rowColShift on the fly so mirror
+	// replay uses the current shift.
+	private void drawCellLocked(int localR, int localC, char ch, int fcolor, int bcolor, boolean extendedErase)
+	{
+		// Apply per-row left shift; negative localC means the col was
+		// stripped, so skip it.
 		if (rowColShift != null && localR >= 0 && localR < rowColShift.length)
 		{
 			localC -= rowColShift[localR];
@@ -390,14 +421,11 @@ public class RegionTermView extends View
 				return;
 		}
 
+		if (canvas == null)
+			return;
+
 		float x = localC * char_width;
 		float y = localR * char_height;
-
-		if (canvas == null)
-		{
-			Log.d(TAG, "null canvas in drawPoint");
-			return;
-		}
 
 		back.setColor(bcolor);
 		canvas.drawRect(x, y, x + char_width + (extendedErase ? 1 : 0),
@@ -410,15 +438,63 @@ public class RegionTermView extends View
 		}
 	}
 
+	// Replay the mirror into the current bitmap after a recreate.
+	// Caller must hold renderLock.
+	private void repaintAllFromMirrorLocked()
+	{
+		if (cellChar == null || canvas == null)
+			return;
+		for (int r = 0; r < mirrorRows; r++)
+		{
+			char[] row = cellChar[r];
+			int[] fgRow = cellFg[r];
+			int[] bgRow = cellBg[r];
+			for (int c = 0; c < mirrorCols; c++)
+			{
+				char ch = row[c];
+				if (ch == 0)
+					continue;
+				drawCellLocked(r, c, ch, fgRow[c], bgRow[c], false);
+			}
+		}
+	}
+
 	public boolean onGameStart()
 	{
 		computeCanvasSize();
 		if (canvas_width == 0 || canvas_height == 0)
 			return false;
 
-		bitmap = Bitmap.createBitmap(canvas_width, canvas_height, Bitmap.Config.RGB_565);
-		canvas = new Canvas(bitmap);
+		synchronized (renderLock)
+		{
+			bitmap = Bitmap.createBitmap(canvas_width, canvas_height, Bitmap.Config.RGB_565);
+			canvas = new Canvas(bitmap);
+			ensureMirrorSizedLocked();
+		}
 		return true;
+	}
+
+	// (Re)allocate the mirror to match regionRows/regionCols. Drops prior
+	// content. Caller must hold renderLock.
+	private void ensureMirrorSizedLocked()
+	{
+		if (mirrorRows == regionRows && mirrorCols == regionCols
+				&& cellChar != null)
+			return;
+		mirrorRows = regionRows;
+		mirrorCols = regionCols;
+		if (mirrorRows > 0 && mirrorCols > 0)
+		{
+			cellChar = new char[mirrorRows][mirrorCols];
+			cellFg = new int[mirrorRows][mirrorCols];
+			cellBg = new int[mirrorRows][mirrorCols];
+		}
+		else
+		{
+			cellChar = null;
+			cellFg = null;
+			cellBg = null;
+		}
 	}
 
 	public void autoSizeFontByWidth(int maxWidth)
@@ -551,21 +627,23 @@ public class RegionTermView extends View
 		}
 		drawOffsetX += offsetCols * char_width;
 
-		// Recreate the bitmap if the canvas dimensions have changed (e.g.
-		// after a font scale change). drawPoint draws at char_width/height
-		// positions, so an undersized bitmap would crop content. We swap
-		// references rather than null-then-assign so a concurrent drawPoint
-		// from the native thread never sees a null canvas.
-		if (canvas_width > 0 && canvas_height > 0
-				&& (bitmap == null
-					|| bitmap.getWidth() != canvas_width
-					|| bitmap.getHeight() != canvas_height))
+		// Recreate the bitmap on canvas-size change and replay the mirror
+		// into it. Locked so concurrent drawPoint never sees a torn pair.
+		synchronized (renderLock)
 		{
-			Bitmap newBitmap = Bitmap.createBitmap(canvas_width, canvas_height,
-					Bitmap.Config.RGB_565);
-			Canvas newCanvas = new Canvas(newBitmap);
-			bitmap = newBitmap;
-			canvas = newCanvas;
+			ensureMirrorSizedLocked();
+			if (canvas_width > 0 && canvas_height > 0
+					&& (bitmap == null
+						|| bitmap.getWidth() != canvas_width
+						|| bitmap.getHeight() != canvas_height))
+			{
+				Bitmap newBitmap = Bitmap.createBitmap(canvas_width, canvas_height,
+						Bitmap.Config.RGB_565);
+				Canvas newCanvas = new Canvas(newBitmap);
+				bitmap = newBitmap;
+				canvas = newCanvas;
+				repaintAllFromMirrorLocked();
+			}
 		}
 
 		// When vertical scroll is enabled, cap reported height to the parent
@@ -612,9 +690,22 @@ public class RegionTermView extends View
 
 	public void clear()
 	{
-		if (canvas != null)
+		synchronized (renderLock)
 		{
-			canvas.drawPaint(back);
+			if (cellChar != null)
+			{
+				for (int r = 0; r < mirrorRows; r++)
+				{
+					java.util.Arrays.fill(cellChar[r], (char) 0);
+					java.util.Arrays.fill(cellFg[r], 0);
+					java.util.Arrays.fill(cellBg[r], 0);
+				}
+			}
+			if (canvas != null)
+			{
+				back.setColor(Color.BLACK);
+				canvas.drawPaint(back);
+			}
 		}
 	}
 }
