@@ -52,7 +52,7 @@ portrait_quickcontrols_font_color=707070
 # Portrait: map panel
 # Shown during: gameplay — top portion, dungeon viewport
 # Terminal region: 37 cols x 17 rows  (terminal cols 0-36, rows 0-16)
-portrait_map_font_scale=1.0
+portrait_map_font_scale=0.95
 
 # Portrait: map horizontal nudge in terminal columns (positive = right)
 # The map panel is auto-centered within the screen, so 0 is centered.
@@ -68,7 +68,7 @@ portrait_map_offset_cols=0
 # without resizing the panel, so zoom-in crops at the panel edges. Zoom
 # is session-only (resets on app restart).
 portrait_map_zoom_step1=1.14
-portrait_map_zoom_step2=1.50
+portrait_map_zoom_step2=1.54
 
 # Portrait: HUD panel
 # Shown during: gameplay — top portion, health/stats (right side of terminal)

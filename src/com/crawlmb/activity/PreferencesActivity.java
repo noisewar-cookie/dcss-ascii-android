@@ -18,6 +18,7 @@
 
 package com.crawlmb.activity;
 
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.Intent;
@@ -161,8 +162,11 @@ public class PreferencesActivity extends PreferenceActivity implements
                 new ZipBackupTask(true, uri, savesDir, null, false).execute();
                 break;
             case REQ_RESTORE_SAVES:
-                // reload Crawl after restore so the running game picks up
-                // the new save state.
+                // Force an app restart after a save restore. The running game
+                // keeps its save package open and saves the in-memory (pre-
+                // restore) state on exit, which would overwrite/tear the files
+                // we just wrote. Restarting the process means the next launch
+                // loads the restored save cleanly with no intervening save.
                 new ZipBackupTask(false, uri, savesDir, null, true).execute();
                 break;
             case REQ_BACKUP_MORGUE:
@@ -200,16 +204,16 @@ public class PreferencesActivity extends PreferenceActivity implements
         private final Uri uri;
         private final File baseDir;
         private final java.util.Set<String> restoreAllowlist;
-        private final boolean reloadCrawlOnSuccess;
+        private final boolean restartAppOnSuccess;
 
         ZipBackupTask(boolean isBackup, Uri uri, File baseDir,
                 java.util.Set<String> restoreAllowlist,
-                boolean reloadCrawlOnSuccess) {
+                boolean restartAppOnSuccess) {
             this.isBackup = isBackup;
             this.uri = uri;
             this.baseDir = baseDir;
             this.restoreAllowlist = restoreAllowlist;
-            this.reloadCrawlOnSuccess = reloadCrawlOnSuccess;
+            this.restartAppOnSuccess = restartAppOnSuccess;
         }
 
         @Override
@@ -337,15 +341,28 @@ public class PreferencesActivity extends PreferenceActivity implements
                 default:
                     toastRes = R.string.error_copying_files;
             }
+            if (r == CopyResult.SUCCESS && restartAppOnSuccess) {
+                showRestartRequiredDialog();
+                return;
+            }
             Toast.makeText(PreferencesActivity.this, toastRes,
                     Toast.LENGTH_LONG).show();
-            if (r == CopyResult.SUCCESS && reloadCrawlOnSuccess) {
-                Intent resultIntent = new Intent();
-                resultIntent.putExtra("reloadCrawl", true);
-                setResult(RESULT_OK, resultIntent);
-                finish();
-            }
         }
+    }
+
+    // After a successful save restore the process must be killed before the
+    // still-running game can save its stale in-memory state over the restored
+    // files. A hard kill (no finish()/onPause) guarantees no further save runs;
+    // the next cold launch loads the restored save intact.
+    private void showRestartRequiredDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.save_restored_restart_title)
+                .setMessage(R.string.save_restored_restart_message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.close_app, (d, w) ->
+                        android.os.Process.killProcess(
+                                android.os.Process.myPid()))
+                .show();
     }
 
     @Override
