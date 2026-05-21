@@ -32,8 +32,8 @@
     <string name="error_nothing_to_backup">Nothing to back up</string>
     <string name="error_backup_empty_or_invalid">Backup file is empty or invalid</string>
     <string name="save_restored_restart_title">Save restored</string>
-    <string name="save_restored_restart_message">Your save was restored successfully. The app will now close — reopen it to load the restored save.</string>
-    <string name="close_app">Close app</string>
+    <string name="save_restored_restart_message">The app will now restart and load the restored save.</string>
+    <string name="close_app">Restart app</string>
     <string name="saves_backup_filename">crawl-saves-backup.zip</string>
     <string name="morgue_backup_filename">crawl-morgue-backup.zip</string>
     <string name="backup_config_files">Backup config files</string>
