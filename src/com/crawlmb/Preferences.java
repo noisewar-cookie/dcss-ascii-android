@@ -22,6 +22,7 @@ final public class Preferences
 	public static final String KEY_FULLSCREEN = "crawl.fullscreen";
 	public static final String KEY_ORIENTATION = "crawl.orientation";
 	public static final String KEY_SKIPSPLASH = "crawl.skipsplash";
+	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
 
 	public static final String KEY_FONTFACE = "crawl.fontface";
 	public static final String KEY_ENABLETOUCH = "crawl.enabletouch";
@@ -86,6 +87,33 @@ final public class Preferences
 	public static boolean getSkipSplash()
 	{
 		return sharedPreferences.getBoolean(Preferences.KEY_SKIPSPLASH, false);
+	}
+
+	// One-shot flag marking that the next launch follows a save-restore
+	// process restart (PreferencesActivity sets it just before killing the
+	// process). GameActivity reads it via consumeReloadInProgress() to show
+	// the "Reloading..." overlay across the restart.
+	//
+	// commit() (synchronous), not apply(): the caller kills the process
+	// immediately after, so an async apply() could be lost before it reaches
+	// disk and the overlay would never show.
+	public static void setReloadInProgressSync(boolean value)
+	{
+		sharedPreferences.edit()
+				.putBoolean(Preferences.KEY_RELOADINPROGRESS, value).commit();
+	}
+
+	// Reads and clears the reload flag in one shot. Cleared on read so a
+	// normal later launch never re-shows the overlay even if the relaunch
+	// that set it never reached GameActivity.
+	public static boolean consumeReloadInProgress()
+	{
+		boolean v = sharedPreferences.getBoolean(
+				Preferences.KEY_RELOADINPROGRESS, false);
+		if (v)
+			sharedPreferences.edit()
+					.putBoolean(Preferences.KEY_RELOADINPROGRESS, false).apply();
+		return v;
 	}
 
 	public static boolean isScreenPortraitOrientation()

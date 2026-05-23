@@ -354,6 +354,21 @@ public class RegionRouter implements TerminalRenderer
 	private FontConfig fontConfig;
 	private ScrollStateListener scrollStateListener;
 	private Runnable redrawRequester;
+	// One-shot, posted to the UI thread the first time DCSS paints a real
+	// post-boot screen (main menu or gameplay). GameActivity uses it to
+	// dismiss the "Reloading..." overlay shown across a save-restore process
+	// restart, exactly when the game becomes visible. Null when no overlay
+	// is pending, so normal launches pay nothing.
+	private Runnable reloadCompleteListener;
+	// Set by applyMode when it reaches the reload destination AND has just
+	// scheduled a repaint into a blank surface (scale change recreated
+	// fullView's bitmap, or gameplay cleared splitRegions). The next
+	// postInvalidate is that repaint's storm — it refills the bitmap before
+	// signalling, so dismissing the overlay there avoids exposing the blank
+	// surface (the flash that firing on the bare detection transition caused).
+	// Written on the UI thread (applyMode), read on the game thread
+	// (postInvalidate); volatile for cross-thread visibility.
+	private volatile boolean reloadAwaitingRepaint = false;
 	// True only when SplashActivity ran InstallProgramTask on this launch
 	// (first install or dat-hash mismatch). On cached launches DCSS init is
 	// fast enough that the static "PLEASE WAIT..." overlay is unnecessary
@@ -667,6 +682,23 @@ public class RegionRouter implements TerminalRenderer
 		this.showLoadingMessage = show;
 	}
 
+	public void setReloadCompleteListener(Runnable r)
+	{
+		this.reloadCompleteListener = r;
+	}
+
+	// Hand the one-shot reload-complete signal to the UI thread and clear it
+	// so it can never fire twice. No-op once consumed.
+	private void fireReloadComplete()
+	{
+		final Runnable done = reloadCompleteListener;
+		if (done == null)
+			return;
+		reloadCompleteListener = null;
+		if (fullView != null)
+			fullView.post(done);
+	}
+
 	// Zero drag-scroll offsets on every panel that can scroll. applyMode is
 	// the single choke point for screen transitions, so doing this here means
 	// no panel re-opens at its prior offset (msg log staying scrolled after
@@ -812,6 +844,24 @@ public class RegionRouter implements TerminalRenderer
 
 		if (redrawRequester != null && redrawTarget != null)
 			scheduleRedrawAfterLayout(redrawTarget);
+
+		// Reload overlay dismissal. GameActivity registers
+		// reloadCompleteListener so the "Reloading..." overlay is torn down
+		// only once DCSS has actually painted its first post-boot screen — we
+		// are now laying that screen out. If a repaint was just scheduled, the
+		// destination surface is momentarily blank; removing the overlay now
+		// would flash it, so defer to the repaint's postInvalidate (see
+		// reloadAwaitingRepaint). If nothing was scheduled, the surface already
+		// holds the painted screen, so dismiss right away.
+		if (reloadCompleteListener != null
+				&& (mode == LayoutMode.GAMEPLAY
+					|| menuType == MenuType.MAINMENU))
+		{
+			if (redrawRequester != null && redrawTarget != null)
+				reloadAwaitingRepaint = true;
+			else
+				fireReloadComplete();
+		}
 	}
 
 	// One-shot OnGlobalLayoutListener that draws the loading message into
@@ -1355,6 +1405,7 @@ public class RegionRouter implements TerminalRenderer
 			currentMenuType = detectedType;
 			if (detected == LayoutMode.GAMEPLAY)
 				gameplayEverDetected = true;
+
 			// Recompute the fold anchor as we enter the skills menu so the
 			// next frame's drawPoints can remap. Done here (not inside the
 			// applyMode post) because applyMode runs on the UI thread later;
@@ -1392,6 +1443,15 @@ public class RegionRouter implements TerminalRenderer
 			skillsView.postInvalidate();
 		for (RegionTermView region : splitRegions)
 			region.postInvalidate();
+
+		// This storm is the post-applyMode repaint of the reload destination:
+		// its drawPoints already refilled the bitmap above, so the overlay can
+		// now be removed without exposing the blank surface applyMode left.
+		if (reloadAwaitingRepaint)
+		{
+			reloadAwaitingRepaint = false;
+			fireReloadComplete();
+		}
 
 		// End of storm: clear the per-storm flag so the next storm starts
 		// from a known state. preStormHint will set it again at the start

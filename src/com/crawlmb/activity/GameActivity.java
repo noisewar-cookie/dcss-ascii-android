@@ -21,11 +21,15 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.graphics.Color;
+import android.graphics.Typeface;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.ContextMenu;
+import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.Menu;
@@ -33,12 +37,14 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.ViewGroup;
 import android.view.ViewGroup.LayoutParams;
 import android.view.ViewTreeObserver;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 import android.os.Handler;
 import android.os.Message;
 import android.widget.SeekBar;
@@ -99,6 +105,17 @@ public class GameActivity extends Activity
 	private View portraitKeyboardView = null;
 	private View portraitDirectionalView = null;
 
+	// "Reloading..." overlay shown across a save-restore process restart (set
+	// just before the kill in PreferencesActivity). reloadOverlayActive is
+	// read once in onCreate from the persisted one-shot flag; the opaque
+	// overlay covers the whole screen — including the Crawl keyboard — until
+	// DCSS paints its first post-boot screen. See enterReloadState.
+	private static final String RELOADING_ASSET = "reloading.txt";
+	private static final long RELOAD_TIMEOUT_MS = 12000;
+	private boolean reloadOverlayActive = false;
+	private View reloadOverlay = null;
+	private Runnable reloadTimeoutRunnable = null;
+
 	protected Handler handler = null;
 
 	@Override
@@ -111,6 +128,10 @@ public class GameActivity extends Activity
 		// the inset listener in rebuildViews() receives the same real insets
 		// it gets on Android 15. No-op on API 35+.
 		WindowCompatAdapter.applyEdgeToEdge(this);
+
+		// Read (and clear) the save-restore reload flag once per launch, before
+		// rebuildViews() so the first layout already carries the overlay.
+		reloadOverlayActive = Preferences.consumeReloadInProgress();
 
 		if (gameKeyListener == null) {
 			gameKeyListener = new GameKeyListener();
@@ -381,7 +402,127 @@ public class GameActivity extends Activity
 
 			setContentView(screenLayout);
 			dialog.restoreDialog();
+
+			if (reloadOverlayActive)
+				enterReloadState();
 		}
+	}
+
+	// Lay an opaque "Reloading..." overlay over the freshly-built screen and
+	// keep it up until DCSS paints its first post-boot screen. The overlay is
+	// the last child of screenLayout, so it draws on top of the game panel,
+	// the Crawl keyboard and DirectionalTouchView, and (being clickable)
+	// swallows touches meant for them. The system soft keyboard is a separate
+	// window the overlay can't cover, so it's suppressed explicitly here and
+	// restored on exit. Called from rebuildViews after setContentView.
+	private void enterReloadState() {
+		// Drop any overlay left attached to a previous screenLayout (rebuilds
+		// recreate screenLayout) before attaching a fresh one.
+		removeReloadOverlay();
+
+		reloadOverlay = buildReloadOverlay();
+		screenLayout.addView(reloadOverlay, new RelativeLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+
+		getWindow().setSoftInputMode(
+				WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+		InputMethodManager imm = (InputMethodManager)
+				getSystemService(Context.INPUT_METHOD_SERVICE);
+		if (imm != null)
+			imm.hideSoftInputFromWindow(screenLayout.getWindowToken(), 0);
+
+		// Dismiss exactly when DCSS reaches the main menu / gameplay...
+		if (portraitRouter != null)
+			portraitRouter.setReloadCompleteListener(this::exitReloadState);
+
+		// ...and a backstop in case that signal never arrives (e.g. a boot
+		// that never reaches a recognized screen) so the overlay can't stick.
+		reloadTimeoutRunnable = this::exitReloadState;
+		reloadOverlay.postDelayed(reloadTimeoutRunnable, RELOAD_TIMEOUT_MS);
+	}
+
+	// Idempotent: may be invoked by both the router callback and the timeout.
+	private void exitReloadState() {
+		if (!reloadOverlayActive)
+			return;
+		reloadOverlayActive = false;
+
+		if (portraitRouter != null)
+			portraitRouter.setReloadCompleteListener(null);
+
+		if (reloadTimeoutRunnable != null && reloadOverlay != null)
+			reloadOverlay.removeCallbacks(reloadTimeoutRunnable);
+		reloadTimeoutRunnable = null;
+
+		removeReloadOverlay();
+		restoreKeyboardAfterReload();
+	}
+
+	private void removeReloadOverlay() {
+		if (reloadOverlay != null && reloadOverlay.getParent() instanceof ViewGroup)
+			((ViewGroup) reloadOverlay.getParent()).removeView(reloadOverlay);
+		reloadOverlay = null;
+	}
+
+	// The Crawl keyboard was only ever covered (not hidden), so it needs no
+	// restore. Only the system soft keyboard, suppressed in enterReloadState,
+	// has to be re-shown here when it's the configured type.
+	private void restoreKeyboardAfterReload() {
+		String keyboardType = Preferences.getPortraitKeyboard();
+		String[] keyboards = getResources().getStringArray(
+				R.array.virtualKeyboardValues);
+		if (keyboardType.equals(keyboards[2])) // System keyboard
+		{
+			getWindow().setSoftInputMode(
+					WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+			InputMethodManager imm = (InputMethodManager)
+					getSystemService(Context.INPUT_METHOD_SERVICE);
+			if (imm != null)
+				imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+		}
+	}
+
+	private View buildReloadOverlay() {
+		TextView tv = new TextView(this);
+		tv.setText(loadReloadMessage());
+		tv.setTextColor(Color.WHITE);
+		tv.setBackgroundColor(Color.BLACK);
+		tv.setGravity(Gravity.CENTER);
+		tv.setTypeface(Typeface.MONOSPACE);
+		tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+		// Opaque + clickable so it both hides and intercepts input for the
+		// views beneath it during the reload.
+		tv.setClickable(true);
+		tv.setFocusable(true);
+		return tv;
+	}
+
+	// Read the (editable) reload message from assets/reloading.txt, one line
+	// per row. Falls back to a literal if the asset is missing so the overlay
+	// is never blank. UTF-8 to allow non-ASCII text.
+	private CharSequence loadReloadMessage() {
+		StringBuilder sb = new StringBuilder();
+		try (InputStream is = getAssets().open(RELOADING_ASSET);
+				BufferedReader br = new BufferedReader(
+						new InputStreamReader(is, StandardCharsets.UTF_8)))
+		{
+			String line;
+			boolean first = true;
+			while ((line = br.readLine()) != null)
+			{
+				if (!first)
+					sb.append('\n');
+				sb.append(line);
+				first = false;
+			}
+		}
+		catch (IOException e)
+		{
+			Log.w("GameActivity", "Could not load " + RELOADING_ASSET
+					+ ": " + e.getMessage());
+		}
+		String msg = sb.toString().trim();
+		return msg.isEmpty() ? "Reloading..." : msg;
 	}
 
 	private TerminalRenderer buildPortraitLayout(boolean hapticFeedbackEnabled) {

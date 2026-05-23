@@ -359,9 +359,14 @@ public class PreferencesActivity extends PreferenceActivity implements
                 .setTitle(R.string.save_restored_restart_title)
                 .setMessage(R.string.save_restored_restart_message)
                 .setCancelable(false)
-                .setPositiveButton(R.string.close_app, (d, w) ->
+                .setPositiveButton(R.string.close_app, (d, w) -> {
+                        // Persist (synchronously) so the next launch can show
+                        // the "Reloading..." overlay; the kill below would
+                        // otherwise lose an async write.
+                        Preferences.setReloadInProgressSync(true);
                         android.os.Process.killProcess(
-                                android.os.Process.myPid()))
+                                android.os.Process.myPid());
+                })
                 .show();
     }
 
