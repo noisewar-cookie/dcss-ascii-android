@@ -20,6 +20,9 @@ keystore.properties
 # JVM heap dumps (Gradle daemon OOM postmortems)
 *.hprof
 
+# Build logs
+*.log
+
 # Claude Code / local docs
 CLAUDE.md
 progress.md

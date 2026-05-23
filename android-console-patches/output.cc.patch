@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/output.cc b/crawl-ref/source/output.cc
-index 3c3bfb8186..14224c5e91 100644
+index 3c3bfb8186..24302e8edf 100644
 --- a/crawl-ref/source/output.cc
 +++ b/crawl-ref/source/output.cc
 @@ -648,6 +648,10 @@ void update_message_status()
@@ -67,7 +67,7 @@ index 3c3bfb8186..14224c5e91 100644
          Noise_Bar.reset(); // so it doesn't display a change bar after silence ends
      }
      else
-@@ -1018,107 +1007,153 @@ static short _get_stat_colour(stat_type stat)
+@@ -1018,107 +1007,176 @@ static short _get_stat_colour(stat_type stat)
  
  static void _print_stat(stat_type stat, int x, int y)
  {
@@ -86,18 +86,31 @@ index 3c3bfb8186..14224c5e91 100644
 -    CPRINTF("%d", you.stat(stat, false));
 -    if (!_is_using_small_layout())
 -        CPRINTF("    ");
--}
-+    CPRINTF("%c%-4d", val < 0 ? '-' : ' ', val < 0 ? -val : val);
-+}
-+
++    // Dex is the rightmost field on row 6 and prints flush to the HUD's right
++    // edge. With the wrapping CPRINTF, its trailing pad space overflows the
++    // 42-col region and CPRINTF re-emits it at col 1 of the next row, blanking
++    // the leading "Do" of the Doom line until an unrelated redraw repairs it.
++    // NOWRAP clips at the region edge instead of wrapping, so no field can
++    // ever corrupt the row below. (Harmless for Str/Int, which don't reach the
++    // edge.) The clip leaves the cursor one col past the region, which is
++    // invalid under -DASSERTS, so park it back at the field start.
++    NOWRAP_EOL_CPRINTF("%c%-4d", val < 0 ? '-' : ' ', val < 0 ? -val : val);
++    CGOTOXY(x+4, y, GOTO_STAT);
+ }
+ 
+-static void _print_stats_doom(int x, int y)
+-{
+-    CGOTOXY(x, y, GOTO_STAT);
 +// Android HUD condense: the bottom HUD row packs Doom | Contam | Place | T:
 +// with dynamic widths (no inter-field padding, no colon-trailing spaces).
 +// All four sources (_print_stats_doom, _print_stats_contam, print_stats_level,
 +// update_turn_count) repaint the entire row each call so the dynamic packing
-+// stays consistent regardless of which field triggered the redraw. Long
-+// branch names may push the turn count past the HUD right edge; this is
-+// acceptable since Doom and Contam are short-lived and Place strings rarely
-+// reach their max width.
++// stays consistent regardless of which field triggered the redraw. Every
++// segment prints with NOWRAP_EOL_CPRINTF so a long branch name or turn count
++// is truncated at the HUD's right edge instead of wrapping onto the weapon
++// line below (the wrapping CPRINTF re-emits the overflow at col 1 of the next
++// row). The cursor is parked at row start afterwards because a clip that
++// fills the row leaves it one col past the region (invalid under -DASSERTS).
 +static void _print_stats_bottom_row(int y)
 +{
 +    // Wipe the row first so stale chars from a previous (longer/shorter)
@@ -108,14 +121,31 @@ index 3c3bfb8186..14224c5e91 100644
 +    clear_to_end_of_line();
 +    CGOTOXY(1, y, GOTO_STAT);
  
--static void _print_stats_doom(int x, int y)
--{
--    CGOTOXY(x, y, GOTO_STAT);
+-    // Hide the bar entirely if there is no active doom (since that will be true
+-    // most of the time).
+-    if (you.attribute[ATTR_DOOM] == 0 && !Options.always_show_doom_contam)
 +    if (you.attribute[ATTR_DOOM] > 0 || Options.always_show_doom_contam)
-+    {
+     {
+-        CPRINTF("          ");
+-        return;
+-    }
 +        textcolour(HUD_CAPTION_COLOUR);
-+        CPRINTF("Doom:");
-+
++        NOWRAP_EOL_CPRINTF("Doom:");
+ 
+-    CGOTOXY(x, y, GOTO_STAT);
+-    textcolour(HUD_CAPTION_COLOUR);
+-    CPRINTF("Doom: ");
+-
+-    if (you.attribute[ATTR_DOOM] >= 75)
+-        textcolour(LIGHTMAGENTA);
+-    else if (you.attribute[ATTR_DOOM] >= 50)
+-        textcolour(LIGHTRED);
+-    else if (you.attribute[ATTR_DOOM] >= 25)
+-        textcolour(YELLOW);
+-    else if (you.attribute[ATTR_DOOM] > 0)
+-        textcolour(LIGHTGRAY);
+-    else
+-        textcolour(DARKGRAY);
 +        if (you.attribute[ATTR_DOOM] >= 75)
 +            textcolour(LIGHTMAGENTA);
 +        else if (you.attribute[ATTR_DOOM] >= 50)
@@ -127,19 +157,24 @@ index 3c3bfb8186..14224c5e91 100644
 +        else
 +            textcolour(DARKGRAY);
  
--    // Hide the bar entirely if there is no active doom (since that will be true
--    // most of the time).
--    if (you.attribute[ATTR_DOOM] == 0 && !Options.always_show_doom_contam)
-+        CPRINTF("%d%% ", you.attribute[ATTR_DOOM]);
+-    CPRINTF("%d%% ", you.attribute[ATTR_DOOM]);
++        NOWRAP_EOL_CPRINTF("%d%% ", you.attribute[ATTR_DOOM]);
 +    }
-+    you.redraw_doom = false;
-+
+     you.redraw_doom = false;
+-}
+-
+-static void _print_stats_contam(int x, int y)
+-{
+-    CGOTOXY(x, y, GOTO_STAT);
+ 
+-    // Hide the bar entirely if the player has no contam
+-    if (you.magic_contamination == 0 && !Options.always_show_doom_contam)
 +    if (you.magic_contamination > 0 || Options.always_show_doom_contam)
      {
--        CPRINTF("          ");
+-        CPRINTF("            ");
 -        return;
 +        textcolour(HUD_CAPTION_COLOUR);
-+        CPRINTF("Contam:");
++        NOWRAP_EOL_CPRINTF("Contam:");
 +
 +        const int contam = max(you.magic_contamination > 0 ? 1 : 0,
 +                               you.magic_contamination / 10);
@@ -150,60 +185,12 @@ index 3c3bfb8186..14224c5e91 100644
 +        else
 +            textcolour(DARKGRAY);
 +
-+        CPRINTF("%d%% ", contam);
++        NOWRAP_EOL_CPRINTF("%d%% ", contam);
      }
 +    you.redraw_contam = false;
  
 -    CGOTOXY(x, y, GOTO_STAT);
      textcolour(HUD_CAPTION_COLOUR);
--    CPRINTF("Doom: ");
-+    CPRINTF("@:");
-+    textcolour(HUD_VALUE_COLOUR);
-+#ifdef DEBUG_DIAGNOSTICS
-+    CPRINTF("(%d) ", env.absdepth0 + 1);
-+#endif
-+    CPRINTF("%s", _level_description_string_hud().c_str());
- 
--    if (you.attribute[ATTR_DOOM] >= 75)
--        textcolour(LIGHTMAGENTA);
--    else if (you.attribute[ATTR_DOOM] >= 50)
--        textcolour(LIGHTRED);
--    else if (you.attribute[ATTR_DOOM] >= 25)
--        textcolour(YELLOW);
--    else if (you.attribute[ATTR_DOOM] > 0)
--        textcolour(LIGHTGRAY);
--    else
--        textcolour(DARKGRAY);
-+    textcolour(HUD_CAPTION_COLOUR);
-+    CPRINTF(" T:");
-+    textcolour(HUD_VALUE_COLOUR);
-+    string time_str = Options.show_game_time
-+        ? make_stringf("%.1f", you.elapsed_time / 10.0)
-+        : make_stringf("%d", you.num_turns);
-+    time_str += make_stringf(" (%.1f)",
-+        (you.elapsed_time - you.elapsed_time_at_last_input) / 10.0);
-+    CPRINTF("%s", time_str.c_str());
- 
--    CPRINTF("%d%% ", you.attribute[ATTR_DOOM]);
--    you.redraw_doom = false;
-+    clear_to_end_of_line();
-+    textcolour(LIGHTGREY);
- }
- 
--static void _print_stats_contam(int x, int y)
-+static void _print_stats_doom(int x, int y)
- {
--    CGOTOXY(x, y, GOTO_STAT);
--
--    // Hide the bar entirely if the player has no contam
--    if (you.magic_contamination == 0 && !Options.always_show_doom_contam)
--    {
--        CPRINTF("            ");
--        return;
--    }
--
--    CGOTOXY(x, y, GOTO_STAT);
--    textcolour(HUD_CAPTION_COLOUR);
 -    CPRINTF("Contam: ");
 -
 -    const int contam = max(you.magic_contamination > 0 ? 1 : 0,
@@ -214,12 +201,40 @@ index 3c3bfb8186..14224c5e91 100644
 -        textcolour(YELLOW);
 -    else
 -        textcolour(DARKGRAY);
-+    (void)x; // x is unused; row 7 layout is fixed.
-+    _print_stats_bottom_row(y);
-+}
++    NOWRAP_EOL_CPRINTF("@:");
++    textcolour(HUD_VALUE_COLOUR);
++#ifdef DEBUG_DIAGNOSTICS
++    NOWRAP_EOL_CPRINTF("(%d) ", env.absdepth0 + 1);
++#endif
++    NOWRAP_EOL_CPRINTF("%s", _level_description_string_hud().c_str());
  
 -    CPRINTF("%d%% ", contam);
 -    you.redraw_contam = false;
++    textcolour(HUD_CAPTION_COLOUR);
++    NOWRAP_EOL_CPRINTF(" T:");
++    textcolour(HUD_VALUE_COLOUR);
++    string time_str = Options.show_game_time
++        ? make_stringf("%.1f", you.elapsed_time / 10.0)
++        : make_stringf("%d", you.num_turns);
++    time_str += make_stringf(" (%.1f)",
++        (you.elapsed_time - you.elapsed_time_at_last_input) / 10.0);
++    NOWRAP_EOL_CPRINTF("%s", time_str.c_str());
++
++    clear_to_end_of_line();
++    textcolour(LIGHTGREY);
++    // Park the cursor at a valid HUD cell: if the segments above filled the
++    // row, the last clip left it one col past the region (col 43), which
++    // would trip assert_valid_cursor_pos() when this row is the final paint
++    // of print_stats (no wp/qv/status redraw) or after update_turn_count().
++    CGOTOXY(1, y, GOTO_STAT);
++}
++
++static void _print_stats_doom(int x, int y)
++{
++    (void)x; // x is unused; row 7 layout is fixed.
++    _print_stats_bottom_row(y);
++}
++
 +static void _print_stats_contam(int x, int y)
 +{
 +    (void)x; // x is unused; row 7 layout is fixed.
@@ -263,7 +278,14 @@ index 3c3bfb8186..14224c5e91 100644
 -    CGOTOXY(x+4, y+2, GOTO_STAT);
 -    CPRINTF("%-12s", sh.c_str());
 +    CGOTOXY(40, y, GOTO_STAT);
-+    CPRINTF("%c%-3d", sh < 0 ? '-' : ' ', sh < 0 ? -sh : sh);
++    // SH is the rightmost field on row 5 and prints flush to the HUD's right
++    // edge. With the wrapping CPRINTF, its trailing pad space overflows the
++    // 42-col region and CPRINTF re-emits it at col 1 of the next row, blanking
++    // the leading 'X' of the XL line until an unrelated redraw repairs it.
++    // NOWRAP clips at the region edge instead of wrapping; the clip leaves the
++    // cursor one col past the region (invalid under -DASSERTS), so park it.
++    NOWRAP_EOL_CPRINTF("%c%-3d", sh < 0 ? '-' : ' ', sh < 0 ? -sh : sh);
++    CGOTOXY(40, y, GOTO_STAT);
  
      you.redraw_armour_class = false;
  }
@@ -288,7 +310,7 @@ index 3c3bfb8186..14224c5e91 100644
  
      you.redraw_evasion = false;
  }
-@@ -1518,9 +1553,10 @@ void print_stats()
+@@ -1518,9 +1576,10 @@ void print_stats()
      if (crawl_state.smallterm)
          return;
  #endif
@@ -302,7 +324,7 @@ index 3c3bfb8186..14224c5e91 100644
      cursor_control coff(false);
      textcolour(LIGHTGREY);
  
-@@ -1559,66 +1595,82 @@ void print_stats()
+@@ -1559,66 +1618,82 @@ void print_stats()
      else if (you.redraw_magic_points)
          _print_stats_mp(1, 4);
  
@@ -423,7 +445,7 @@ index 3c3bfb8186..14224c5e91 100644
  
  #ifndef USE_TILE_LOCAL
      assert_valid_cursor_pos();
-@@ -1627,23 +1679,13 @@ void print_stats()
+@@ -1627,23 +1702,13 @@ void print_stats()
  
  void print_stats_level()
  {
@@ -452,7 +474,7 @@ index 3c3bfb8186..14224c5e91 100644
  }
  
  void draw_border()
-@@ -1655,33 +1697,28 @@ void draw_border()
+@@ -1655,33 +1720,28 @@ void draw_border()
  
      textcolour(Options.status_caption_colour);
  
@@ -476,17 +498,13 @@ index 3c3bfb8186..14224c5e91 100644
 -    int str_pos = ac_pos;
 -    int int_pos = ev_pos;
 -    int dex_pos = sh_pos;
--
++        row5 = 5;
++    const int row6 = row5 + 1;
+ 
 -    // "Health:" and "Magic:" printed elsewhere
 -    CGOTOXY(1, ac_pos, GOTO_STAT); CPRINTF("AC:");
 -    CGOTOXY(1, ev_pos, GOTO_STAT); CPRINTF("EV:");
 -    CGOTOXY(1, sh_pos, GOTO_STAT); CPRINTF("SH:");
-+        row5 = 5;
-+    const int row6 = row5 + 1;
- 
--    CGOTOXY(19, str_pos, GOTO_STAT); CPRINTF("Str:");
--    CGOTOXY(19, int_pos, GOTO_STAT); CPRINTF("Int:");
--    CGOTOXY(19, dex_pos, GOTO_STAT); CPRINTF("Dex:");
 +    // "Health:"/"Magic:"/"XL:"/"Noise:"/"Doom:"/"Contam:"/"T:" printed elsewhere
 +    // AC:/EV:/SH: are shifted 1 col right of Str:/Int:/Dex: so the colons of
 +    // the 2-letter and 3-letter labels line up vertically.
@@ -494,6 +512,10 @@ index 3c3bfb8186..14224c5e91 100644
 +    CGOTOXY(28, row5, GOTO_STAT); CPRINTF("EV:");
 +    CGOTOXY(37, row5, GOTO_STAT); CPRINTF("SH:");
  
+-    CGOTOXY(19, str_pos, GOTO_STAT); CPRINTF("Str:");
+-    CGOTOXY(19, int_pos, GOTO_STAT); CPRINTF("Int:");
+-    CGOTOXY(19, dex_pos, GOTO_STAT); CPRINTF("Dex:");
+-
 -    // "XL:" and "Place:" printed elsewhere
 -    // "Noise:" printed elsewhere
 -    CGOTOXY(19, ac_pos + 4, GOTO_STAT);
@@ -504,7 +526,7 @@ index 3c3bfb8186..14224c5e91 100644
  }
  
  #ifndef USE_TILE_LOCAL
-@@ -2171,15 +2208,10 @@ static string _overview_screen_title(int sw)
+@@ -2171,15 +2231,10 @@ static string _overview_screen_title(int sw)
                                        species::name(you.species).c_str(),
                                        get_job_name(you.char_class));
  
@@ -521,7 +543,7 @@ index 3c3bfb8186..14224c5e91 100644
  
      if (linelength >= sw)
      {
-@@ -2191,22 +2223,13 @@ static string _overview_screen_title(int sw)
+@@ -2191,22 +2246,13 @@ static string _overview_screen_title(int sw)
  
      // Still not enough?
      if (linelength >= sw)
@@ -544,7 +566,7 @@ index 3c3bfb8186..14224c5e91 100644
      text += "</yellow>\n";
  
      return text;
-@@ -2296,15 +2319,15 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2296,15 +2342,15 @@ static vector<formatted_string> _get_overview_stats()
  {
      formatted_string entry;
  
@@ -563,7 +585,7 @@ index 3c3bfb8186..14224c5e91 100644
  
      entry.textcolour(HUD_CAPTION_COLOUR);
      if (player_drained())
-@@ -2423,6 +2446,24 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2423,6 +2469,24 @@ static vector<formatted_string> _get_overview_stats()
      cols.add_formatted(2, entry.to_colour_string(), false);
      entry.clear();
  
@@ -588,7 +610,7 @@ index 3c3bfb8186..14224c5e91 100644
      entry.textcolour(HUD_CAPTION_COLOUR);
      entry.cprintf("XL:     ");
  
-@@ -2438,7 +2479,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2438,7 +2502,7 @@ static vector<formatted_string> _get_overview_stats()
          entry.cprintf("%d%%", get_exp_progress());
      }
  
@@ -597,7 +619,7 @@ index 3c3bfb8186..14224c5e91 100644
      entry.clear();
  
      entry.textcolour(HUD_CAPTION_COLOUR);
-@@ -2453,7 +2494,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2453,7 +2517,7 @@ static vector<formatted_string> _get_overview_stats()
  #endif
      entry += formatted_string::parse_string(godpowers);
  
@@ -606,7 +628,7 @@ index 3c3bfb8186..14224c5e91 100644
      entry.clear();
  
      if (!you.has_mutation(MUT_INNATE_CASTER))
-@@ -2465,7 +2506,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2465,7 +2529,7 @@ static vector<formatted_string> _get_overview_stats()
          entry.cprintf("%d/%d levels left",
                        player_spell_levels(), player_total_spell_levels());
  
@@ -615,7 +637,7 @@ index 3c3bfb8186..14224c5e91 100644
          entry.clear();
      }
  
-@@ -2483,11 +2524,11 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2483,11 +2547,11 @@ static vector<formatted_string> _get_overview_stats()
          entry.textcolour(HUD_VALUE_COLOUR);
          entry.cprintf("%d", you.deaths);
  
@@ -629,7 +651,7 @@ index 3c3bfb8186..14224c5e91 100644
  }
  
  // generator of resistance strings:
-@@ -2658,6 +2699,10 @@ void print_overview_screen()
+@@ -2658,6 +2722,10 @@ void print_overview_screen()
          overview.add_formatted_string(bline, true);
      overview.add_text("\n");
  
@@ -640,7 +662,7 @@ index 3c3bfb8186..14224c5e91 100644
      {
          vector<formatted_string> blines =
              _get_overview_resistances(overview.equip_chars, num_cols);
-@@ -2683,6 +2728,13 @@ string dump_overview_screen()
+@@ -2683,6 +2751,13 @@ string dump_overview_screen()
      }
      text += "\n";
  
