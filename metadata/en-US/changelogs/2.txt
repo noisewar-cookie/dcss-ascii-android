@@ -1,0 +1,14 @@
+First release of DCSS ASCII, a fork of Michael Barlow's Android port.
+
+• Updated to DCSS 0.34.1 (latest).
+• Two-finger long press for app menu.
+• Improved 9-grid overlay controls.
+• Revamped UI for portrait view.
+• Manage saves and config files.
+• Faster asset loading.
+• Quick Controls guide for new players.
+
+Bug Fixes:
+• Supports Android 15+, some compatibility for 13, 14, etc.
+• Auto-save now more reliable between app resume states.
+• Fixed missing font glyphs.

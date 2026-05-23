@@ -1,4 +1,4 @@
-Dungeon Crawl Stone Soup ASCII (DCSS) is a free, open-source roguelike about exploring an endlessly unique dungeon, fighting monsters, and escaping with the Orb of Zot. This pure-ASCII Android port provides a more classic, streamlined experience. A tiled graphics version can also be found on the Play Store, if you prefer.
+Dungeon Crawl Stone Soup ASCII (DCSS) is a free, open-source roguelike about exploring an endlessly unique dungeon, fighting monsters, and escaping with the Orb of Zot. This pure-ASCII Android port provides a classic, streamlined experience.
 
 DCSS is considered by true roguelike fans to be one of the most tactical, difficult, yet fair dungeon crawl RPGs ever made.
 
@@ -19,8 +19,7 @@ CONTROLS
 
 PRIVACY & PERMISSIONS
 • Offline only.
-• No ads, no tracking, no analytics, no account required.
-• No data collected. Game data lives on your device only.
+• No ads, tracking, data collection, or account required.
 
 ABOUT THIS PORT
 Wraps DCSS 0.34.1 (upstream: github.com/crawl/crawl). Forked from Michael Barlow's original Android port and updated for modern Android. Licensed under GPL-2.0-or-later. Game content under its respective licenses (see in-app credits).
