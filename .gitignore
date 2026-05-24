@@ -28,3 +28,6 @@ CLAUDE.md
 progress.md
 launchProgress.md
 releaseChecklist.md
+
+# Local release tooling
+prepare-release.ps1

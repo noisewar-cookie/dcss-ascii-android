@@ -6,6 +6,17 @@ This is a fork of [michaelbarlow7/dungeon-crawl-android](https://github.com/mich
 
 Full disclosure, LLM AI code was used extensively for this project. The context engineering md files were not included in order to keep the repo clean, and because local project setups, tooling, and MCP used can differ dramatically. The goal of this project is to create the closest ASCII console experience of DCSS on mobile, and will make every effort to constrain AI code changes to just the wrapper, and avoid changing the core game source included in the submodule.
 
+* Please see CHANGELOG.md for latest release notes.
+
+
+## Future Planned Features
+
+- Include a default autofight+autoexplore script, possibly as UI button.
+- Find more in-game menus to adapt to full portrait height.
+- Add better support for other typefaces.
+- Investigate support for legacy Crawl versions.
+- Complete UI refactor for max dynamic sizing.
+
 
 ## Architecture
 
