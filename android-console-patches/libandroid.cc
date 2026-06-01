@@ -239,10 +239,15 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
 	const char *settingsDir = env->GetStringUTFChars(jSettingsDir, NULL);
 	const char *morgueDir = env->GetStringUTFChars(jMorgueDir, NULL);
 
-	int argc = 9;
+	// -rcdir puts settingsDir at the front of find_crawlrc's search list,
+	// so init.txt is read from external user-visible storage (where the
+	// in-app editor writes) instead of falling back to the bundled
+	// ANDROID_ASSETS/settings/init.txt.
+	int argc = 11;
 	char *argv[] = {(char*)"", (char*)"-dir", (char*)dataDir,
                       (char*)"-macro", (char*)settingsDir,
                       (char*)"-morgue", (char*)morgueDir,
+                      (char*)"-rcdir", (char*)settingsDir,
                       (char*)"-extra-opt-first", (char*)"char_set=ascii"};
 	main(argc, argv);
 }

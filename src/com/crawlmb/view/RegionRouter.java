@@ -31,7 +31,7 @@ public class RegionRouter implements TerminalRenderer
 		// panel container (one panel per category) and per-panel scales
 		// from font_config.txt. Detected via row-0 "Welcome" + the
 		// "species." / "background." disambiguator from newgame.cc.
-		NEWGAME_SPECIES, NEWGAME_BACKGROUND
+		NEWGAME_SPECIES, NEWGAME_BACKGROUND, NEWGAME_NAME
 	}
 
 	public interface ScrollStateListener
@@ -219,6 +219,11 @@ public class RegionRouter implements TerminalRenderer
 	private static final String NEWGAME_WELCOME_PREFIX = "Welcome";
 	private static final String NEWGAME_SPECIES_TOKEN = "species.";
 	private static final String NEWGAME_BACKGROUND_TOKEN = "background.";
+
+	// Character naming screen anchor. _choose_name in newgame.cc renders
+	// "What is your name today? " via formatted_string into a popup; the
+	// exact terminal row depends on the popup's vertical centering.
+	private static final String NEWGAME_NAME_ANCHOR = "What is your name today?";
 
 	// DCSS main menu greeting. menu.cc renders "Hello, welcome to Dungeon
 	// Crawl Stone Soup <version>." at row 0 col 0 of the main menu shown at
@@ -991,6 +996,11 @@ public class RegionRouter implements TerminalRenderer
 			scrollable = fontConfig.portraitVfeaturesScrollable;
 			vscrollable = fontConfig.portraitVfeaturesVScrollable;
 			break;
+		case NEWGAME_NAME:
+			scale = fontConfig.portraitNewgameNameFontScale;
+			scrollable = fontConfig.portraitNewgameNameScrollable;
+			vscrollable = fontConfig.portraitNewgameNameVScrollable;
+			break;
 		case SKILLS:
 			// Should never happen — SKILLS uses skillsView. Fall through
 			// to default to be defensive.
@@ -1479,14 +1489,10 @@ public class RegionRouter implements TerminalRenderer
 		MenuType anchor = detectPregameAnchor();
 		if (anchor != null)
 			return anchor;
-		// Pregame fallthrough: an unrecognized non-loading screen. The
-		// character-naming prompt at the end of the newgame flow is one
-		// such screen — its row 0 doesn't match MAINMENU_ANCHOR or any
-		// newgame token. Returning MAINMENU here misclassified naming as
-		// the main menu, which in turn made the Quick Controls panel show
-		// during character naming. DEFAULT is the safe catch-all: gives
-		// the screen portraitDefaultFontScale and keeps the QC panel
-		// (gated on MAINMENU specifically) hidden.
+		// Pregame fallthrough: an unrecognized non-loading screen.
+		// DEFAULT is the safe catch-all: gives the screen
+		// portraitDefaultFontScale and keeps the QC panel (gated on
+		// MAINMENU specifically) hidden.
 		return MenuType.DEFAULT;
 	}
 
@@ -1508,6 +1514,13 @@ public class RegionRouter implements TerminalRenderer
 				return MenuType.NEWGAME_SPECIES;
 			if (rowContains(0, NEWGAME_BACKGROUND_TOKEN))
 				return MenuType.NEWGAME_BACKGROUND;
+		}
+		// Character naming popup (_choose_name). The popup is vertically
+		// centered, so the exact row varies; scan all rows.
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+		{
+			if (rowContains(r, NEWGAME_NAME_ANCHOR))
+				return MenuType.NEWGAME_NAME;
 		}
 		return null;
 	}

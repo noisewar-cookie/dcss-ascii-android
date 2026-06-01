@@ -392,16 +392,19 @@ public class SplashActivity extends Activity {
             // Done immediately after copyFileOrDir("dat") so installedHash and
             // the actual on-disk content stay in sync on a clean install.
             copyFileOrDir("dat-hash.txt");
-            // Create settings folder if needed, but always refresh init.txt
-            // (other files like macro.txt are preserved)
+            // Create settings folder and seed stock configs on first run.
+            // On subsequent dat-hash bumps, seed only files that are missing
+            // — never overwrite user edits. Reset-to-default lives in
+            // ConfigEditor's menu for that.
             File settingsFolder = Paths.getSettingsDir(SplashActivity.this);
             if (settingsFolder.list() == null
                     || settingsFolder.list().length == 0) {
                 copyAssetDirTo("settings", settingsFolder);
             } else {
-                copyAssetFileTo("settings/init.txt",
-                        new File(settingsFolder, "init.txt"));
-                // Seed macro.txt only when missing — never overwrite user macros.
+                File initFile = new File(settingsFolder, "init.txt");
+                if (!initFile.exists()) {
+                    copyAssetFileTo("settings/init.txt", initFile);
+                }
                 File macroFile = new File(settingsFolder, "macro.txt");
                 if (!macroFile.exists()) {
                     copyAssetFileTo("settings/macro.txt", macroFile);

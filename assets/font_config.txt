@@ -100,13 +100,13 @@ landscape_font_scale=1.0
 # inscribe ({), quiver (Shift+Q)
 # - portrait_items_scrollable: enable horizontal drag (when content > width)
 # - portrait_items_vscrollable: enable vertical drag (when content > height)
-portrait_items_font_scale=1.6
+portrait_items_font_scale=1.75
 portrait_items_scrollable=true
 portrait_items_vscrollable=true
 
 # Spell/ability lists: spell list (I), cast (z), memorise (M),
 # abilities (a), mutations (A)
-portrait_spells_font_scale=1.6
+portrait_spells_font_scale=1.75
 portrait_spells_scrollable=true
 portrait_spells_vscrollable=true
 
@@ -126,11 +126,11 @@ portrait_skills_scrollable=true
 portrait_skills_vscrollable=false
 
 # Religion screen (^)
-portrait_religion_font_scale=1.5
+portrait_religion_font_scale=1.6
 portrait_religion_scrollable=true
 
 # Hi-score screen (end of game)
-portrait_hiscores_font_scale=1.5
+portrait_hiscores_font_scale=1.6
 portrait_hiscores_scrollable=true
 
 # Stash search results (Ctrl+F → match found)
@@ -150,7 +150,7 @@ portrait_levelmap_vscrollable=true
 # Visible features (Ctrl+X)
 # Shown during: the "Visible Monsters/Items/Features" target/travel menu.
 # Detected by the "Visible " prefix at the start of the title row.
-portrait_vfeatures_font_scale=1.5
+portrait_vfeatures_font_scale=1.6
 portrait_vfeatures_scrollable=true
 portrait_vfeatures_vscrollable=true
 
@@ -170,7 +170,7 @@ portrait_vfeatures_vscrollable=true
 
 # Welcome row at the top of the screen ("Welcome, %s. Please select your ...")
 # Terminal region: 80 cols x 2 rows  (rows 0-1)
-portrait_newgame_welcome_font_scale=1.6
+portrait_newgame_welcome_font_scale=1.7
 portrait_newgame_welcome_scrollable=true
 portrait_newgame_welcome_vscrollable=false
 
@@ -178,7 +178,7 @@ portrait_newgame_welcome_vscrollable=false
 # sub-slice of the upstream multi-column grid, but the font is sized as if
 # rendering the full 80-col terminal — so a multiplier of 1.5 here matches
 # the mainmenu glyph size.
-portrait_newgame_category_font_scale=1.5
+portrait_newgame_category_font_scale=1.6
 portrait_newgame_category_scrollable=true
 portrait_newgame_category_vscrollable=false
 
@@ -193,6 +193,13 @@ portrait_newgame_desc_vscrollable=false
 # Sub-options block at the bottom (random/aptitudes/help/space/tab). The
 # upstream 2-col grid is split into two stacked panels (left col then right
 # col) so the 8 prompts read as a single vertical list.
-portrait_newgame_sub_font_scale=1.6
+portrait_newgame_sub_font_scale=1.5
 portrait_newgame_sub_scrollable=true
 portrait_newgame_sub_vscrollable=false
+
+# Character naming screen ("What is your name today?")
+# Shown during: the final newgame step where the player enters a name.
+# Detected by scanning for "What is your name today?" on any terminal row.
+portrait_newgame_name_font_scale=1.75
+portrait_newgame_name_scrollable=true
+portrait_newgame_name_vscrollable=true

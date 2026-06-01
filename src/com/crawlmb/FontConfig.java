@@ -78,6 +78,9 @@ public class FontConfig
     public final float portraitNewgameSubFontScale;
     public final boolean portraitNewgameSubScrollable;
     public final boolean portraitNewgameSubVScrollable;
+    public final float portraitNewgameNameFontScale;
+    public final boolean portraitNewgameNameScrollable;
+    public final boolean portraitNewgameNameVScrollable;
 
     private FontConfig(Properties props)
     {
@@ -148,6 +151,9 @@ public class FontConfig
         this.portraitNewgameSubFontScale         = getFloat(props, "portrait_newgame_sub_font_scale", ngDefault);
         this.portraitNewgameSubScrollable        = getBool (props, "portrait_newgame_sub_scrollable", ngHDefault);
         this.portraitNewgameSubVScrollable       = getBool (props, "portrait_newgame_sub_vscrollable", ngVDefault);
+        this.portraitNewgameNameFontScale        = getFloat(props, "portrait_newgame_name_font_scale", ngDefault);
+        this.portraitNewgameNameScrollable       = getBool (props, "portrait_newgame_name_scrollable", ngHDefault);
+        this.portraitNewgameNameVScrollable      = getBool (props, "portrait_newgame_name_vscrollable", ngVDefault);
     }
 
     public static FontConfig load(AssetManager assets)

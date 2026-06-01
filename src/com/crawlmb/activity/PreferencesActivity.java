@@ -194,25 +194,26 @@ public class PreferencesActivity extends PreferenceActivity implements
     }
 
     // Zips a directory tree to a user-chosen .zip, or extracts a .zip back
-    // into a directory tree. If allowlist is non-null, restore skips zip
-    // entries whose path isn't in the set (used for config restore to keep
-    // tampered zips from dropping foreign files into settings/). Backup
-    // ignores allowlist — it always zips everything under baseDir.
+    // into a directory tree. If allowlist is non-null, both backup and
+    // restore skip entries whose name isn't in the set. Used for config
+    // backup/restore so the zip contains only the user-facing config files
+    // (init.txt, macro.txt, no_vi_command_keys.txt) and tampered zips can't
+    // drop foreign files into settings/.
     private final class ZipBackupTask extends AsyncTask<Void, Void, CopyResult> {
         private static final String TAG = "ZipBackupTask";
         private final boolean isBackup;
         private final Uri uri;
         private final File baseDir;
-        private final java.util.Set<String> restoreAllowlist;
+        private final java.util.Set<String> allowlist;
         private final boolean restartAppOnSuccess;
 
         ZipBackupTask(boolean isBackup, Uri uri, File baseDir,
-                java.util.Set<String> restoreAllowlist,
+                java.util.Set<String> allowlist,
                 boolean restartAppOnSuccess) {
             this.isBackup = isBackup;
             this.uri = uri;
             this.baseDir = baseDir;
-            this.restoreAllowlist = restoreAllowlist;
+            this.allowlist = allowlist;
             this.restartAppOnSuccess = restartAppOnSuccess;
         }
 
@@ -263,6 +264,8 @@ public class PreferencesActivity extends PreferenceActivity implements
                 if (kid.isDirectory()) {
                     walkAndZip(kid, entryName, zip, written);
                 } else if (kid.isFile()) {
+                    if (allowlist != null && !allowlist.contains(entryName))
+                        continue;
                     zip.putNextEntry(new java.util.zip.ZipEntry(entryName));
                     FileInputStream in = new FileInputStream(kid);
                     try {
@@ -295,8 +298,8 @@ public class PreferencesActivity extends PreferenceActivity implements
                     String entryName = e.getName();
                     if (e.isDirectory())
                         continue;
-                    if (restoreAllowlist != null
-                            && !restoreAllowlist.contains(entryName))
+                    if (allowlist != null
+                            && !allowlist.contains(entryName))
                         continue;
                     File dest = new File(baseDir, entryName);
                     // Zip-slip guard: reject entries that escape baseDir.

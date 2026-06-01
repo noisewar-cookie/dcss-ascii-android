@@ -26,7 +26,6 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -193,40 +192,24 @@ public class ConfigEditor extends Activity
 		}
 	};
 
+	// Read the file's raw bytes and decode as UTF-8 so trailing newlines
+	// and exact byte content survive. The previous loop used the deprecated
+	// DataInputStream.readLine() and only inserted "\n" between lines —
+	// never after the last — which silently stripped any trailing newline
+	// on every open→save cycle and broke rc files whose final line matters
+	// to DCSS's FileLineInput parser (e.g. an unclosed brace-block "}").
 	private String readFile(File file)
 	{
-
 		FileInputStream fis = null;
-		BufferedInputStream bis = null;
-		DataInputStream dis = null;
-		StringBuffer sb = new StringBuffer();
-
 		try
 		{
 			fis = new FileInputStream(file);
-
-			// Here BufferedInputStream is added for fast reading.
-			bis = new BufferedInputStream(fis);
-			dis = new DataInputStream(bis);
-
-			// dis.available() returns 0 if the file does not have more lines.
-			while (dis.available() != 0)
-			{
-
-				// this statement reads the line from the file and print it to
-				// the console.
-				sb.append(dis.readLine());
-				if (dis.available() != 0)
-				{
-					sb.append("\n");
-				}
-			}
-
-			// dispose all the resources after using them.
-			fis.close();
-			bis.close();
-			dis.close();
-
+			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			byte[] buf = new byte[8192];
+			int n;
+			while ((n = fis.read(buf)) != -1)
+				baos.write(buf, 0, n);
+			return new String(baos.toByteArray(), "UTF-8");
 		}
 		catch (FileNotFoundException e)
 		{
@@ -236,12 +219,14 @@ public class ConfigEditor extends Activity
 		}
 		catch (IOException e)
 		{
-			Log.e(TAG, "File not found", e);
+			Log.e(TAG, "Error reading file", e);
 			Toast.makeText(this, R.string.error_reading_file, Toast.LENGTH_SHORT).show();
 			return null;
 		}
-
-		return sb.toString();
+		finally
+		{
+			if (fis != null) try { fis.close(); } catch (IOException ignored) {}
+		}
 	}
 
 	@Override

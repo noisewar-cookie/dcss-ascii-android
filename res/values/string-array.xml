@@ -5,6 +5,7 @@
     <!-- It's important that none of these lines are more than 80 characters long -->
     <!-- and there can't be more than 24 lines -->
     <string-array name="loading_message_array">
+        <item> </item>
         <item>PLEASE WAIT...</item>
         <item>First time launching may take some time.</item>
         <item> </item>
