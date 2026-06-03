@@ -1,0 +1,139 @@
+diff --git a/crawl-ref/source/menu.cc b/crawl-ref/source/menu.cc
+index 70e78747bf..6ef1d08b15 100644
+--- a/crawl-ref/source/menu.cc
++++ b/crawl-ref/source/menu.cc
+@@ -500,6 +500,112 @@ void UIMenu::do_layout(int mw, int num_columns, bool just_checking)
+     int column = -1; // an initial increment makes these 0
+     int column_width = 0;
+ 
++    // Android: use column-fill order (left column first, then right)
++    // instead of round-robin so that navigation order matches the
++    // folded single-column view on the Android UI layer.
++    if (num_columns > 1)
++    {
++        // Count non-heading items in each section (between headings).
++        // section_start[s] = index of first non-heading item,
++        // section_count[s] = number of non-heading items.
++        vector<size_t> sec_start;
++        vector<int> sec_count;
++        int cur = 0;
++        size_t cur_start = 0;
++        for (size_t i = 0; i < m_menu->items.size(); ++i)
++        {
++            if (item_info[i].heading)
++            {
++                if (cur > 0)
++                {
++                    sec_start.push_back(cur_start);
++                    sec_count.push_back(cur);
++                    cur = 0;
++                }
++            }
++            else
++            {
++                if (cur == 0)
++                    cur_start = i;
++                cur++;
++            }
++        }
++        if (cur > 0)
++        {
++            sec_start.push_back(cur_start);
++            sec_count.push_back(cur);
++        }
++
++        size_t sec_idx = 0;
++        int item_in_sec = 0;
++        int left_count = 0;
++        int left_bottom_row = -1;
++
++        for (size_t i = 0; i < m_menu->items.size(); ++i)
++        {
++            auto& entry = item_info[i];
++            const int text_width = static_cast<int>(entry.text.width());
++
++            if (entry.heading)
++            {
++                // Ensure row is at or past the left column's bottom
++                if (left_bottom_row > row)
++                    row = left_bottom_row;
++                row++;
++                entry.x = 0;
++                entry.y = row;
++                entry.row = row;
++                entry.column = 0;
++                // Prepare for the next section
++                item_in_sec = 0;
++                if (sec_idx < sec_count.size()
++                    && sec_start[sec_idx] <= i)
++                {
++                    sec_idx++;
++                }
++                left_count = sec_idx < sec_count.size()
++                    ? (sec_count[sec_idx] + 1) / 2 : 0;
++                left_bottom_row = -1;
++                continue;
++            }
++
++            // First section may have no heading
++            if (item_in_sec == 0 && left_count == 0
++                && sec_idx < sec_count.size())
++            {
++                left_count = (sec_count[sec_idx] + 1) / 2;
++            }
++
++            if (item_in_sec < left_count)
++            {
++                column = 0;
++                row++;
++                if (item_in_sec == left_count - 1)
++                    left_bottom_row = row;
++            }
++            else if (item_in_sec == left_count)
++            {
++                column = 1;
++                row = row - left_count + 1;
++            }
++            else
++            {
++                column = 1;
++                row++;
++            }
++
++            entry.x = 0;
++            entry.y = row;
++            entry.row = row;
++            entry.column = column;
++            column_width = max(column_width, text_width + pad_right);
++            item_in_sec++;
++        }
++        // Ensure final row accounts for left column bottom
++        if (left_bottom_row > row)
++            row = left_bottom_row;
++    }
++    else
+     for (size_t i = 0; i < m_menu->items.size(); ++i)
+     {
+         auto& entry = item_info[i];
+@@ -1733,7 +1839,10 @@ bool Menu::process_command(command_type cmd)
+     case CMD_MENU_UP:
+         if (is_set(MF_ARROWS_SELECT))
+         {
+-            cycle_hover(true, false, true);
++            // Android: sequential navigation when two-column fold is
++            // active so Down/Up order matches the folded view.
++            cycle_hover(true, false,
++                !is_set(MF_USE_TWO_COLUMNS));
+             if (last_hovered >= 0 && old_hover == last_hovered)
+                 line_up();
+         }
+@@ -1743,7 +1852,8 @@ bool Menu::process_command(command_type cmd)
+     case CMD_MENU_DOWN:
+         if (is_set(MF_ARROWS_SELECT))
+         {
+-            cycle_hover(false, false, true);
++            cycle_hover(false, false,
++                !is_set(MF_USE_TWO_COLUMNS));
+             if (last_hovered >= 0 && old_hover == last_hovered)
+                 line_down();
+         }

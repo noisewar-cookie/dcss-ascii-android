@@ -93,6 +93,7 @@ public class GameActivity extends Activity
 	private RegionTermView portraitMsgView = null;
 	private RegionTermView portraitFullView = null;
 	private RegionTermView portraitSkillsView = null;
+	private RegionTermView portraitItemsView = null;
 	private RegionTermView portraitMapView = null;
 	private FontConfig portraitFontConfig = null;
 	private RegionRouter portraitRouter = null;
@@ -593,6 +594,20 @@ public class GameActivity extends Activity
 		gamePanel.addView(skillsView, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
+		// Items menu view: 48 rows tall. When DCSS renders the inventory
+		// in two-column mode (~22 item rows × 2 columns), the fold remap
+		// stacks the right column underneath the left, producing up to
+		// ~44 content rows + title + footer. Vertical scroll handles
+		// overflow past the gamePanel height.
+		RegionTermView itemsView = new RegionTermView(this, 0, 0, 48, 80);
+		itemsView.setFontScaleMultiplier(fontConfig.portraitItemsFontScale);
+		itemsView.setHorizontalScrollEnabled(fontConfig.portraitItemsScrollable);
+		itemsView.setVerticalScrollEnabled(fontConfig.portraitItemsVScrollable);
+		itemsView.setVisibility(View.INVISIBLE);
+		portraitItemsView = itemsView;
+		gamePanel.addView(itemsView, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
 		// msg anchored to bottom, hud above msg, map fills the remaining
 		// gap from the top. Only the map/HUD seam can overlap; the
 		// onGlobalLayout listener below shrinks map font to resolve it.
@@ -771,6 +786,7 @@ public class GameActivity extends Activity
 		RegionRouter router = new RegionRouter(this);
 		router.setFullView(fullView);
 		router.setSkillsView(skillsView);
+		router.setItemsView(itemsView);
 		router.setQuickControlsView(quickControlsView);
 		router.setSplitContainer(splitContainer);
 		router.addRegion(mapView);
@@ -953,6 +969,7 @@ public class GameActivity extends Activity
 		portraitMsgView = null;
 		portraitFullView = null;
 		portraitSkillsView = null;
+		portraitItemsView = null;
 		portraitMapView = null;
 		portraitFontConfig = null;
 		portraitRouter = null;
@@ -1022,6 +1039,8 @@ public class GameActivity extends Activity
 			view.setMenuView(portraitFullView);
 		if (portraitSkillsView != null)
 			view.setSkillsView(portraitSkillsView);
+		if (portraitItemsView != null)
+			view.setItemsView(portraitItemsView);
 		if (portraitRouter != null)
 			view.setRouter(portraitRouter);
 		if (portraitExtraScrollTargets != null)

@@ -267,6 +267,7 @@ public class RegionRouter implements TerminalRenderer
 	private final List<RegionTermView> splitRegions = new ArrayList<>();
 	private RegionTermView fullView;
 	private RegionTermView skillsView;
+	private RegionTermView itemsView;
 	// App-only static panel shown only while the DCSS main menu is active.
 	// Sits in a LinearLayout sibling-pair with fullView so its slot expands
 	// to fill the gap between fullView's bottom and the virtual keyboard.
@@ -311,6 +312,8 @@ public class RegionRouter implements TerminalRenderer
 	private final Context context;
 
 	private final char[][] terminalShadow = new char[TERMINAL_ROWS][TERMINAL_COLS];
+	private final int[][] terminalFg = new int[TERMINAL_ROWS][TERMINAL_COLS];
+	private final int[][] terminalBg = new int[TERMINAL_ROWS][TERMINAL_COLS];
 	private volatile LayoutMode currentMode = LayoutMode.PREGAME;
 	private volatile MenuType currentMenuType = MenuType.DEFAULT;
 
@@ -356,6 +359,22 @@ public class RegionRouter implements TerminalRenderer
 	private volatile int skillsLeftCol = -1;
 	private volatile int skillsRightCol = -1;
 
+	// Anchor for the single-column fold of item menus. Recomputed each
+	// frame while in MenuType.ITEMS. itemsColSplit is the column where
+	// the right column starts; itemsFirstContentRow / itemsFoldRows
+	// define the content region. itemsLeftDest[r] / itemsRightDest[r]
+	// give the destination row in itemsView for left- and right-column
+	// content on terminal row r. Right items are inserted after each
+	// category section's left items so the fold order matches DCSS's
+	// navigation order. -1 = skip. itemsRightRowCount is the total
+	// number of right-column rows (used as footer offset).
+	private volatile int itemsColSplit = -1;
+	private volatile int itemsFirstContentRow = -1;
+	private volatile int itemsFoldRows = -1;
+	private volatile int[] itemsLeftDest;
+	private volatile int[] itemsRightDest;
+	private volatile int itemsRightRowCount;
+
 	private FontConfig fontConfig;
 	private ScrollStateListener scrollStateListener;
 	private Runnable redrawRequester;
@@ -399,6 +418,16 @@ public class RegionRouter implements TerminalRenderer
 	public void setSkillsView(RegionTermView view)
 	{
 		this.skillsView = view;
+	}
+
+	public void setItemsView(RegionTermView view)
+	{
+		this.itemsView = view;
+	}
+
+	public RegionTermView getItemsView()
+	{
+		return itemsView;
 	}
 
 	public void setQuickControlsView(View view)
@@ -717,6 +746,8 @@ public class RegionRouter implements TerminalRenderer
 			fullView.resetScroll();
 		if (skillsView != null)
 			skillsView.resetScroll();
+		if (itemsView != null)
+			itemsView.resetScroll();
 		if (quickControlsView instanceof RegionTermView)
 			((RegionTermView) quickControlsView).resetScroll();
 		RegionTermView[] ng = {
@@ -737,6 +768,9 @@ public class RegionRouter implements TerminalRenderer
 		boolean skillsVisible = !splitVisible
 				&& menuType == MenuType.SKILLS
 				&& skillsView != null;
+		boolean itemsVisible = !splitVisible
+				&& menuType == MenuType.ITEMS
+				&& itemsView != null;
 		boolean newgameSpeciesVisible = !splitVisible
 				&& menuType == MenuType.NEWGAME_SPECIES
 				&& newgameSpeciesContainer != null;
@@ -744,6 +778,7 @@ public class RegionRouter implements TerminalRenderer
 				&& menuType == MenuType.NEWGAME_BACKGROUND
 				&& newgameBackgroundContainer != null;
 		boolean fullVisible = !splitVisible && !skillsVisible
+				&& !itemsVisible
 				&& !newgameSpeciesVisible && !newgameBackgroundVisible;
 
 		// INVISIBLE (never GONE) keeps layout dimensions stable across
@@ -758,6 +793,12 @@ public class RegionRouter implements TerminalRenderer
 			// source cell, so without a clear they can show old data.
 			if (skillsVisible)
 				skillsView.clear();
+		}
+		if (itemsView != null)
+		{
+			itemsView.setVisibility(itemsVisible ? View.VISIBLE : View.INVISIBLE);
+			if (itemsVisible)
+				itemsView.clear();
 		}
 		if (splitContainer != null)
 			splitContainer.setVisibility(splitVisible ? View.VISIBLE : View.INVISIBLE);
@@ -799,9 +840,8 @@ public class RegionRouter implements TerminalRenderer
 		}
 
 		// Apply scale/scroll config to whichever menu view is now active.
-		// fullView and skillsView are mutually exclusive in non-gameplay
-		// modes; the skills menu owns skillsView, everything else owns
-		// fullView.
+		// fullView, skillsView, and itemsView are mutually exclusive in
+		// non-gameplay modes.
 		boolean scaleChanged = false;
 		RegionTermView activeMenu = null;
 		if (fontConfig != null)
@@ -810,6 +850,11 @@ public class RegionRouter implements TerminalRenderer
 			{
 				activeMenu = skillsView;
 				scaleChanged = applySkillsConfig();
+			}
+			else if (itemsVisible)
+			{
+				activeMenu = itemsView;
+				scaleChanged = applyItemsConfig();
 			}
 			else if (fullVisible && fullView != null)
 			{
@@ -844,7 +889,8 @@ public class RegionRouter implements TerminalRenderer
 		else if (newgameBackgroundVisible && newgameBackgroundContainer != null)
 			redrawTarget = newgameBackgroundContainer;
 		else if (activeMenu != null
-				&& (scaleChanged || activeMenu == skillsView))
+				&& (scaleChanged || activeMenu == skillsView
+						|| activeMenu == itemsView))
 			redrawTarget = activeMenu;
 
 		if (redrawRequester != null && redrawTarget != null)
@@ -957,10 +1003,8 @@ public class RegionRouter implements TerminalRenderer
 			vscrollable = false;
 			break;
 		case ITEMS:
-			scale = fontConfig.portraitItemsFontScale;
-			scrollable = fontConfig.portraitItemsScrollable;
-			vscrollable = fontConfig.portraitItemsVScrollable;
-			break;
+			// Should never happen — ITEMS uses itemsView. Fall through
+			// to default to be defensive.
 		case SPELLS:
 			scale = fontConfig.portraitSpellsFontScale;
 			scrollable = fontConfig.portraitSpellsScrollable;
@@ -1031,6 +1075,16 @@ public class RegionRouter implements TerminalRenderer
 		return prevScale != scale;
 	}
 
+	private boolean applyItemsConfig()
+	{
+		float scale = fontConfig.portraitItemsFontScale;
+		float prevScale = itemsView.getFontScaleMultiplier();
+		itemsView.setFontScaleMultiplier(scale);
+		itemsView.setHorizontalScrollEnabled(fontConfig.portraitItemsScrollable);
+		itemsView.setVerticalScrollEnabled(fontConfig.portraitItemsVScrollable);
+		return prevScale != scale;
+	}
+
 	@Override
 	public boolean onGameStart()
 	{
@@ -1043,9 +1097,19 @@ public class RegionRouter implements TerminalRenderer
 		skillsHeaderRow = -1;
 		skillsLeftCol = -1;
 		skillsRightCol = -1;
+		itemsColSplit = -1;
+		itemsFirstContentRow = -1;
+		itemsFoldRows = -1;
+		itemsLeftDest = null;
+		itemsRightDest = null;
+		itemsRightRowCount = 0;
 		for (int i = 0; i < TERMINAL_ROWS; i++)
 			for (int j = 0; j < TERMINAL_COLS; j++)
+			{
 				terminalShadow[i][j] = 0;
+				terminalFg[i][j] = 0;
+				terminalBg[i][j] = 0;
+			}
 
 		if (fullView != null)
 		{
@@ -1069,6 +1133,8 @@ public class RegionRouter implements TerminalRenderer
 			allOk = false;
 		if (skillsView != null && !skillsView.onGameStart())
 			allOk = false;
+		if (itemsView != null && !itemsView.onGameStart())
+			allOk = false;
 		for (RegionTermView region : splitRegions)
 		{
 			if (!region.onGameStart())
@@ -1081,7 +1147,11 @@ public class RegionRouter implements TerminalRenderer
 	public void drawPoint(int r, int c, char ch, int fcolor, int bcolor, boolean extendedErase)
 	{
 		if (r >= 0 && r < TERMINAL_ROWS && c >= 0 && c < TERMINAL_COLS)
+		{
 			terminalShadow[r][c] = ch;
+			terminalFg[r][c] = fcolor;
+			terminalBg[r][c] = bcolor;
+		}
 
 		if (fullView != null)
 			fullView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
@@ -1097,6 +1167,9 @@ public class RegionRouter implements TerminalRenderer
 
 		if (skillsView != null && currentMenuType == MenuType.SKILLS)
 			forwardToSkillsView(r, c, ch, fcolor, bcolor, extendedErase);
+
+		if (itemsView != null && currentMenuType == MenuType.ITEMS)
+			forwardToItemsView(r, c, ch, fcolor, bcolor, extendedErase);
 	}
 
 	// Set the skip flag when this storm transitions GAMEPLAY -> non-gameplay.
@@ -1210,6 +1283,230 @@ public class RegionRouter implements TerminalRenderer
 				}
 			}
 		}
+	}
+
+	// Remap the 24×80 two-column item menu layout into a 48×80 single-column
+	// view. When DCSS renders the inventory with MF_USE_TWO_COLUMNS, items
+	// are split across left (cols 0..colSplit-1) and right (cols colSplit..79)
+	// halves. This method stacks the right column underneath the left.
+	// Rules:
+	//   r < firstContentRow                       → pass through (title)
+	//   firstContentRow <= r <= firstContentRow + foldRows - 1
+	//     c < colSplit                            → pass through (left column)
+	//     c >= colSplit                           → emit at (r + foldRows, c - colSplit)
+	//   r > firstContentRow + foldRows - 1        → emit at (r + foldRows, c) (footer)
+	// If anchor not set, forward 1:1.
+	private void forwardToItemsView(int r, int c, char ch, int fcolor,
+			int bcolor, boolean extendedErase)
+	{
+		int colSplit = itemsColSplit;
+		int firstRow = itemsFirstContentRow;
+		int fold = itemsFoldRows;
+		int[] ld = itemsLeftDest;
+		int[] rd = itemsRightDest;
+		int rightCount = itemsRightRowCount;
+		if (colSplit < 0 || firstRow < 0 || fold <= 0 || ld == null)
+		{
+			itemsView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+			return;
+		}
+		if (r < firstRow)
+		{
+			itemsView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+		}
+		else if (r < firstRow + fold)
+		{
+			int rDest = (rd != null) ? rd[r] : -1;
+			if (rDest < 0 || c < colSplit)
+			{
+				// No right item on this row (heading / left-only):
+				// all columns go to leftDest. For rows with a right
+				// item, only cols < colSplit go to leftDest.
+				int dest = ld[r];
+				if (dest >= 0)
+					itemsView.drawPoint(dest, c, ch, fcolor, bcolor,
+							extendedErase);
+			}
+			else
+			{
+				itemsView.drawPoint(rDest, c - colSplit, ch, fcolor,
+						bcolor, extendedErase);
+			}
+		}
+		else
+		{
+			itemsView.drawPoint(r + rightCount, c, ch, fcolor, bcolor,
+					extendedErase);
+		}
+	}
+
+	// Scan terminalShadow to detect the two-column item menu layout and
+	// compute fold parameters. Looks for non-space content past column 35
+	// in rows 1..22 to find the column split and count content rows.
+	private void recomputeItemsAnchor()
+	{
+		int prevSplit = itemsColSplit;
+		int prevFirst = itemsFirstContentRow;
+		int prevFold = itemsFoldRows;
+
+		itemsColSplit = -1;
+		itemsFirstContentRow = -1;
+		itemsFoldRows = -1;
+
+		// Find the first row with content and the column split by scanning
+		// for the earliest non-space character past the midpoint. DCSS
+		// places the right column at m_nat_column_width (≤ 40).
+		int detectedSplit = -1;
+		int firstContent = -1;
+		int lastContent = -1;
+		for (int r = 1; r < TERMINAL_ROWS - 1; r++)
+		{
+			boolean leftHasContent = false;
+			for (int c = 0; c < 35; c++)
+			{
+				if (terminalShadow[r][c] != ' ' && terminalShadow[r][c] != 0)
+				{
+					leftHasContent = true;
+					break;
+				}
+			}
+			if (!leftHasContent)
+				continue;
+			if (firstContent < 0)
+				firstContent = r;
+			lastContent = r;
+
+			// Look for a right-column item entry on this row.
+			// Real two-column items start with " <letter> - "
+			// (indent + slot letter + separator).  Plain overflow
+			// text from long single-column names won't match.
+			if (detectedSplit < 0)
+			{
+				for (int c = 35; c < 49; c++)
+				{
+					char sc = terminalShadow[r][c];
+					if ((sc >= 'a' && sc <= 'z') || (sc >= 'A' && sc <= 'Z'))
+					{
+						char sep = terminalShadow[r][c + 2];
+							if (c + 3 < TERMINAL_COLS
+								&& terminalShadow[r][c + 1] == ' '
+								&& (sep == '-' || sep == '+')
+								&& terminalShadow[r][c + 3] == ' ')
+						{
+							// Include the leading indent space
+							detectedSplit = (c > 0
+									&& terminalShadow[r][c - 1] == ' ')
+									? c - 1 : c;
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		if (detectedSplit < 0 || firstContent < 0)
+		{
+			itemsLeftDest = null;
+			itemsRightDest = null;
+			itemsRightRowCount = 0;
+			if (prevFold > 0)
+				replayItemsFromShadow();
+			return;
+		}
+
+		// Build per-section fold maps. For each section (group of item
+		// rows between headings), right-column items are inserted
+		// immediately after that section's left-column items. This makes
+		// the fold's visual order match DCSS's navigation order.
+		int[] ld = new int[TERMINAL_ROWS];
+		int[] rd = new int[TERMINAL_ROWS];
+		java.util.Arrays.fill(ld, -1);
+		java.util.Arrays.fill(rd, -1);
+
+		int dest = firstContent;
+		int rightCount = 0;
+		int r = firstContent;
+		while (r <= lastContent)
+		{
+			if (isItemRow(r))
+			{
+				// Collect this section's rows (until heading or end)
+				java.util.List<Integer> secRightRows =
+						new java.util.ArrayList<>();
+				while (r <= lastContent && isItemRow(r))
+				{
+					ld[r] = dest++;
+					if (hasRightItemAt(r, detectedSplit))
+						secRightRows.add(r);
+					r++;
+				}
+				for (int rr : secRightRows)
+				{
+					rd[rr] = dest++;
+					rightCount++;
+				}
+			}
+			else
+			{
+				// Heading or non-item row — full width passthrough
+				ld[r] = dest++;
+				r++;
+			}
+		}
+
+		itemsColSplit = detectedSplit;
+		itemsFirstContentRow = firstContent;
+		itemsFoldRows = lastContent - firstContent + 1;
+		itemsLeftDest = ld;
+		itemsRightDest = rd;
+		itemsRightRowCount = rightCount;
+
+		if (itemsColSplit != prevSplit
+				|| itemsFirstContentRow != prevFirst
+				|| itemsFoldRows != prevFold)
+		{
+			replayItemsFromShadow();
+		}
+	}
+
+	// Item rows start with " <letter> - " (space at col 0, letter at 1,
+	// " - " at 2-4). Headings start with a capital letter at col 0.
+	private boolean isItemRow(int r)
+	{
+		if (r < 0 || r >= TERMINAL_ROWS)
+			return false;
+		char sep = terminalShadow[r][3];
+		return terminalShadow[r][0] == ' '
+				&& (sep == '-' || sep == '+')
+				&& terminalShadow[r][2] == ' '
+				&& terminalShadow[r][4] == ' ';
+	}
+
+	private boolean hasRightItemAt(int r, int colSplit)
+	{
+		for (int c = colSplit; c <= colSplit + 2
+				&& c + 3 < TERMINAL_COLS; c++)
+		{
+			char ch = terminalShadow[r][c];
+			if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'))
+			{
+				char sep2 = terminalShadow[r][c + 2];
+					if (terminalShadow[r][c + 1] == ' '
+						&& (sep2 == '-' || sep2 == '+')
+						&& terminalShadow[r][c + 3] == ' ')
+					return true;
+			}
+		}
+		return false;
+	}
+
+	private void replayItemsFromShadow()
+	{
+		itemsView.clear();
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+			for (int c = 0; c < TERMINAL_COLS; c++)
+				forwardToItemsView(r, c, terminalShadow[r][c],
+						terminalFg[r][c], terminalBg[r][c], false);
 	}
 
 	private boolean matchesAt(int row, int col, String pattern)
@@ -1428,6 +1725,17 @@ public class RegionRouter implements TerminalRenderer
 				skillsLeftCol = -1;
 				skillsRightCol = -1;
 			}
+			if (detectedType == MenuType.ITEMS)
+				recomputeItemsAnchor();
+			else
+			{
+				itemsColSplit = -1;
+				itemsFirstContentRow = -1;
+				itemsFoldRows = -1;
+				itemsLeftDest = null;
+				itemsRightDest = null;
+				itemsRightRowCount = 0;
+			}
 			final LayoutMode targetMode = detected;
 			final MenuType targetType = detectedType;
 			if (fullView != null)
@@ -1447,10 +1755,18 @@ public class RegionRouter implements TerminalRenderer
 		else if (currentMenuType == MenuType.NEWGAME_BACKGROUND && fullView != null)
 			fullView.post(() -> applyNewgameSubBounds(false));
 
+		// Recompute items fold anchor every frame while in ITEMS mode.
+		// The menu content changes when the user scrolls, switches pages,
+		// or the two-column layout toggles on/off depending on item count.
+		if (currentMenuType == MenuType.ITEMS && itemsView != null)
+			recomputeItemsAnchor();
+
 		if (fullView != null)
 			fullView.postInvalidate();
 		if (skillsView != null)
 			skillsView.postInvalidate();
+		if (itemsView != null)
+			itemsView.postInvalidate();
 		for (RegionTermView region : splitRegions)
 			region.postInvalidate();
 
@@ -1532,6 +1848,8 @@ public class RegionRouter implements TerminalRenderer
 			fullView.increaseFontSize();
 		if (skillsView != null)
 			skillsView.increaseFontSize();
+		if (itemsView != null)
+			itemsView.increaseFontSize();
 		for (RegionTermView region : splitRegions)
 			region.increaseFontSize();
 	}
@@ -1543,6 +1861,8 @@ public class RegionRouter implements TerminalRenderer
 			fullView.decreaseFontSize();
 		if (skillsView != null)
 			skillsView.decreaseFontSize();
+		if (itemsView != null)
+			itemsView.decreaseFontSize();
 		for (RegionTermView region : splitRegions)
 			region.decreaseFontSize();
 	}

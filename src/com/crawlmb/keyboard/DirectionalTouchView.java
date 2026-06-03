@@ -25,6 +25,7 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	private View messageView;
 	private RegionTermView menuView;
 	private RegionTermView skillsView;
+	private RegionTermView itemsView;
 	private RegionTermView[] extraScrollTargets = null;
 	private RegionRouter router;
 	private View activeForwardTarget = null;
@@ -150,6 +151,11 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		this.skillsView = view;
 	}
 
+	public void setItemsView(RegionTermView view)
+	{
+		this.itemsView = view;
+	}
+
 	public void setRouter(RegionRouter router)
 	{
 		this.router = router;
@@ -189,12 +195,13 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		if (e == null)
 			return null;
 		int extras = extraScrollTargets == null ? 0 : extraScrollTargets.length;
-		View[] candidates = new View[3 + extras];
+		View[] candidates = new View[4 + extras];
 		candidates[0] = messageView;
 		candidates[1] = menuView;
 		candidates[2] = skillsView;
+		candidates[3] = itemsView;
 		for (int i = 0; i < extras; i++)
-			candidates[3 + i] = extraScrollTargets[i];
+			candidates[4 + i] = extraScrollTargets[i];
 		for (View v : candidates)
 		{
 			if (v == null)
