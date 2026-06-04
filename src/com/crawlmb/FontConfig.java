@@ -56,6 +56,9 @@ public class FontConfig
     public final float portraitVfeaturesFontScale;
     public final boolean portraitVfeaturesScrollable;
     public final boolean portraitVfeaturesVScrollable;
+    public final float portraitHelpFontScale;
+    public final boolean portraitHelpScrollable;
+    public final boolean portraitHelpVScrollable;
 
     // Newgame portrait layout: each species/background category renders into
     // its own vertically-stacked panel sampled from a fixed terminal
@@ -131,6 +134,9 @@ public class FontConfig
         this.portraitVfeaturesFontScale= getFloat(props, "portrait_vfeatures_font_scale", this.portraitDefaultFontScale);
         this.portraitVfeaturesScrollable=getBool (props, "portrait_vfeatures_scrollable", this.portraitDefaultScrollable);
         this.portraitVfeaturesVScrollable=getBool(props, "portrait_vfeatures_vscrollable", this.portraitDefaultVScrollable);
+        this.portraitHelpFontScale     = getFloat(props, "portrait_help_font_scale", 1.4f);
+        this.portraitHelpScrollable    = getBool (props, "portrait_help_scrollable", this.portraitDefaultScrollable);
+        this.portraitHelpVScrollable   = getBool (props, "portrait_help_vscrollable", true);
 
         // Newgame panels. Each category gets its own knob; default each to
         // the pregame scale so the screens still render before the user has

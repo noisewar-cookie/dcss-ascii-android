@@ -26,7 +26,7 @@ public class RegionRouter implements TerminalRenderer
 	public enum MenuType
 	{
 		DEFAULT, PREGAME, MAINMENU, ITEMS, SPELLS, OVERVIEW, SKILLS,
-		RELIGION, HISCORES, TRAVEL, LEVELMAP, VFEATURES,
+		RELIGION, HISCORES, TRAVEL, LEVELMAP, VFEATURES, HELP,
 		// Newgame sub-states. Each picks a different vertically-stacked
 		// panel container (one panel per category) and per-panel scales
 		// from font_config.txt. Detected via row-0 "Welcome" + the
@@ -166,6 +166,22 @@ public class RegionRouter implements TerminalRenderer
 	// Visible Monsters/Items/Features title from _full_describe_menu in
 	// directn.cc — accessed via Ctrl+X (full_describe_view).
 	private static final String VFEATURES_PREFIX = "Visible ";
+
+	// Help screen (?). The formatted_scroller popup has no title widget;
+	// content starts at row 0. The two two-column pages are the help menu
+	// ("Dungeon Crawl Help") and the key help ("Movement:"). Both use
+	// column_composer(2, 42) — left column at positions 0-41, right at 42-79.
+	// Single-column text-file pages (Manual, Aptitudes, etc.) are navigated
+	// to from within the same popup but fall through to DEFAULT.
+	private static final String[] HELP_ROW0_PREFIXES = {
+		"Dungeon Crawl Help",
+		"Movement:",
+	};
+
+	// Fixed column split for help screens. column_composer(2, 42) pads the
+	// left column to width margin-1 = 41, so right-column text starts at
+	// terminal position 41.
+	private static final int HELP_COL_SPLIT = 41;
 
 	// Quiver action menu (Shift+Q). ActionSelectMenu in quiver.cc sets an
 	// empty MEL_TITLE, so row-0 prefix matching can't catch it. Its more
@@ -774,7 +790,7 @@ public class RegionRouter implements TerminalRenderer
 				&& menuType == MenuType.SKILLS
 				&& skillsView != null;
 		boolean itemsVisible = !splitVisible
-				&& menuType == MenuType.ITEMS
+				&& (menuType == MenuType.ITEMS || menuType == MenuType.HELP)
 				&& itemsView != null;
 		boolean newgameSpeciesVisible = !splitVisible
 				&& menuType == MenuType.NEWGAME_SPECIES
@@ -859,7 +875,8 @@ public class RegionRouter implements TerminalRenderer
 			else if (itemsVisible)
 			{
 				activeMenu = itemsView;
-				scaleChanged = applyItemsConfig();
+				scaleChanged = menuType == MenuType.HELP
+						? applyHelpConfig() : applyItemsConfig();
 			}
 			else if (fullVisible && fullView != null)
 			{
@@ -1090,6 +1107,16 @@ public class RegionRouter implements TerminalRenderer
 		return prevScale != scale;
 	}
 
+	private boolean applyHelpConfig()
+	{
+		float scale = fontConfig.portraitHelpFontScale;
+		float prevScale = itemsView.getFontScaleMultiplier();
+		itemsView.setFontScaleMultiplier(scale);
+		itemsView.setHorizontalScrollEnabled(fontConfig.portraitHelpScrollable);
+		itemsView.setVerticalScrollEnabled(fontConfig.portraitHelpVScrollable);
+		return prevScale != scale;
+	}
+
 	@Override
 	public boolean onGameStart()
 	{
@@ -1175,7 +1202,9 @@ public class RegionRouter implements TerminalRenderer
 		if (skillsView != null && currentMenuType == MenuType.SKILLS)
 			forwardToSkillsView(r, c, ch, fcolor, bcolor, extendedErase);
 
-		if (itemsView != null && currentMenuType == MenuType.ITEMS)
+		if (itemsView != null
+				&& (currentMenuType == MenuType.ITEMS
+					|| currentMenuType == MenuType.HELP))
 			forwardToItemsView(r, c, ch, fcolor, bcolor, extendedErase);
 	}
 
@@ -1588,6 +1617,126 @@ public class RegionRouter implements TerminalRenderer
 						terminalFg[r][c], terminalBg[r][c], false);
 	}
 
+	// Compute fold parameters for two-column help screens. Populates the
+	// same items* fields used by forwardToItemsView(). The column split is
+	// fixed at HELP_COL_SPLIT (42), matching column_composer(2, 42) in
+	// command.cc. Left-column content stays in place; right-column content
+	// is stacked sequentially below the last left-column row.
+	private void recomputeHelpAnchor()
+	{
+		int prevSplit = itemsColSplit;
+		int prevFirst = itemsFirstContentRow;
+		int prevFold = itemsFoldRows;
+		int[] prevLd = itemsLeftDest;
+		int[] prevRd = itemsRightDest;
+
+		itemsColSplit = -1;
+		itemsFirstContentRow = -1;
+		itemsFoldRows = -1;
+		itemsFooterStartRow = -1;
+		itemsFooterDestRow = -1;
+
+		// Scan for content rows and detect whether there's a right column.
+		int firstContent = -1;
+		int lastContent = -1;
+		boolean hasRightCol = false;
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+		{
+			boolean rowHasLeft = false;
+			boolean rowHasRight = false;
+			for (int c = 0; c < HELP_COL_SPLIT; c++)
+			{
+				if (terminalShadow[r][c] != ' ' && terminalShadow[r][c] != 0)
+				{
+					rowHasLeft = true;
+					break;
+				}
+			}
+			for (int c = HELP_COL_SPLIT; c < TERMINAL_COLS; c++)
+			{
+				if (terminalShadow[r][c] != ' ' && terminalShadow[r][c] != 0)
+				{
+					rowHasRight = true;
+					break;
+				}
+			}
+			if (rowHasLeft || rowHasRight)
+			{
+				if (firstContent < 0)
+					firstContent = r;
+				lastContent = r;
+				if (rowHasRight)
+					hasRightCol = true;
+			}
+		}
+
+		if (firstContent < 0 || !hasRightCol)
+		{
+			itemsLeftDest = null;
+			itemsRightDest = null;
+			itemsRightRowCount = 0;
+			if (prevFold > 0)
+				replayItemsFromShadow();
+			return;
+		}
+
+		// Build fold maps: left-column rows first, then right-column rows.
+		int[] ld = new int[TERMINAL_ROWS];
+		int[] rd = new int[TERMINAL_ROWS];
+		java.util.Arrays.fill(ld, -1);
+		java.util.Arrays.fill(rd, -1);
+
+		int dest = firstContent;
+		int rightCount = 0;
+
+		// Pass 1: assign left-column destinations (all content rows).
+		for (int r = firstContent; r <= lastContent; r++)
+			ld[r] = dest++;
+
+		// Pass 2: assign right-column destinations below the left block.
+		// Insert a blank spacer row before each section heading. A heading
+		// is detected as a right-column row that follows a terminal row
+		// whose right column was blank (DCSS puts blank lines between
+		// sections in the column_composer output).
+		boolean prevRightBlank = true;
+		for (int r = firstContent; r <= lastContent; r++)
+		{
+			boolean rowHasRight = false;
+			for (int c = HELP_COL_SPLIT; c < TERMINAL_COLS; c++)
+			{
+				if (terminalShadow[r][c] != ' ' && terminalShadow[r][c] != 0)
+				{
+					rowHasRight = true;
+					break;
+				}
+			}
+			if (rowHasRight)
+			{
+				if (prevRightBlank)
+					dest++;
+				rd[r] = dest++;
+				rightCount++;
+			}
+			prevRightBlank = !rowHasRight;
+		}
+
+		itemsColSplit = HELP_COL_SPLIT;
+		itemsFirstContentRow = firstContent;
+		itemsFoldRows = lastContent - firstContent + 1;
+		itemsLeftDest = ld;
+		itemsRightDest = rd;
+		itemsRightRowCount = rightCount;
+
+		if (itemsColSplit != prevSplit
+				|| itemsFirstContentRow != prevFirst
+				|| itemsFoldRows != prevFold
+				|| !java.util.Arrays.equals(ld, prevLd)
+				|| !java.util.Arrays.equals(rd, prevRd))
+		{
+			replayItemsFromShadow();
+		}
+	}
+
 	private boolean matchesAt(int row, int col, String pattern)
 	{
 		if (row < 0 || row >= TERMINAL_ROWS)
@@ -1700,6 +1849,16 @@ public class RegionRouter implements TerminalRenderer
 		if (rowContains(0, TRAVEL_TOGGLE_MARKER))
 			return MenuType.ITEMS;
 
+		// Help screen (?). The formatted_scroller popup renders two-column
+		// keybinding content starting at row 0 (no title widget). Detected
+		// before custom-rendered screens so "Dungeon Crawl Help" doesn't
+		// accidentally match a looser scan below.
+		for (String p : HELP_ROW0_PREFIXES)
+		{
+			if (rowStartsWith(0, p))
+				return MenuType.HELP;
+		}
+
 		// Level map (Shift+X). _draw_title in viewmap.cc renders
 		// "(Press ? for help)" at the right of row 0.
 		if (rowContains(0, LEVELMAP_HELP_MARKER))
@@ -1799,6 +1958,8 @@ public class RegionRouter implements TerminalRenderer
 			}
 			if (detectedType == MenuType.ITEMS)
 				recomputeItemsAnchor();
+			else if (detectedType == MenuType.HELP)
+				recomputeHelpAnchor();
 			else
 			{
 				itemsColSplit = -1;
@@ -1829,11 +1990,13 @@ public class RegionRouter implements TerminalRenderer
 		else if (currentMenuType == MenuType.NEWGAME_BACKGROUND && fullView != null)
 			fullView.post(() -> applyNewgameSubBounds(false));
 
-		// Recompute items fold anchor every frame while in ITEMS mode.
-		// The menu content changes when the user scrolls, switches pages,
+		// Recompute items/help fold anchor every frame while active.
+		// Content changes when the user scrolls, switches pages,
 		// or the two-column layout toggles on/off depending on item count.
 		if (currentMenuType == MenuType.ITEMS && itemsView != null)
 			recomputeItemsAnchor();
+		else if (currentMenuType == MenuType.HELP && itemsView != null)
+			recomputeHelpAnchor();
 
 		if (fullView != null)
 			fullView.postInvalidate();
@@ -1879,6 +2042,13 @@ public class RegionRouter implements TerminalRenderer
 		MenuType anchor = detectPregameAnchor();
 		if (anchor != null)
 			return anchor;
+		// Help screen reachable from the main menu (? before starting a
+		// game). Shares the same row-0 prefixes as the in-game path.
+		for (String p : HELP_ROW0_PREFIXES)
+		{
+			if (rowStartsWith(0, p))
+				return MenuType.HELP;
+		}
 		// Pregame fallthrough: an unrecognized non-loading screen.
 		// DEFAULT is the safe catch-all: gives the screen
 		// portraitDefaultFontScale and keeps the QC panel (gated on

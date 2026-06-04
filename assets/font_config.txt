@@ -16,9 +16,10 @@
 
 # Default Game Screens
 # Fallback for any in-game menu/info screen NOT matched by the more specific
-# groups below. Includes: help screens (?), description popups (item/monster
-# examine, lookup help ?/), message history (Ctrl+P), macros (~), and any
-# other menu without an explicit category.
+# groups below. Includes: description popups (item/monster examine, lookup
+# help ?/), message history (Ctrl+P), macros (~), single-column help pages
+# (Manual, Aptitudes, Quickstart), and any other menu without an explicit
+# category.
 # Terminal region: 80 cols x 24 rows
 portrait_default_font_scale=1.5
 portrait_default_scrollable=true
@@ -153,6 +154,15 @@ portrait_levelmap_vscrollable=true
 portrait_vfeatures_font_scale=1.6
 portrait_vfeatures_scrollable=true
 portrait_vfeatures_vscrollable=true
+
+# Help screen (?)
+# Shown during: the two-column keybinding pages — the help menu
+# ("Dungeon Crawl Help") and key help ("Movement:"). The two columns
+# (positions 0-41 and 42-79) are folded into a single tall column and
+# routed to the items view for vertical scrolling.
+portrait_help_font_scale=1.75
+portrait_help_scrollable=true
+portrait_help_vscrollable=true
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Newgame species/background screens (portrait)
