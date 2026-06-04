@@ -1,0 +1,12 @@
+diff --git a/crawl-ref/source/mutation.cc b/crawl-ref/source/mutation.cc
+index b89403bb8a..43b62ee2dc 100644
+--- a/crawl-ref/source/mutation.cc
++++ b/crawl-ref/source/mutation.cc
+@@ -1036,6 +1036,7 @@ public:
+           banes(_get_active_banes())
+     {
+         set_highlighter(nullptr);
++        set_flags(get_flags() | MF_USE_TWO_COLUMNS);
+         set_title(new MenuEntry("Innate Abilities, Weirdness & Mutations",
+                                 MEL_TITLE));
+         menu_action = ACT_EXAMINE;

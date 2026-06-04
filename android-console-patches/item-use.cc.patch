@@ -1,0 +1,11 @@
+diff --git a/crawl-ref/source/item-use.cc b/crawl-ref/source/item-use.cc
+--- a/crawl-ref/source/item-use.cc
++++ b/crawl-ref/source/item-use.cc
+@@ -366,7 +366,6 @@
+         inv_header(nullptr), floor_header(nullptr)
+ {
+     set_tag("use_item");
+-    set_flags(get_flags() & ~MF_USE_TWO_COLUMNS);
+     set_highlighter(new TempUselessnessHighlighter()); // pointer managed by Menu
+     menu_action = ACT_EXECUTE;
+     reset(oper, prompt);

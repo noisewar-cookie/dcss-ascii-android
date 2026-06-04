@@ -97,7 +97,16 @@ public class RegionTermView extends View
 	private boolean verticalScrollEnabled = false;
 	private int scrollOffsetX = 0;
 	private int scrollOffsetY = 0;
+	private int maxContentRow = -1;
 	private GestureDetector scrollDetector;
+
+	private static final int AXIS_NONE = 0;
+	private static final int AXIS_HORIZONTAL = 1;
+	private static final int AXIS_VERTICAL = 2;
+	private int lockedAxis = AXIS_NONE;
+	private float axisAccumX = 0;
+	private float axisAccumY = 0;
+	private static final float AXIS_LOCK_THRESHOLD = 10f;
 
 	public RegionTermView(Context context, int startRow, int startCol, int endRow, int endCol)
 	{
@@ -273,8 +282,29 @@ public class RegionTermView extends View
 					public boolean onScroll(MotionEvent e1, MotionEvent e2,
 							float distanceX, float distanceY)
 					{
+						boolean bothAxes = horizontalScrollEnabled
+								&& verticalScrollEnabled;
+						if (bothAxes && lockedAxis == AXIS_NONE)
+						{
+							axisAccumX += Math.abs(distanceX);
+							axisAccumY += Math.abs(distanceY);
+							if (axisAccumX >= AXIS_LOCK_THRESHOLD
+									|| axisAccumY >= AXIS_LOCK_THRESHOLD)
+							{
+								lockedAxis = axisAccumX >= axisAccumY
+										? AXIS_HORIZONTAL : AXIS_VERTICAL;
+							}
+							else
+							{
+								return true;
+							}
+						}
+						boolean scrollH = horizontalScrollEnabled
+								&& (!bothAxes || lockedAxis == AXIS_HORIZONTAL);
+						boolean scrollV = verticalScrollEnabled
+								&& (!bothAxes || lockedAxis == AXIS_VERTICAL);
 						boolean changed = false;
-						if (horizontalScrollEnabled)
+						if (scrollH)
 						{
 							int maxX = Math.max(0, canvas_width - getWidth());
 							int newX = Math.max(0,
@@ -285,9 +315,12 @@ public class RegionTermView extends View
 								changed = true;
 							}
 						}
-						if (verticalScrollEnabled)
+						if (scrollV)
 						{
-							int maxY = Math.max(0, canvas_height - getHeight());
+							int contentH = maxContentRow >= 0
+									? (int)((maxContentRow + 1) * char_height)
+									: canvas_height;
+							int maxY = Math.max(0, contentH - getHeight());
 							int newY = Math.max(0,
 									Math.min(maxY, scrollOffsetY + (int) distanceY));
 							if (newY != scrollOffsetY)
@@ -314,6 +347,14 @@ public class RegionTermView extends View
 	{
 		if (isScrollEnabled() && scrollDetector != null)
 		{
+			int action = event.getActionMasked();
+			if (action == MotionEvent.ACTION_UP
+					|| action == MotionEvent.ACTION_CANCEL)
+			{
+				lockedAxis = AXIS_NONE;
+				axisAccumX = 0;
+				axisAccumY = 0;
+			}
 			scrollDetector.onTouchEvent(event);
 			return true;
 		}
@@ -436,6 +477,9 @@ public class RegionTermView extends View
 			fore.setColor(fcolor);
 			canvas.drawText(ch + "", x, y + char_height - fore.descent(), fore);
 		}
+
+		if (ch != ' ' && ch != 0 && localR > maxContentRow)
+			maxContentRow = localR;
 	}
 
 	// Replay the mirror into the current bitmap after a recreate.
@@ -662,7 +706,10 @@ public class RegionTermView extends View
 				reportedHeight = parentLimit;
 			}
 			// Re-clamp existing offset against the new viewport size.
-			int maxY = Math.max(0, canvas_height - reportedHeight);
+			int contentH = maxContentRow >= 0
+					? (int)((maxContentRow + 1) * char_height)
+					: canvas_height;
+			int maxY = Math.max(0, contentH - reportedHeight);
 			if (scrollOffsetY > maxY)
 				scrollOffsetY = maxY;
 		}
@@ -692,6 +739,7 @@ public class RegionTermView extends View
 	{
 		synchronized (renderLock)
 		{
+			maxContentRow = -1;
 			if (cellChar != null)
 			{
 				for (int r = 0; r < mirrorRows; r++)

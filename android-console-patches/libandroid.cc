@@ -51,6 +51,7 @@ extern int main(int argc, char *argv[]);
 
 
 #define LINES 24
+#define MENU_LINES 48
 #define COLS 80
 
 // Probably a redundant conversion, since it gets converted later on,
@@ -127,7 +128,7 @@ public:
 };
 
 std::map<COLOURS, int> colourMap;
-TerminalChar terminalWindow[LINES][COLS];
+TerminalChar terminalWindow[MENU_LINES][COLS];
 std::set<TerminalChar *> dirtyTerminalChars;
 int x = 0;
 int y = 0;
@@ -143,9 +144,9 @@ void advance()
 			++y;
 			x = 0;
 		}
-		if (y >= LINES)
+		if (y >= MENU_LINES)
 		{
-			y = LINES - 1;
+			y = MENU_LINES - 1;
 		}
 }
 
@@ -255,7 +256,7 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
 void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object)
 {
 	// This needs to use the passed-in JNIEnv and jobject, since this is run from the UI thread
-	for (int i = 0; i < LINES; ++i)
+	for (int i = 0; i < MENU_LINES; ++i)
 	{
 		for (int j = 0; j < COLS; ++j)
 		{
@@ -411,7 +412,7 @@ int start_colour()
 void setUpTerminalCharacters()
 {
 	// Set up terminal window here
-	for (int i = 0; i < LINES; ++i)
+	for (int i = 0; i < MENU_LINES; ++i)
 	{
 		for (int j = 0; j < COLS; ++j)
 		{//TODO: We'd ideally initialize all this in a constructor
@@ -456,9 +457,9 @@ void crawl_quit(const char* msg)
 void advanceLine()
 {
 	y++;
-	if (y >= LINES)
+	if (y >= MENU_LINES)
 	{
-		y = LINES - 1;
+		y = MENU_LINES - 1;
 	}
 	x = 0;
 }
@@ -614,7 +615,7 @@ void clear_to_end_of_line(void)
 
 int get_number_of_lines(void)
 {
-    return (LINES);
+    return (MENU_LINES);
 }
 
 int get_number_of_cols(void)
@@ -630,7 +631,7 @@ void clrscr_sys()
 	int origY = y;
     x = 0;
     y = 0;
-    for (int i = 0; i < LINES; ++i)
+    for (int i = 0; i < MENU_LINES; ++i)
     {
 		for (int j = 0; j < COLS; ++j)
 		{

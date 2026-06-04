@@ -1,15 +1,41 @@
 diff --git a/crawl-ref/source/viewgeom.cc b/crawl-ref/source/viewgeom.cc
-index b03d1dab69..93a5bceb9f 100644
+index b03d1dab69..c461c97b35 100644
 --- a/crawl-ref/source/viewgeom.cc
 +++ b/crawl-ref/source/viewgeom.cc
-@@ -19,7 +19,9 @@
+@@ -19,7 +19,7 @@
  // define VIEW_MIN_WIDTH defined elsewhere
  // define VIEW_MAX_WIDTH use Options.view_max_width
  #define HUD_WIDTH  42
 -#define HUD_HEIGHT 13
-+// Shrunk 13 → 11: caps status-light wrap at 2 rows and shifts mlist up.
-+// HUD rows 0-10 (stats + 2 status rows), mlist rows 11-14.
 +#define HUD_HEIGHT 11
  #define MSG_MAX_HEIGHT Options.msg_max_height
  #define MLIST_MIN_HEIGHT Options.mlist_min_height
  #define MLIST_MIN_WIDTH 25  // non-inline layout only
+@@ -384,20 +384,22 @@ void crawl_view_geometry::set_player_at(const coord_def &c, bool centre)
+ void crawl_view_geometry::init_geometry()
+ {
+     termsz = coord_def(get_number_of_cols(), get_number_of_lines());
++    coord_def layout_sz = termsz;
++    layout_sz.y = min(layout_sz.y, 24);
+ 
+     // currently, webtiles has weird interactions with this logic (I think
+     // because of extra resize calls). But this is basically safe because
+     // dgamelaunch wraps terminal size and prevents smallterm.
+ #ifndef USE_TILE_LOCAL
+-    const bool smallterm = termsz.x < MIN_COLS || termsz.y < MIN_LINES;
++    const bool smallterm = layout_sz.x < MIN_COLS || layout_sz.y < MIN_LINES;
+     crawl_state.smallterm = smallterm;
+-    termsz.x = max(termsz.x, MIN_COLS);
+-    termsz.y = max(termsz.y, MIN_LINES);
++    layout_sz.x = max(layout_sz.x, MIN_COLS);
++    layout_sz.y = max(layout_sz.y, MIN_LINES);
+ #endif
+     hudsz  = coord_def(HUD_WIDTH, HUD_HEIGHT);
+ 
+-    const _inline_layout lay_inline(termsz, hudsz);
+-    const _mlist_col_layout lay_mlist(termsz, hudsz);
++    const _inline_layout lay_inline(layout_sz, hudsz);
++    const _mlist_col_layout lay_mlist(layout_sz, hudsz);
+ 
+     const _layout* winner = &lay_inline;
+     if (Options.mlist_allow_alternate_layout

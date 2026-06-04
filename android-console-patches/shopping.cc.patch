@@ -1,0 +1,12 @@
+diff --git a/crawl-ref/source/shopping.cc b/crawl-ref/source/shopping.cc
+--- a/crawl-ref/source/shopping.cc
++++ b/crawl-ref/source/shopping.cc
+@@ -1053,8 +1053,7 @@
+       can_purchase(_can_purchase)
+ {
+     menu_action = can_purchase ? ACT_EXECUTE : ACT_EXAMINE;
+-    set_flags(get_flags() & ~MF_USE_TWO_COLUMNS);
+
+     set_tag("shop");
+
+     init_entries();

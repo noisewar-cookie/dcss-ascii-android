@@ -1,0 +1,12 @@
+diff --git a/crawl-ref/source/acquire.cc b/crawl-ref/source/acquire.cc
+index abcdef1234..abcdef5678 100644
+--- a/crawl-ref/source/acquire.cc
++++ b/crawl-ref/source/acquire.cc
+@@ -1496,7 +1496,6 @@ AcquireMenu::AcquireMenu(vector<item_def>& aitems, item_def& ikey,
+ {
+     menu_action = ACT_EXECUTE;
+     action_cycle = CYCLE_TOGGLE;
+-    set_flags(get_flags() & ~MF_USE_TWO_COLUMNS);
+
+     set_tag("acquirement");
+

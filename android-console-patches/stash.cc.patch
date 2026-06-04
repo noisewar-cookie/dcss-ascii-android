@@ -1,0 +1,15 @@
+diff --git a/crawl-ref/source/stash.cc b/crawl-ref/source/stash.cc
+index fa5962c532..e1dadfb39e 100644
+--- a/crawl-ref/source/stash.cc
++++ b/crawl-ref/source/stash.cc
+@@ -1512,7 +1512,10 @@ public:
+           sort_style(sort_style_),
+           filtered(filtered_),
+           search(nullptr)
+-    { }
++    {
++        set_flags(get_flags() | MF_USE_TWO_COLUMNS);
++    }
+ 
+ public:
+     bool request_toggle_sort_method;

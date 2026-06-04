@@ -59,7 +59,7 @@ public class RegionRouter implements TerminalRenderer
 	public static final int MSG_START_COL = 0;
 	public static final int MSG_END_COL = 80;
 
-	private static final int TERMINAL_ROWS = 24;
+	private static final int TERMINAL_ROWS = 48;
 	public static final int TERMINAL_COLS = 80;
 
 	// Gameplay anchor: any HUD caption present at terminal col 37 in the HUD
@@ -143,7 +143,9 @@ public class RegionRouter implements TerminalRenderer
 		"Welcome to ",
 		"Items not yet recognised",
 		"Recognised items",
-		"You recognise all items"
+		"You recognise all items",
+		"Innate Abilities, Weirdness",
+		"Visible ",
 	};
 
 	// Catches:
@@ -154,13 +156,11 @@ public class RegionRouter implements TerminalRenderer
 	//     Vehumet's Divine Exegesis, Spellspark Servitor imbue
 	//     via SpellLibraryMenu::calc_title in spl-book.cc
 	//   "Ability - do what" / "Ability - describe what" — abilities (a)
-	//   "Innate Abilities, Weirdness" — mutations (A)
 	private static final String[] SPELLS_ROW0_PREFIXES = {
 		"Your spells",
 		"Spells (",
 		"Ability - do what",
 		"Ability - describe what",
-		"Innate Abilities, Weirdness"
 	};
 
 	// Visible Monsters/Items/Features title from _full_describe_menu in
@@ -374,6 +374,11 @@ public class RegionRouter implements TerminalRenderer
 	private volatile int[] itemsLeftDest;
 	private volatile int[] itemsRightDest;
 	private volatile int itemsRightRowCount;
+	// Footer compression: footerStartRow is the first non-blank row after
+	// a blank gap past the item content. footerDestRow is the destination
+	// row in itemsView where the footer should start (right after content).
+	private volatile int itemsFooterStartRow = -1;
+	private volatile int itemsFooterDestRow = -1;
 
 	private FontConfig fontConfig;
 	private ScrollStateListener scrollStateListener;
@@ -1103,6 +1108,8 @@ public class RegionRouter implements TerminalRenderer
 		itemsLeftDest = null;
 		itemsRightDest = null;
 		itemsRightRowCount = 0;
+		itemsFooterStartRow = -1;
+		itemsFooterDestRow = -1;
 		for (int i = 0; i < TERMINAL_ROWS; i++)
 			for (int j = 0; j < TERMINAL_COLS; j++)
 			{
@@ -1307,7 +1314,14 @@ public class RegionRouter implements TerminalRenderer
 		int rightCount = itemsRightRowCount;
 		if (colSplit < 0 || firstRow < 0 || fold <= 0 || ld == null)
 		{
-			itemsView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+			int footerStart = itemsFooterStartRow;
+			int footerDest = itemsFooterDestRow;
+			if (footerStart >= 0 && footerDest >= 0 && r >= footerStart)
+				itemsView.drawPoint(footerDest + (r - footerStart), c,
+						ch, fcolor, bcolor, extendedErase);
+			else
+				itemsView.drawPoint(r, c, ch, fcolor, bcolor,
+						extendedErase);
 			return;
 		}
 		if (r < firstRow)
@@ -1335,8 +1349,18 @@ public class RegionRouter implements TerminalRenderer
 		}
 		else
 		{
-			itemsView.drawPoint(r + rightCount, c, ch, fcolor, bcolor,
-					extendedErase);
+			int footerStart = itemsFooterStartRow;
+			int footerDest = itemsFooterDestRow;
+			if (footerStart >= 0 && footerDest >= 0 && r >= footerStart)
+			{
+				itemsView.drawPoint(footerDest + (r - footerStart), c,
+						ch, fcolor, bcolor, extendedErase);
+			}
+			else
+			{
+				itemsView.drawPoint(r + rightCount, c, ch, fcolor,
+						bcolor, extendedErase);
+			}
 		}
 	}
 
@@ -1348,6 +1372,10 @@ public class RegionRouter implements TerminalRenderer
 		int prevSplit = itemsColSplit;
 		int prevFirst = itemsFirstContentRow;
 		int prevFold = itemsFoldRows;
+		int[] prevLd = itemsLeftDest;
+		int[] prevRd = itemsRightDest;
+		int prevFooterStart = itemsFooterStartRow;
+		int prevFooterDest = itemsFooterDestRow;
 
 		itemsColSplit = -1;
 		itemsFirstContentRow = -1;
@@ -1371,7 +1399,11 @@ public class RegionRouter implements TerminalRenderer
 				}
 			}
 			if (!leftHasContent)
+			{
+				if (firstContent >= 0)
+					break;
 				continue;
+			}
 			if (firstContent < 0)
 				firstContent = r;
 			lastContent = r;
@@ -1404,12 +1436,45 @@ public class RegionRouter implements TerminalRenderer
 			}
 		}
 
+		// Detect footer rows: scan upward from the bottom of the terminal
+		// to find non-blank rows separated from item content by a gap.
+		int footerStart = -1;
+		for (int fr = TERMINAL_ROWS - 1; fr > lastContent; fr--)
+		{
+			boolean hasContent = false;
+			for (int fc = 0; fc < TERMINAL_COLS; fc++)
+			{
+				if (terminalShadow[fr][fc] != ' '
+						&& terminalShadow[fr][fc] != 0)
+				{
+					hasContent = true;
+					break;
+				}
+			}
+			if (hasContent)
+				footerStart = fr;
+		}
+
 		if (detectedSplit < 0 || firstContent < 0)
 		{
 			itemsLeftDest = null;
 			itemsRightDest = null;
 			itemsRightRowCount = 0;
-			if (prevFold > 0)
+			// Even without a fold, compress the footer gap.
+			if (footerStart >= 0 && lastContent >= 0
+					&& footerStart > lastContent + 1)
+			{
+				itemsFooterStartRow = footerStart;
+				itemsFooterDestRow = lastContent + 2;
+			}
+			else
+			{
+				itemsFooterStartRow = -1;
+				itemsFooterDestRow = -1;
+			}
+			if (prevFold > 0
+					|| itemsFooterStartRow != prevFooterStart
+					|| itemsFooterDestRow != prevFooterDest)
 				replayItemsFromShadow();
 			return;
 		}
@@ -1460,10 +1525,24 @@ public class RegionRouter implements TerminalRenderer
 		itemsLeftDest = ld;
 		itemsRightDest = rd;
 		itemsRightRowCount = rightCount;
+		if (footerStart >= 0 && footerStart > lastContent + 1)
+		{
+			itemsFooterStartRow = footerStart;
+			itemsFooterDestRow = dest + 1;
+		}
+		else
+		{
+			itemsFooterStartRow = -1;
+			itemsFooterDestRow = -1;
+		}
 
 		if (itemsColSplit != prevSplit
 				|| itemsFirstContentRow != prevFirst
-				|| itemsFoldRows != prevFold)
+				|| itemsFoldRows != prevFold
+				|| !java.util.Arrays.equals(ld, prevLd)
+				|| !java.util.Arrays.equals(rd, prevRd)
+				|| itemsFooterStartRow != prevFooterStart
+				|| itemsFooterDestRow != prevFooterDest)
 		{
 			replayItemsFromShadow();
 		}
@@ -1616,17 +1695,10 @@ public class RegionRouter implements TerminalRenderer
 			if (rowStartsWith(0, p))
 				return MenuType.SPELLS;
 		}
-		// Visible Monsters/Items/Features (Ctrl+X). Title row 0 begins with
-		// "Visible " (modulo possible indent space) — must be checked before
-		// the generic row scans below to avoid being shadowed.
-		if (rowStartsWith(0, VFEATURES_PREFIX))
-			return MenuType.VFEATURES;
-
-		// Stash search results (Ctrl+F). Row 0 contains "[toggle:" as part of
-		// the StashSearchMenu calc_title format. Cheaper than the rowContains
-		// scans below and unique to that menu.
+		// Stash search results (Ctrl+F). Row 0 contains "[toggle:" as part
+		// of the StashSearchMenu calc_title format.
 		if (rowContains(0, TRAVEL_TOGGLE_MARKER))
-			return MenuType.TRAVEL;
+			return MenuType.ITEMS;
 
 		// Level map (Shift+X). _draw_title in viewmap.cc renders
 		// "(Press ? for help)" at the right of row 0.
@@ -1735,6 +1807,8 @@ public class RegionRouter implements TerminalRenderer
 				itemsLeftDest = null;
 				itemsRightDest = null;
 				itemsRightRowCount = 0;
+				itemsFooterStartRow = -1;
+				itemsFooterDestRow = -1;
 			}
 			final LayoutMode targetMode = detected;
 			final MenuType targetType = detectedType;
