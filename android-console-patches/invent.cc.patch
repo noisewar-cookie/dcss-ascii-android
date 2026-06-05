@@ -1,22 +1,29 @@
 diff --git a/crawl-ref/source/invent.cc b/crawl-ref/source/invent.cc
-index 793664ef15..ba5f44e81a 100644
+index 793664ef15..a3354cba9d 100644
 --- a/crawl-ref/source/invent.cc
 +++ b/crawl-ref/source/invent.cc
-@@ -298,8 +298,9 @@ InvMenu::InvMenu(int mflags)
+@@ -298,8 +298,7 @@ InvMenu::InvMenu(int mflags)
          title_annotate(nullptr), cur_osel(0)
  {
      menu_action = ACT_EXAMINE; // default
 -    if (!Options.single_column_item_menus)
 -        set_flags(get_flags() | MF_USE_TWO_COLUMNS);
-+    // Android: always request two columns so the Android UI layer can fold
-+    // them into a single tall scrollable column.
 +    set_flags(get_flags() | MF_USE_TWO_COLUMNS);
  }
-
+ 
  void InvMenu::set_type(menu_type t)
-@@ -1243,8 +1244,7 @@ vector<SelItem> select_items(const vector<const item_def*> &items,
+@@ -340,7 +339,7 @@ void InvMenu::set_title(const string &s)
+             case 2: str = "Scrolls: "; break;
+             case 3: str = "Evocable Items: "; break;
+         }
+-        str += "    (Left/Right to switch category)";
++        str += "\n(Left/Right to switch category)";
+         set_title(new InvTitle(this, str, title_annotate));
+         return;
+     }
+@@ -1243,8 +1242,7 @@ vector<SelItem> select_items(const vector<const item_def*> &items,
              new_flags |= MF_SELECT_QTY;
-
+ 
          new_flags |= MF_ALLOW_FORMATTING | MF_ARROWS_SELECT;
 -        if (!Options.single_column_item_menus)
 -            new_flags |= menu.get_flags() & MF_USE_TWO_COLUMNS;
@@ -24,3 +31,13 @@ index 793664ef15..ba5f44e81a 100644
          menu.set_flags(new_flags);
          menu.show();
          selected = menu.get_selitems(true);
+@@ -1489,7 +1487,8 @@ void display_inventory()
+ 
+ static string _drop_menu_titlefn(const Menu*, const string &)
+ {
+-    return "Drop what? (Left/Right to switch category) " + slot_description() + " (_ for help)";
++    return "Drop what? " + slot_description()
++        + "\n(Left/Right to switch category) (_ for help)";
+ }
+ 
+ /**

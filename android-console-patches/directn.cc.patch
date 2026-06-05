@@ -1,0 +1,22 @@
+diff --git a/crawl-ref/source/directn.cc b/crawl-ref/source/directn.cc
+index 05963d8279..d7a53f3dbc 100644
+--- a/crawl-ref/source/directn.cc
++++ b/crawl-ref/source/directn.cc
+@@ -541,14 +541,14 @@ static coord_def _full_describe_menu(vector<monster_info> const &list_mons,
+         }
+         title = "Visible " + title;
+         if (examine_only)
+-            title += "<lightgray> (select to examine)</lightgray>";
++            title += "\n<lightgray>(select to examine)</lightgray>";
+         else
+         {
+             title_secondary = title
+-                + "<lightgray> (select to examine, "
++                + "\n<lightgray>(select to examine, "
+                 + menu_keyhelp_cmd(CMD_MENU_CYCLE_MODE)
+                 + " to " + selectverb + ")</lightgray>";
+-            title += "<lightgray> (select to " + selectverb + ", "
++            title += "\n<lightgray>(select to " + selectverb + ", "
+                 + menu_keyhelp_cmd(CMD_MENU_CYCLE_MODE)
+                 + " to examine)</lightgray>";
+         }

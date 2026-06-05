@@ -1,8 +1,8 @@
 diff --git a/crawl-ref/source/stash.cc b/crawl-ref/source/stash.cc
-index fa5962c532..e1dadfb39e 100644
+index fa5962c532..0bb7805bbb 100644
 --- a/crawl-ref/source/stash.cc
 +++ b/crawl-ref/source/stash.cc
-@@ -1512,7 +1512,10 @@ public:
+@@ -1512,7 +1512,9 @@ public:
            sort_style(sort_style_),
            filtered(filtered_),
            search(nullptr)
@@ -13,3 +13,26 @@ index fa5962c532..e1dadfb39e 100644
  
  public:
      bool request_toggle_sort_method;
+@@ -1591,16 +1593,16 @@ formatted_string StashSearchMenu::calc_title()
+     else
+     {
+         fs += formatted_string::parse_string(make_stringf(
+-            "<lightgrey>"
+-            ": <w>%s</w> [toggle: <w>!</w>],"
+-            " by <w>%s</w> [<w>/</w>],"
+-            " <w>%s</w> useless & duplicates [<w>=</w>]"
++            ":\n<lightgrey>"
++            "<w>%s</w> [toggle: <w>!</w>],"
++            " by <w>%s</w> [<w>/</w>]"
++            "</lightgrey>"
++            "\n<lightgrey>"
++            "<w>%s</w> useless & duplicates [<w>=</w>]"
+             "</lightgrey>",
+             menu_action == ACT_EXECUTE ? "travel" : "view  ",
+             sort_style, filtered));
+     }
+-    fs.cprintf(string(max(0, strwidth(prefixes[!f])-strwidth(prefixes[f])),
+-                      ' '));
+     return fs;
+ }
+ 

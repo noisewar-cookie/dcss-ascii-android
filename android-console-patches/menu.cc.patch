@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/menu.cc b/crawl-ref/source/menu.cc
-index 70e78747bf..6ef1d08b15 100644
+index 70e78747bf..319274bd4c 100644
 --- a/crawl-ref/source/menu.cc
 +++ b/crawl-ref/source/menu.cc
 @@ -500,6 +500,112 @@ void UIMenu::do_layout(int mw, int num_columns, bool just_checking)
@@ -115,7 +115,56 @@ index 70e78747bf..6ef1d08b15 100644
      for (size_t i = 0; i < m_menu->items.size(); ++i)
      {
          auto& entry = item_info[i];
-@@ -1733,7 +1839,10 @@ bool Menu::process_command(command_type cmd)
+@@ -1401,38 +1507,33 @@ string Menu::get_keyhelp(bool scrollable) const
+     {
+         navigation +=
+             menu_keyhelp_cmd(CMD_MENU_PAGE_DOWN) + " page down  "
+-            + menu_keyhelp_cmd(CMD_MENU_PAGE_UP) + " page up  ";
++            + menu_keyhelp_cmd(CMD_MENU_PAGE_UP) + " page up";
+     }
+-    if (!is_set(MF_MULTISELECT))
+-        navigation += menu_keyhelp_cmd(CMD_MENU_EXIT) + " exit";
+     navigation += "</lightgrey>";
+     if (is_set(MF_MULTISELECT))
+     {
+-        navigation = pad_more_with_esc(navigation);
+-        // XX this may not work perfectly with the way InvMenu handles
+-        // selection
+-        const auto chosen_count = selected_entries().size();
+         navigation +=
+                 "\n<lightgrey>"
+-                "Letters toggle    ";
++                "Letters toggle  ";
+         if (is_set(MF_ARROWS_SELECT))
+         {
+             navigation += menu_keyhelp_cmd(CMD_MENU_TOGGLE_SELECTED)
+-                + " toggle selected    ";
++                + " toggle selected  ";
+         }
++        const auto chosen_count = selected_entries().size();
+         if (chosen_count)
+         {
+             navigation += menu_keyhelp_cmd(CMD_MENU_ACCEPT_SELECTION)
+                 + make_stringf(
+-                    " accept (%zu chosen)"
+-                    "</lightgrey>",
++                    " accept (%zu chosen)",
+                 chosen_count);
+         }
++        navigation += "</lightgrey>";
+     }
+-    // XX this is present on non-scrolling multiselect keyhelps mostly for
+-    // aesthetic reasons, but maybe it could change with hover?
+-    // the `XXX` is replaced in the ui code with a position in the scroll.
+-    return pad_more_with(navigation, "<lightgrey>[<w>XXX</w>]</lightgrey>");
++    navigation += "\n<lightgrey>"
++        + menu_keyhelp_cmd(CMD_MENU_EXIT) + " exit  "
++        "[<w>XXX</w>]</lightgrey>";
++    return navigation;
+ }
+ 
+ // use the class's built in keyhelp string
+@@ -1733,7 +1834,10 @@ bool Menu::process_command(command_type cmd)
      case CMD_MENU_UP:
          if (is_set(MF_ARROWS_SELECT))
          {
@@ -127,7 +176,7 @@ index 70e78747bf..6ef1d08b15 100644
              if (last_hovered >= 0 && old_hover == last_hovered)
                  line_up();
          }
-@@ -1743,7 +1852,8 @@ bool Menu::process_command(command_type cmd)
+@@ -1743,7 +1847,8 @@ bool Menu::process_command(command_type cmd)
      case CMD_MENU_DOWN:
          if (is_set(MF_ARROWS_SELECT))
          {

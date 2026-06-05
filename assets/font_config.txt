@@ -16,10 +16,9 @@
 
 # Default Game Screens
 # Fallback for any in-game menu/info screen NOT matched by the more specific
-# groups below. Includes: description popups (item/monster examine, lookup
-# help ?/), message history (Ctrl+P), macros (~), single-column help pages
-# (Manual, Aptitudes, Quickstart), and any other menu without an explicit
-# category.
+# groups below. Includes: message history (Ctrl+P), macros (~),
+# single-column help pages (Manual, Aptitudes, Quickstart), and any other
+# menu without an explicit category.
 # Terminal region: 80 cols x 24 rows
 portrait_default_font_scale=1.5
 portrait_default_scrollable=true
@@ -148,12 +147,13 @@ portrait_levelmap_font_scale=2.25
 portrait_levelmap_scrollable=true
 portrait_levelmap_vscrollable=true
 
-# Visible features (Ctrl+X)
-# Shown during: the "Visible Monsters/Items/Features" target/travel menu.
-# Detected by the "Visible " prefix at the start of the title row.
-portrait_vfeatures_font_scale=1.6
-portrait_vfeatures_scrollable=true
-portrait_vfeatures_vscrollable=true
+# Description popups (item/spell/monster/feature/ability examine)
+# Shown during: any examine/describe popup regardless of entry point
+# (inventory examine, shop examine, Ctrl+X target examine, spell info, etc.)
+# Detected by the blank-row-1 CRT margin signature of show_description().
+portrait_describe_font_scale=1.6
+portrait_describe_scrollable=true
+portrait_describe_vscrollable=true
 
 # Help screen (?)
 # Shown during: the two-column keybinding pages — the help menu

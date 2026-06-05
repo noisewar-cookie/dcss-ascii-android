@@ -98,6 +98,7 @@ public class RegionTermView extends View
 	private int scrollOffsetX = 0;
 	private int scrollOffsetY = 0;
 	private int maxContentRow = -1;
+	private int maxContentCol = -1;
 	private GestureDetector scrollDetector;
 
 	private static final int AXIS_NONE = 0;
@@ -306,7 +307,10 @@ public class RegionTermView extends View
 						boolean changed = false;
 						if (scrollH)
 						{
-							int maxX = Math.max(0, canvas_width - getWidth());
+							int contentW = maxContentCol >= 0
+									? (int)((maxContentCol + 1) * char_width)
+									: canvas_width;
+							int maxX = Math.max(0, contentW - getWidth());
 							int newX = Math.max(0,
 									Math.min(maxX, scrollOffsetX + (int) distanceX));
 							if (newX != scrollOffsetX)
@@ -478,8 +482,13 @@ public class RegionTermView extends View
 			canvas.drawText(ch + "", x, y + char_height - fore.descent(), fore);
 		}
 
-		if (ch != ' ' && ch != 0 && localR > maxContentRow)
-			maxContentRow = localR;
+		if (ch != ' ' && ch != 0)
+		{
+			if (localR > maxContentRow)
+				maxContentRow = localR;
+			if (localC > maxContentCol)
+				maxContentCol = localC;
+		}
 	}
 
 	// Replay the mirror into the current bitmap after a recreate.
@@ -740,6 +749,7 @@ public class RegionTermView extends View
 		synchronized (renderLock)
 		{
 			maxContentRow = -1;
+			maxContentCol = -1;
 			if (cellChar != null)
 			{
 				for (int r = 0; r < mirrorRows; r++)

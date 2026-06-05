@@ -26,7 +26,7 @@ public class RegionRouter implements TerminalRenderer
 	public enum MenuType
 	{
 		DEFAULT, PREGAME, MAINMENU, ITEMS, SPELLS, OVERVIEW, SKILLS,
-		RELIGION, HISCORES, TRAVEL, LEVELMAP, VFEATURES, HELP,
+		RELIGION, HISCORES, TRAVEL, LEVELMAP, DESCRIBE, HELP,
 		// Newgame sub-states. Each picks a different vertically-stacked
 		// panel container (one panel per category) and per-panel scales
 		// from font_config.txt. Detected via row-0 "Welcome" + the
@@ -162,10 +162,6 @@ public class RegionRouter implements TerminalRenderer
 		"Ability - do what",
 		"Ability - describe what",
 	};
-
-	// Visible Monsters/Items/Features title from _full_describe_menu in
-	// directn.cc — accessed via Ctrl+X (full_describe_view).
-	private static final String VFEATURES_PREFIX = "Visible ";
 
 	// Help screen (?). The formatted_scroller popup has no title widget;
 	// content starts at row 0. The two two-column pages are the help menu
@@ -367,13 +363,19 @@ public class RegionRouter implements TerminalRenderer
 	// title. The cut threshold (which side of the fold a char belongs to)
 	// is skillsRightCol; the shift applied to col 1 chars to align them
 	// under col 0 is (skillsRightCol - skillsLeftCol), which equals
-	// MIN_COLS/2 = 39 in practice. The two values must come from the same
-	// detection so the col-shift stays consistent with the cut. -1 = anchor
-	// unknown (pre-detection or detection failed) → drawPoint forwards to
-	// skillsView 1:1 as a fallback.
+	// MIN_COLS/2 = 39 in practice. -1 = anchor unknown → drawPoint
+	// forwards to skillsView 1:1 as a fallback.
 	private volatile int skillsHeaderRow = -1;
 	private volatile int skillsLeftCol = -1;
 	private volatile int skillsRightCol = -1;
+	// Compact row mappings: destination row for each source skill row in
+	// the left/right columns. -1 = blank row, skip. Built by
+	// recomputeSkillsAnchor() to eliminate blank-line dividers within
+	// each column, keeping only one divider between the two column
+	// sections and one before the help/button block.
+	private volatile int[] skillsLeftDest;
+	private volatile int[] skillsRightDest;
+	private volatile int skillsBottomStart = -1;
 
 	// Anchor for the single-column fold of item menus. Recomputed each
 	// frame while in MenuType.ITEMS. itemsColSplit is the column where
@@ -1057,10 +1059,10 @@ public class RegionRouter implements TerminalRenderer
 			scrollable = fontConfig.portraitLevelmapScrollable;
 			vscrollable = fontConfig.portraitLevelmapVScrollable;
 			break;
-		case VFEATURES:
-			scale = fontConfig.portraitVfeaturesFontScale;
-			scrollable = fontConfig.portraitVfeaturesScrollable;
-			vscrollable = fontConfig.portraitVfeaturesVScrollable;
+		case DESCRIBE:
+			scale = fontConfig.portraitDescribeFontScale;
+			scrollable = fontConfig.portraitDescribeScrollable;
+			vscrollable = fontConfig.portraitDescribeVScrollable;
 			break;
 		case NEWGAME_NAME:
 			scale = fontConfig.portraitNewgameNameFontScale;
@@ -1223,32 +1225,23 @@ public class RegionRouter implements TerminalRenderer
 				(currentMode == LayoutMode.GAMEPLAY) && !isGameplay;
 	}
 
-	// Remap the 24x80 two-column skills layout into a 41x80 single-column
-	// view. Uses the cached anchor (skillsHeaderRow, skillsLeftCol,
-	// skillsRightCol). The cut threshold for which column a char belongs to
-	// is skillsRightCol; the col-shift applied to col-1 chars is
-	// (skillsRightCol - skillsLeftCol). These differ — the right column's
-	// title is at col 41 but its content is offset 39 from the left column's
-	// content, because col_split=MIN_COLS/2=39 and both columns share the
-	// same x++ indent before placement.
-	// Rules:
-	//   r < headerRow                                  → pass through
-	//   r == headerRow, c <  rightCol                  → pass through (left header)
-	//   r == headerRow, c >= rightCol                  → drop (redundant right header)
-	//   headerRow < r <= headerRow + SKILL_FOLD_ROWS
-	//     c <  rightCol                                → pass through (col 0 skill)
-	//     c >= rightCol                                → emit at (r+fold, c-(rightCol-leftCol))
-	//   r > headerRow + SKILL_FOLD_ROWS                → emit at (r+fold, c)
-	//                                                    (help/button rows span full width)
-	// If the anchor isn't set yet, forward 1:1 — the destination view will
-	// be repainted once the anchor resolves on the next frame.
+	// Remap the 24x80 two-column skills layout into a compact
+	// single-column view. Uses the cached anchor and the compact row
+	// mappings built by recomputeSkillsAnchor(). Blank-line dividers
+	// within each column are skipped; one divider row is inserted
+	// between the two column sections and one before the help/button
+	// block.
 	private void forwardToSkillsView(int r, int c, char ch, int fcolor,
 			int bcolor, boolean extendedErase)
 	{
 		int headerRow = skillsHeaderRow;
 		int leftCol = skillsLeftCol;
 		int rightCol = skillsRightCol;
-		if (headerRow < 0 || leftCol < 0 || rightCol < 0)
+		int[] ld = skillsLeftDest;
+		int[] rd = skillsRightDest;
+		int bottom = skillsBottomStart;
+		if (headerRow < 0 || leftCol < 0 || rightCol < 0
+				|| ld == null || rd == null || bottom < 0)
 		{
 			skillsView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
 			return;
@@ -1266,29 +1259,54 @@ public class RegionRouter implements TerminalRenderer
 		}
 		else if (r <= headerRow + fold)
 		{
+			int idx = r - headerRow - 1;
 			if (c < rightCol)
-				skillsView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+			{
+				int dest = ld[idx];
+				if (dest >= 0)
+					skillsView.drawPoint(dest, c, ch, fcolor, bcolor,
+							extendedErase);
+			}
 			else
-				skillsView.drawPoint(r + fold, c - colShift, ch, fcolor,
-						bcolor, extendedErase);
+			{
+				int dest = rd[idx];
+				if (dest >= 0)
+					skillsView.drawPoint(dest, c - colShift, ch, fcolor,
+							bcolor, extendedErase);
+			}
 		}
 		else
 		{
-			skillsView.drawPoint(r + fold, c, ch, fcolor, bcolor, extendedErase);
+			int offset = r - (headerRow + fold + 1);
+			skillsView.drawPoint(bottom + offset, c, ch, fcolor,
+					bcolor, extendedErase);
 		}
 	}
 
+	private boolean isSkillHalfBlank(int row, int colStart, int colEnd)
+	{
+		if (row < 0 || row >= TERMINAL_ROWS)
+			return true;
+		for (int c = colStart; c < colEnd && c < TERMINAL_COLS; c++)
+		{
+			char ch = terminalShadow[row][c];
+			if (ch != 0 && ch != ' ')
+				return false;
+		}
+		return true;
+	}
+
 	// Scan rows 0..3 for the literal SKILL_HEADER text. If two matches
-	// land on the same row, store both column positions: skillsLeftCol is
-	// the start of the first occurrence (col-0 title), skillsRightCol is
-	// the start of the second (col-1 title). The col-shift for the fold
-	// is the difference between them. Otherwise leave the anchor unset
-	// (-1, -1, -1) and fall back to 1:1 forwarding.
+	// land on the same row, store both column positions and build compact
+	// row mappings that eliminate blank-line dividers within each column.
 	private void recomputeSkillsAnchor()
 	{
 		skillsHeaderRow = -1;
 		skillsLeftCol = -1;
 		skillsRightCol = -1;
+		skillsLeftDest = null;
+		skillsRightDest = null;
+		skillsBottomStart = -1;
 		int patLen = SKILL_HEADER.length();
 		for (int r = 0; r <= 3; r++)
 		{
@@ -1307,18 +1325,57 @@ public class RegionRouter implements TerminalRenderer
 				if (!ok)
 					continue;
 				if (firstCol < 0)
-				{
 					firstCol = c;
-				}
 				else
 				{
 					skillsHeaderRow = r;
 					skillsLeftCol = firstCol;
 					skillsRightCol = c;
+					buildSkillsCompactMap();
 					return;
 				}
 			}
 		}
+	}
+
+	// Build compact destination-row arrays that skip blank rows within
+	// each column, inserting one divider between the two column sections
+	// and one before the help/button block.
+	private void buildSkillsCompactMap()
+	{
+		int fold = SKILL_FOLD_ROWS;
+		int hdr = skillsHeaderRow;
+		int rCol = skillsRightCol;
+
+		int[] leftDest = new int[fold];
+		int[] rightDest = new int[fold];
+		int destRow = hdr + 1;
+
+		for (int i = 0; i < fold; i++)
+		{
+			int srcRow = hdr + 1 + i;
+			if (isSkillHalfBlank(srcRow, 0, rCol))
+				leftDest[i] = -1;
+			else
+				leftDest[i] = destRow++;
+		}
+
+		destRow++;
+
+		for (int i = 0; i < fold; i++)
+		{
+			int srcRow = hdr + 1 + i;
+			if (isSkillHalfBlank(srcRow, rCol, TERMINAL_COLS))
+				rightDest[i] = -1;
+			else
+				rightDest[i] = destRow++;
+		}
+
+		destRow++;
+
+		skillsLeftDest = leftDest;
+		skillsRightDest = rightDest;
+		skillsBottomStart = destRow;
 	}
 
 	// Remap the 24×80 two-column item menu layout into a 48×80 single-column
@@ -1905,6 +1962,14 @@ public class RegionRouter implements TerminalRenderer
 			if (rowContains(r, "Apt "))
 				return MenuType.SKILLS;
 		}
+
+		// Description popups (item/spell/monster/feature/ability examine).
+		// All use show_description() or equivalent with a title widget at
+		// the top and set_margin_for_crt(0, 0, 1, 0), producing: row 0 =
+		// title, row 1 = blank margin, row 2+ = description body.
+		if (!rowIsBlank(0) && rowIsBlank(1) && !rowIsBlank(2))
+			return MenuType.DESCRIBE;
+
 		return MenuType.DEFAULT;
 	}
 

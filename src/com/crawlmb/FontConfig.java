@@ -53,9 +53,9 @@ public class FontConfig
     public final float portraitLevelmapFontScale;
     public final boolean portraitLevelmapScrollable;
     public final boolean portraitLevelmapVScrollable;
-    public final float portraitVfeaturesFontScale;
-    public final boolean portraitVfeaturesScrollable;
-    public final boolean portraitVfeaturesVScrollable;
+    public final float portraitDescribeFontScale;
+    public final boolean portraitDescribeScrollable;
+    public final boolean portraitDescribeVScrollable;
     public final float portraitHelpFontScale;
     public final boolean portraitHelpScrollable;
     public final boolean portraitHelpVScrollable;
@@ -131,9 +131,9 @@ public class FontConfig
         this.portraitLevelmapFontScale = getFloat(props, "portrait_levelmap_font_scale", this.portraitDefaultFontScale);
         this.portraitLevelmapScrollable= getBool (props, "portrait_levelmap_scrollable", this.portraitDefaultScrollable);
         this.portraitLevelmapVScrollable=getBool (props, "portrait_levelmap_vscrollable", this.portraitDefaultVScrollable);
-        this.portraitVfeaturesFontScale= getFloat(props, "portrait_vfeatures_font_scale", this.portraitDefaultFontScale);
-        this.portraitVfeaturesScrollable=getBool (props, "portrait_vfeatures_scrollable", this.portraitDefaultScrollable);
-        this.portraitVfeaturesVScrollable=getBool(props, "portrait_vfeatures_vscrollable", this.portraitDefaultVScrollable);
+        this.portraitDescribeFontScale = getFloat(props, "portrait_describe_font_scale", this.portraitDefaultFontScale);
+        this.portraitDescribeScrollable= getBool (props, "portrait_describe_scrollable", this.portraitDefaultScrollable);
+        this.portraitDescribeVScrollable=getBool (props, "portrait_describe_vscrollable", true);
         this.portraitHelpFontScale     = getFloat(props, "portrait_help_font_scale", 1.4f);
         this.portraitHelpScrollable    = getBool (props, "portrait_help_scrollable", this.portraitDefaultScrollable);
         this.portraitHelpVScrollable   = getBool (props, "portrait_help_vscrollable", true);
