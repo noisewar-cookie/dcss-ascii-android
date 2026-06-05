@@ -129,11 +129,15 @@ public class CrawlKeyboardWrapper implements CrawlKeyboardView.OnKeyboardActionL
 		}
        	else
 		{
-			c = (char)primaryCode;			
+			c = (char)primaryCode;
 			if(virtualKeyboardView.getKeyboard() == virtualKeyboardQwerty && virtualKeyboardView.isShifted())
 			{
 				c = Character.toUpperCase(c);
 				virtualKeyboardView.setShifted(false);
+			}
+			else if(virtualKeyboardView.getKeyboard() == virtualKeyboardSymbolsShift)
+			{
+				virtualKeyboardView.setKeyboard(virtualKeyboardQwerty, KeyboardType.QWERTY);
 			}
 		}
 		if(c != 0)
