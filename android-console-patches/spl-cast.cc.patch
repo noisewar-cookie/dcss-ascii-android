@@ -1,0 +1,29 @@
+diff --git a/crawl-ref/source/spl-cast.cc b/crawl-ref/source/spl-cast.cc
+index e8401543d6..6b306d8fde 100644
+--- a/crawl-ref/source/spl-cast.cc
++++ b/crawl-ref/source/spl-cast.cc
+@@ -290,9 +290,9 @@ int list_spells(bool toggle_with_I, bool transient, bool viewing,
+     spell_menu.add_toggle_from_command(CMD_MENU_CYCLE_MODE);
+     spell_menu.add_toggle_from_command(CMD_MENU_CYCLE_MODE_REVERSE);
+ 
+-    string more_str = make_stringf("<lightgrey>Select a spell to %s</lightgrey>",
++    string more_str = "\n"
++        + make_stringf("<lightgrey>Select a spell to %s</lightgrey>",
+         real_action.c_str());
+-    string help_desc = make_stringf("   [<w>?</w>] help    ");
+     string toggle_desc = menu_keyhelp_cmd(CMD_MENU_CYCLE_MODE);
+     if (toggle_with_I)
+     {
+@@ -301,7 +301,11 @@ int list_spells(bool toggle_with_I, bool transient, bool viewing,
+         toggle_desc += "/[<w>I</w>]";
+     }
+     toggle_desc += " toggle spell headers";
+-    more_str = pad_more_with_esc(more_str + help_desc + toggle_desc);
++    more_str += "\n<lightgrey>[<w>?</w>] help  "
++                + toggle_desc + "</lightgrey>";
++    more_str += "\n<lightgrey>"
++                + string(menu_keyhelp_cmd(CMD_MENU_EXIT))
++                + " exit</lightgrey>";
+     spell_menu.set_more(formatted_string::parse_string(more_str));
+     // TODO: should allow toggling between execute and examine
+     spell_menu.menu_action = viewing ? Menu::ACT_EXAMINE : Menu::ACT_EXECUTE;

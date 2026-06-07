@@ -154,6 +154,7 @@ public class RegionTermView extends View
 
 	public int getStartCol() { return startCol; }
 	public int getEndCol() { return endCol; }
+	public int getEndRow() { return endRow; }
 
 	// Set per-row col shift for drawPoint. Length must equal regionRows;
 	// pass null to clear. See rowColShift field comment.

@@ -1,15 +1,38 @@
 diff --git a/crawl-ref/source/known-items.cc b/crawl-ref/source/known-items.cc
-index ccd19e2e06..eda9e28ac0 100644
+index ccd19e2e06..43644f33c2 100644
 --- a/crawl-ref/source/known-items.cc
 +++ b/crawl-ref/source/known-items.cc
-@@ -139,43 +139,45 @@ protected:
-                     + menu_keyhelp_cmd(CMD_MENU_PAGE_UP) + " page up  ";
-             }
-             navigation += "[<w>-</w>] recognised  "
+@@ -126,56 +126,52 @@ protected:
+         return Menu::process_key(key);
+     }
+ 
+-    string get_keyhelp(bool scrollable) const override
++    bool process_command(command_type cmd) override
++    {
++        if (cmd == CMD_MENU_PAGE_DOWN || cmd == CMD_MENU_PAGE_UP)
++            return true;
++        return Menu::process_command(cmd);
++    }
++
++    string get_keyhelp(bool) const override
+     {
+         string navigation;
+         if (is_set(MF_NOSELECT))
+         {
+-            navigation = "<lightgrey>";
+-            if (scrollable)
+-            {
+-                navigation +=
+-                    menu_keyhelp_cmd(CMD_MENU_PAGE_DOWN) + " page down  "
+-                    + menu_keyhelp_cmd(CMD_MENU_PAGE_UP) + " page up  ";
+-            }
+-            navigation += "[<w>-</w>] recognised  "
 -                            + menu_keyhelp_cmd(CMD_MENU_EXIT) + " exit"
 -                            "</lightgrey>";
-+                            + menu_keyhelp_cmd(CMD_MENU_EXIT) + " exit  "
-+                            "[<w>XXX</w>]</lightgrey>";
++            navigation = "<lightgrey>"
++                "[<w>-</w>] recognised  "
++                            + menu_keyhelp_cmd(CMD_MENU_EXIT)
++                            + " exit</lightgrey>";
          }
          else
          {
@@ -18,21 +41,17 @@ index ccd19e2e06..eda9e28ac0 100644
 -            navigation = "<lightgrey>" + menu_keyhelp_select_keys()
 -                         + " select  ";
 -
-+            navigation = "<lightgrey>"
-+                + menu_keyhelp_select_keys()
-+                + " select</lightgrey>";
-             if (scrollable)
-             {
+-            if (scrollable)
+-            {
 -                navigation +=
 -                    menu_keyhelp_cmd(CMD_MENU_PAGE_DOWN) + " page down  "
 -                    + menu_keyhelp_cmd(CMD_MENU_PAGE_UP) + " page up  ";
-+                navigation += "\n<lightgrey>"
-+                    + menu_keyhelp_cmd(CMD_MENU_PAGE_DOWN) + " page down  "
-+                    + menu_keyhelp_cmd(CMD_MENU_PAGE_UP)
-+                    + " page up</lightgrey>";
-             }
+-            }
 -            navigation += "</lightgrey>";
 -            navigation = pad_more_with_esc(navigation);
++            navigation = "<lightgrey>"
++                + menu_keyhelp_select_keys()
++                + " select</lightgrey>";
              navigation +=
 -                    "\n<lightgrey>"
 -                    "Letters toggle autopickup  ";
@@ -59,7 +78,7 @@ index ccd19e2e06..eda9e28ac0 100644
              }
 +            navigation += "\n<lightgrey>"
 +                + menu_keyhelp_cmd(CMD_MENU_EXIT)
-+                + " exit  [<w>XXX</w>]</lightgrey>";
++                + " exit</lightgrey>";
          }
  
 -        return pad_more_with(navigation,
@@ -68,7 +87,7 @@ index ccd19e2e06..eda9e28ac0 100644
      }
  
      bool all_items_known;
-@@ -504,14 +506,14 @@ void check_item_knowledge(bool unknown_items)
+@@ -504,14 +500,14 @@ void check_item_knowledge(bool unknown_items)
      if (unknown_items)
          stitle = "Items not yet recognised:";
      else if (!all_items_known)

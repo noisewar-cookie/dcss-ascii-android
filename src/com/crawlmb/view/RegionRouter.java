@@ -398,6 +398,14 @@ public class RegionRouter implements TerminalRenderer
 	private volatile int itemsFooterStartRow = -1;
 	private volatile int itemsFooterDestRow = -1;
 
+	// Generic footer compression for fullView menus (SPELLS, etc.).
+	// When the DCSS "more" widget renders keyhelp past row 23 (fullView's
+	// endRow), these remap footer rows to just after the last content row
+	// so they're visible without scrolling.
+	private volatile int fullViewFooterStart = -1;
+	private volatile int fullViewFooterDest = -1;
+	private volatile int fullViewLastOverflow = -1;
+
 	private FontConfig fontConfig;
 	private ScrollStateListener scrollStateListener;
 	private Runnable redrawRequester;
@@ -1079,11 +1087,11 @@ public class RegionRouter implements TerminalRenderer
 			vscrollable = fontConfig.portraitDefaultVScrollable;
 			break;
 		}
+		int endRow = (type == MenuType.SPELLS) ? TERMINAL_ROWS : 28;
+		fullView.setRegionRows(0, endRow);
 		float prevScale = fullView.getFontScaleMultiplier();
 		fullView.setFontScaleMultiplier(scale);
 		fullView.setHorizontalScrollEnabled(scrollable);
-		// Drag-scroll only takes effect when the rendered bitmap exceeds
-		// the screen in that axis — at smaller font scales this is a no-op.
 		fullView.setVerticalScrollEnabled(vscrollable);
 		return prevScale != scale;
 	}
@@ -1139,6 +1147,9 @@ public class RegionRouter implements TerminalRenderer
 		itemsRightRowCount = 0;
 		itemsFooterStartRow = -1;
 		itemsFooterDestRow = -1;
+		fullViewFooterStart = -1;
+		fullViewFooterDest = -1;
+		fullViewLastOverflow = -1;
 		for (int i = 0; i < TERMINAL_ROWS; i++)
 			for (int j = 0; j < TERMINAL_COLS; j++)
 			{
@@ -1190,7 +1201,7 @@ public class RegionRouter implements TerminalRenderer
 		}
 
 		if (fullView != null)
-			fullView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+			forwardToFullView(r, c, ch, fcolor, bcolor, extendedErase);
 		// Skip splitRegions during a gameplay->menu transition storm: the
 		// new frame's chars belong to a menu, and forwarding them at
 		// terminal coordinates into mapView/hudView/msgView would tear the
@@ -1794,6 +1805,126 @@ public class RegionRouter implements TerminalRenderer
 		}
 	}
 
+	// Scan terminalShadow for keyhelp/footer rows that fall past row 23.
+	// When the DCSS "more" widget renders past that boundary, compress
+	// the footer to right after the last content row. applyMode handles
+	// the endRow expansion on the UI thread; this method only sets the
+	// remap coordinates used by forwardToFullView.
+	private void recomputeFullViewFooter()
+	{
+		int prevStart = fullViewFooterStart;
+		int prevDest = fullViewFooterDest;
+		int prevOverflow = fullViewLastOverflow;
+		fullViewFooterStart = -1;
+		fullViewFooterDest = -1;
+		fullViewLastOverflow = -1;
+
+		int lastContent = -1;
+		for (int r = 0; r < 24; r++)
+		{
+			for (int c = 0; c < TERMINAL_COLS; c++)
+			{
+				if (terminalShadow[r][c] != ' ' && terminalShadow[r][c] != 0)
+				{
+					lastContent = r;
+					break;
+				}
+			}
+		}
+
+		// Find the contiguous non-blank block at the very bottom of the
+		// terminal. Scan upward from row 47 and stop at the first blank
+		// row. This isolates the real keyhelp footer from overflow menu
+		// content that may spill past row 23 when the spell list is long.
+		int footerStart = -1;
+		int footerEnd = -1;
+		for (int r = TERMINAL_ROWS - 1; r >= 24; r--)
+		{
+			boolean hasContent = false;
+			for (int c = 0; c < TERMINAL_COLS; c++)
+			{
+				if (terminalShadow[r][c] != ' ' && terminalShadow[r][c] != 0)
+				{
+					hasContent = true;
+					break;
+				}
+			}
+			if (hasContent)
+			{
+				if (footerEnd < 0)
+					footerEnd = r;
+				footerStart = r;
+			}
+			else if (footerEnd >= 0)
+			{
+				break;
+			}
+		}
+
+		if (footerStart >= 0 && lastContent >= 0)
+		{
+			// Find the last overflow content row between row 24 and the
+			// footer. These are spell-list items that spill past the
+			// default 24-row boundary.
+			int lastOverflow = -1;
+			for (int r = footerStart - 1; r >= 24; r--)
+			{
+				for (int c = 0; c < TERMINAL_COLS; c++)
+				{
+					if (terminalShadow[r][c] != ' ' && terminalShadow[r][c] != 0)
+					{
+						lastOverflow = r;
+						break;
+					}
+				}
+				if (lastOverflow >= 0)
+					break;
+			}
+
+			fullViewFooterStart = footerStart;
+			fullViewLastOverflow = lastOverflow;
+			if (lastOverflow >= 0)
+				fullViewFooterDest = lastOverflow + 1;
+			else
+				fullViewFooterDest = lastContent + 1;
+		}
+
+		if (fullViewFooterStart != prevStart
+				|| fullViewFooterDest != prevDest
+				|| fullViewLastOverflow != prevOverflow)
+		{
+			replayFullViewFromShadow();
+		}
+	}
+
+	private void replayFullViewFromShadow()
+	{
+		if (fullView == null)
+			return;
+		fullView.clear();
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+			for (int c = 0; c < TERMINAL_COLS; c++)
+				forwardToFullView(r, c, terminalShadow[r][c],
+						terminalFg[r][c], terminalBg[r][c], false);
+	}
+
+	private void forwardToFullView(int r, int c, char ch, int fcolor,
+			int bcolor, boolean extendedErase)
+	{
+		int fStart = fullViewFooterStart;
+		int fDest = fullViewFooterDest;
+		int lastOv = fullViewLastOverflow;
+		if (fStart >= 0 && fDest >= 0 && r >= fStart)
+			fullView.drawPoint(fDest + (r - fStart), c,
+					ch, fcolor, bcolor, extendedErase);
+		else if (fStart >= 0 && r >= 24 && r <= lastOv)
+			fullView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+		else if (fStart >= 0 && r >= 24)
+			return;
+		else
+			fullView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+	}
+
 	private boolean matchesAt(int row, int col, String pattern)
 	{
 		if (row < 0 || row >= TERMINAL_ROWS)
@@ -2036,6 +2167,9 @@ public class RegionRouter implements TerminalRenderer
 				itemsFooterStartRow = -1;
 				itemsFooterDestRow = -1;
 			}
+			fullViewFooterStart = -1;
+			fullViewFooterDest = -1;
+			fullViewLastOverflow = -1;
 			final LayoutMode targetMode = detected;
 			final MenuType targetType = detectedType;
 			if (fullView != null)
@@ -2062,6 +2196,16 @@ public class RegionRouter implements TerminalRenderer
 			recomputeItemsAnchor();
 		else if (currentMenuType == MenuType.HELP && itemsView != null)
 			recomputeHelpAnchor();
+
+		// Compress fullView footer for menus whose keyhelp renders past
+		// row 23. ITEMS/HELP/SKILLS use their own views; GAMEPLAY and
+		// PREGAME don't have keyhelp footers.
+		if (detected == LayoutMode.MENU
+				&& detectedType != MenuType.ITEMS
+				&& detectedType != MenuType.HELP
+				&& detectedType != MenuType.SKILLS
+				&& fullView != null)
+			recomputeFullViewFooter();
 
 		if (fullView != null)
 			fullView.postInvalidate();

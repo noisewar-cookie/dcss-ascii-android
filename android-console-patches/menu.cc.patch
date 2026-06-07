@@ -115,7 +115,7 @@ index 70e78747bf..319274bd4c 100644
      for (size_t i = 0; i < m_menu->items.size(); ++i)
      {
          auto& entry = item_info[i];
-@@ -1401,38 +1507,33 @@ string Menu::get_keyhelp(bool scrollable) const
+@@ -1401,38 +1507,32 @@ string Menu::get_keyhelp(bool scrollable) const
      {
          navigation +=
              menu_keyhelp_cmd(CMD_MENU_PAGE_DOWN) + " page down  "
@@ -158,8 +158,7 @@ index 70e78747bf..319274bd4c 100644
 -    // the `XXX` is replaced in the ui code with a position in the scroll.
 -    return pad_more_with(navigation, "<lightgrey>[<w>XXX</w>]</lightgrey>");
 +    navigation += "\n<lightgrey>"
-+        + menu_keyhelp_cmd(CMD_MENU_EXIT) + " exit  "
-+        "[<w>XXX</w>]</lightgrey>";
++        + menu_keyhelp_cmd(CMD_MENU_EXIT) + " exit</lightgrey>";
 +    return navigation;
  }
  

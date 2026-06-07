@@ -1,0 +1,27 @@
+diff --git a/crawl-ref/source/spl-book.cc b/crawl-ref/source/spl-book.cc
+index ab3036167b..4931651a21 100644
+--- a/crawl-ref/source/spl-book.cc
++++ b/crawl-ref/source/spl-book.cc
+@@ -611,13 +611,17 @@ private:
+                  : current_action == action::hide
+                             ? act + "|Describe|<w>Hide</w>|Show"
+                  : act + "|Describe|Hide|<w>Show</w>");
+-        desc << "   " << menu_keyhelp_cmd(CMD_MENU_SEARCH) << " search"
+-                "   [<w>?</w>] help"; // XX hardcoded for this menu
++        desc << "\n<lightgrey>"
++             << menu_keyhelp_cmd(CMD_MENU_SEARCH) << " search"
++                "  [<w>?</w>] help"; // XX hardcoded for this menu
+ 
+         if (search_text.size())
+-            return pad_more_with(desc.str(), "[<w>Esc</w>] clear"); // esc is hardcoded for this case
+-        else
+-            return pad_more_with_esc(desc.str());
++            desc << "  [<w>Esc</w>] clear";
++
++        desc << "</lightgrey>"
++             << "\n<lightgrey>"
++             << menu_keyhelp_cmd(CMD_MENU_EXIT) << " exit</lightgrey>";
++        return desc.str();
+     }
+ 
+     bool cycle_mode(bool forward) override
