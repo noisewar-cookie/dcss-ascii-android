@@ -1,0 +1,35 @@
+diff --git a/crawl-ref/source/quiver.cc b/crawl-ref/source/quiver.cc
+index a03a16a36c..62f30fa002 100644
+--- a/crawl-ref/source/quiver.cc
++++ b/crawl-ref/source/quiver.cc
+@@ -2453,22 +2453,23 @@ namespace quiver
+ 
+         string get_keyhelp(bool) const override
+         {
+-            string s = more_message + "\n";
++            string s = more_message + "\n<lightgrey>";
+ 
+             if (any_items)
+                 s += "[<w>*/%</w>] inventory  ";
+             if (any_spells)
+-                s += "[<w>&</w>] all spells  ";
++                s += "[<w>&</w>] all spells";
+             if (any_abilities)
+-                s += "[<w>^</w>] all abilities  ";
++                s += "\n[<w>^</w>] all abilities";
+ 
+-
+-            string mode = make_stringf("%s focus mode: %s",
++            s += make_stringf("\n%s focus mode: %s",
+                 menu_keyhelp_cmd(CMD_MENU_CYCLE_MODE).c_str(),
+                 focus_mode == Focus::NONE ? "<w>off</w>|on"
+-                                          : "off|<w>on</w>");;
++                                          : "off|<w>on</w>");
+ 
+-            return pad_more_with(s, mode);
++            s += "\n" + menu_keyhelp_cmd(CMD_MENU_EXIT)
++                + " exit</lightgrey>";
++            return s;
+         }
+ 
+     protected:

@@ -1,7 +1,16 @@
 diff --git a/crawl-ref/source/spl-book.cc b/crawl-ref/source/spl-book.cc
-index ab3036167b..4931651a21 100644
+index ab3036167b..33cd6eb839 100644
 --- a/crawl-ref/source/spl-book.cc
 +++ b/crawl-ref/source/spl-book.cc
+@@ -568,7 +568,7 @@ private:
+                 you.magic_points);
+         }
+         else
+-            desc << spell_levels_str;
++            desc << spell_levels_str << "\n";
+ 
+         // divine exegesis doesn't have space
+         if (hidden_count && (!you.divine_exegesis || !search_text.size()))
 @@ -611,13 +611,17 @@ private:
                   : current_action == action::hide
                              ? act + "|Describe|<w>Hide</w>|Show"

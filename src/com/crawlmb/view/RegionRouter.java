@@ -456,19 +456,9 @@ public class RegionRouter implements TerminalRenderer
 		this.itemsView = view;
 	}
 
-	public RegionTermView getItemsView()
-	{
-		return itemsView;
-	}
-
 	public void setQuickControlsView(View view)
 	{
 		this.quickControlsView = view;
-	}
-
-	public RegionTermView getSkillsView()
-	{
-		return skillsView;
 	}
 
 	public void setSplitContainer(ViewGroup container)
@@ -1832,12 +1822,14 @@ public class RegionRouter implements TerminalRenderer
 			}
 		}
 
-		// Find the contiguous non-blank block at the very bottom of the
-		// terminal. Scan upward from row 47 and stop at the first blank
-		// row. This isolates the real keyhelp footer from overflow menu
-		// content that may spill past row 23 when the spell list is long.
+		// Find the footer block at the bottom of the terminal. Scan
+		// upward from row 47, tolerating small gaps (<=3 blank rows)
+		// so that spacer lines within set_more() text don't split
+		// the footer. The gap between overflow content and the footer
+		// is always much larger (>10 rows).
 		int footerStart = -1;
 		int footerEnd = -1;
+		int blankRun = 0;
 		for (int r = TERMINAL_ROWS - 1; r >= 24; r--)
 		{
 			boolean hasContent = false;
@@ -1854,10 +1846,13 @@ public class RegionRouter implements TerminalRenderer
 				if (footerEnd < 0)
 					footerEnd = r;
 				footerStart = r;
+				blankRun = 0;
 			}
 			else if (footerEnd >= 0)
 			{
-				break;
+				blankRun++;
+				if (blankRun > 3)
+					break;
 			}
 		}
 

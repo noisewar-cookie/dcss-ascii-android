@@ -1,0 +1,17 @@
+diff --git a/crawl-ref/source/ability.cc b/crawl-ref/source/ability.cc
+index 3e2d5945a6..26b1141f1e 100644
+--- a/crawl-ref/source/ability.cc
++++ b/crawl-ref/source/ability.cc
+@@ -4192,8 +4192,10 @@ int choose_ability_menu(const vector<talent>& talents)
+     else
+     {
+         abil_menu.set_more(formatted_string::parse_string(
+-            menu_keyhelp_cmd(CMD_MENU_HELP) + " toggle "
+-                       "between ability selection and description."));
++            "\n" + menu_keyhelp_cmd(CMD_MENU_HELP) + " toggle "
++                       "between ability selection and description."
++            "\n<lightgrey>" + menu_keyhelp_cmd(CMD_MENU_EXIT)
++                       + " exit</lightgrey>"));
+     }
+ 
+     int numbers[52];

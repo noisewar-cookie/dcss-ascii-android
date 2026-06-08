@@ -1,19 +1,12 @@
 diff --git a/crawl-ref/source/known-items.cc b/crawl-ref/source/known-items.cc
-index ccd19e2e06..43644f33c2 100644
+index ccd19e2e06..0083c7c2c6 100644
 --- a/crawl-ref/source/known-items.cc
 +++ b/crawl-ref/source/known-items.cc
-@@ -126,56 +126,52 @@ protected:
+@@ -126,56 +126,45 @@ protected:
          return Menu::process_key(key);
      }
- 
+
 -    string get_keyhelp(bool scrollable) const override
-+    bool process_command(command_type cmd) override
-+    {
-+        if (cmd == CMD_MENU_PAGE_DOWN || cmd == CMD_MENU_PAGE_UP)
-+            return true;
-+        return Menu::process_command(cmd);
-+    }
-+
 +    string get_keyhelp(bool) const override
      {
          string navigation;
@@ -49,7 +42,7 @@ index ccd19e2e06..43644f33c2 100644
 -            }
 -            navigation += "</lightgrey>";
 -            navigation = pad_more_with_esc(navigation);
-+            navigation = "<lightgrey>"
++            navigation = "\n<lightgrey>"
 +                + menu_keyhelp_select_keys()
 +                + " select</lightgrey>";
              navigation +=
@@ -80,14 +73,14 @@ index ccd19e2e06..43644f33c2 100644
 +                + menu_keyhelp_cmd(CMD_MENU_EXIT)
 +                + " exit</lightgrey>";
          }
- 
+
 -        return pad_more_with(navigation,
 -                            "<lightgrey>[<w>XXX</w>]</lightgrey>", MIN_COLS);
 +        return navigation;
      }
- 
+
      bool all_items_known;
-@@ -504,14 +500,14 @@ void check_item_knowledge(bool unknown_items)
+@@ -504,14 +493,14 @@ void check_item_knowledge(bool unknown_items)
      if (unknown_items)
          stitle = "Items not yet recognised:";
      else if (!all_items_known)
@@ -96,7 +89,7 @@ index ccd19e2e06..43644f33c2 100644
      else
 -        stitle = "You recognise all items. (Select to toggle autopickup)";
 +        stitle = "You recognise all items.";
- 
+
 -    string prompt = "(_ for help)";
 -    //TODO: when the menu is opened, the text is not justified properly.
 -    stitle = stitle + string(max(0, MIN_COLS - strwidth(stitle + prompt)),
@@ -105,6 +98,6 @@ index ccd19e2e06..43644f33c2 100644
 +        stitle += "\n(Select to toggle autopickup)  (_ for help)";
 +    else
 +        stitle += "\n(_ for help)";
- 
+
      menu.set_preselect(&selected_items);
      menu_letter ml;

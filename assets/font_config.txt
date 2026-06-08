@@ -121,7 +121,7 @@ portrait_overview_scrollable=true
 # screen taller; vertical scrolling is needed at most font scales.
 # - portrait_skills_scrollable: enable horizontal drag (when content > width)
 # - portrait_skills_vscrollable: enable vertical drag (when content > height)
-portrait_skills_font_scale=1.6
+portrait_skills_font_scale=1.75
 portrait_skills_scrollable=true
 portrait_skills_vscrollable=false
 
