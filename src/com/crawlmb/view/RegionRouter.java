@@ -810,6 +810,45 @@ public class RegionRouter implements TerminalRenderer
 				&& !itemsVisible
 				&& !newgameSpeciesVisible && !newgameBackgroundVisible;
 
+		// Apply scale/scroll config BEFORE visibility changes. When
+		// fullView transitions INVISIBLE→VISIBLE, its bitmap may hold
+		// content drawn at a stale font scale (gameplay-era storms wrote
+		// into it even while invisible). Applying the scale first lets
+		// setFontScaleMultiplier → requestLayout → onMeasure recreate
+		// the bitmap at the correct scale in the same layout pass that
+		// makes the view visible, avoiding a one-frame flash of
+		// misaligned ghost chars from the old scale. If the scale
+		// changes, clearBitmap hides the stale pixels immediately so
+		// even a mid-pass draw sees black rather than wrong-scale text.
+		boolean scaleChanged = false;
+		RegionTermView activeMenu = null;
+		if (fontConfig != null)
+		{
+			if (!splitVisible && menuType == MenuType.SKILLS
+					&& skillsView != null)
+			{
+				activeMenu = skillsView;
+				scaleChanged = applySkillsConfig();
+			}
+			else if (!splitVisible
+					&& (menuType == MenuType.ITEMS
+						|| menuType == MenuType.HELP)
+					&& itemsView != null)
+			{
+				activeMenu = itemsView;
+				scaleChanged = menuType == MenuType.HELP
+						? applyHelpConfig() : applyItemsConfig();
+			}
+			else if (fullVisible && fullView != null)
+			{
+				activeMenu = fullView;
+				scaleChanged = applyFullConfig(menuType);
+				if (scaleChanged
+						&& fullView.getVisibility() != View.VISIBLE)
+					fullView.clearBitmap();
+			}
+		}
+
 		// INVISIBLE (never GONE) keeps layout dimensions stable across
 		// transitions, which prevents the bleedthrough seen previously.
 		if (fullView != null)
@@ -866,31 +905,6 @@ public class RegionRouter implements TerminalRenderer
 		{
 			applyNewgameBackgroundBounds();
 			applyNewgameSubBounds(false);
-		}
-
-		// Apply scale/scroll config to whichever menu view is now active.
-		// fullView, skillsView, and itemsView are mutually exclusive in
-		// non-gameplay modes.
-		boolean scaleChanged = false;
-		RegionTermView activeMenu = null;
-		if (fontConfig != null)
-		{
-			if (skillsVisible)
-			{
-				activeMenu = skillsView;
-				scaleChanged = applySkillsConfig();
-			}
-			else if (itemsVisible)
-			{
-				activeMenu = itemsView;
-				scaleChanged = menuType == MenuType.HELP
-						? applyHelpConfig() : applyItemsConfig();
-			}
-			else if (fullVisible && fullView != null)
-			{
-				activeMenu = fullView;
-				scaleChanged = applyFullConfig(menuType);
-			}
 		}
 
 		if (scrollStateListener != null)
@@ -1893,10 +1907,14 @@ public class RegionRouter implements TerminalRenderer
 
 			fullViewFooterStart = footerStart;
 			fullViewLastOverflow = lastOverflow;
+			// +2 (not +1) leaves a 1-row spacer between content and the
+			// remapped footer, matching itemsView's footer compression
+			// (recomputeItemsAnchor uses lastContent+2). Without this the
+			// "more" prompt sits flush against the last list row.
 			if (lastOverflow >= 0)
-				fullViewFooterDest = lastOverflow + 1;
+				fullViewFooterDest = lastOverflow + 2;
 			else
-				fullViewFooterDest = lastContent + 1;
+				fullViewFooterDest = lastContent + 2;
 		}
 
 		if (fullViewFooterStart != prevStart
@@ -2063,10 +2081,13 @@ public class RegionRouter implements TerminalRenderer
 			return MenuType.LEVELMAP;
 
 		// Custom-rendered screens — scan distinctive markers across rows.
-		// Hiscores: title widget renders "<game name>: High Scores" near top.
-		for (int r = 0; r <= 3; r++)
+		// Hiscores: title widget renders "<game name>: High Scores" near
+		// top. The death/quit screen (end.cc) renders "Best Crawlers"
+		// as its leaderboard header — same screen, different trigger.
+		for (int r = 0; r <= 8; r++)
 		{
-			if (rowContains(r, "High Scores"))
+			if (rowContains(r, "High Scores")
+					|| rowContains(r, "Best Crawlers"))
 				return MenuType.HISCORES;
 		}
 		// Overview (%): _get_overview_progress emits "Turns:" at the start

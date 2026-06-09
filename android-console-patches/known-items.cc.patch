@@ -1,11 +1,11 @@
 diff --git a/crawl-ref/source/known-items.cc b/crawl-ref/source/known-items.cc
-index ccd19e2e06..0083c7c2c6 100644
+index ccd19e2e06..3f0a820aef 100644
 --- a/crawl-ref/source/known-items.cc
 +++ b/crawl-ref/source/known-items.cc
-@@ -126,56 +126,45 @@ protected:
+@@ -126,56 +126,48 @@ protected:
          return Menu::process_key(key);
      }
-
+ 
 -    string get_keyhelp(bool scrollable) const override
 +    string get_keyhelp(bool) const override
      {
@@ -22,7 +22,7 @@ index ccd19e2e06..0083c7c2c6 100644
 -            navigation += "[<w>-</w>] recognised  "
 -                            + menu_keyhelp_cmd(CMD_MENU_EXIT) + " exit"
 -                            "</lightgrey>";
-+            navigation = "<lightgrey>"
++            navigation = "\n<lightgrey>"
 +                "[<w>-</w>] recognised  "
 +                            + menu_keyhelp_cmd(CMD_MENU_EXIT)
 +                            + " exit</lightgrey>";
@@ -42,13 +42,18 @@ index ccd19e2e06..0083c7c2c6 100644
 -            }
 -            navigation += "</lightgrey>";
 -            navigation = pad_more_with_esc(navigation);
-+            navigation = "\n<lightgrey>"
-+                + menu_keyhelp_select_keys()
-+                + " select</lightgrey>";
-             navigation +=
+-            navigation +=
 -                    "\n<lightgrey>"
 -                    "Letters toggle autopickup  ";
-+                "\n<lightgrey>Letters toggle autopickup</lightgrey>";
++            navigation = "\n<lightgrey>Letters toggle autopickup</lightgrey>";
++            navigation += "\n<lightgrey>"
++                + menu_keyhelp_select_keys()
++                + " select</lightgrey>";
++            navigation += "\n<lightgrey>"
++                + menu_keyhelp_cmd(CMD_MENU_PAGE_DOWN)
++                + " page down  "
++                + menu_keyhelp_cmd(CMD_MENU_PAGE_UP)
++                + " page up</lightgrey>";
              if (is_set(MF_ARROWS_SELECT))
              {
 -                navigation += menu_keyhelp_cmd(CMD_MENU_TOGGLE_SELECTED)
@@ -64,8 +69,8 @@ index ccd19e2e06..0083c7c2c6 100644
 -            if (!all_items_known)
 +            else if (!all_items_known)
              {
-                 navigation +=
-+                    "\n<lightgrey>"
+-                navigation +=
++                navigation += "\n<lightgrey>"
                      "[<w>-</w>] unrecognised"
                      "</lightgrey>";
              }
@@ -73,31 +78,10 @@ index ccd19e2e06..0083c7c2c6 100644
 +                + menu_keyhelp_cmd(CMD_MENU_EXIT)
 +                + " exit</lightgrey>";
          }
-
+ 
 -        return pad_more_with(navigation,
 -                            "<lightgrey>[<w>XXX</w>]</lightgrey>", MIN_COLS);
 +        return navigation;
      }
-
+ 
      bool all_items_known;
-@@ -504,14 +493,14 @@ void check_item_knowledge(bool unknown_items)
-     if (unknown_items)
-         stitle = "Items not yet recognised:";
-     else if (!all_items_known)
--        stitle = "Recognised items. (Select to toggle autopickup)";
-+        stitle = "Recognised items.";
-     else
--        stitle = "You recognise all items. (Select to toggle autopickup)";
-+        stitle = "You recognise all items.";
-
--    string prompt = "(_ for help)";
--    //TODO: when the menu is opened, the text is not justified properly.
--    stitle = stitle + string(max(0, MIN_COLS - strwidth(stitle + prompt)),
--                             ' ') + prompt;
-+    if (!unknown_items)
-+        stitle += "\n(Select to toggle autopickup)  (_ for help)";
-+    else
-+        stitle += "\n(_ for help)";
-
-     menu.set_preselect(&selected_items);
-     menu_letter ml;

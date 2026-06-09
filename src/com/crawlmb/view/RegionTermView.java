@@ -787,4 +787,22 @@ public class RegionTermView extends View
 			}
 		}
 	}
+
+	// Paint the bitmap black without wiping the mirror. The next
+	// onMeasure/repaintAllFromMirrorLocked redraws the mirror content at
+	// the (possibly new) font scale, so the correct picture is restored
+	// as soon as the layout pass completes. Use this to hide stale-scale
+	// pixels during an INVISIBLE→VISIBLE transition where the font scale
+	// is about to change.
+	public void clearBitmap()
+	{
+		synchronized (renderLock)
+		{
+			if (canvas != null)
+			{
+				back.setColor(Color.BLACK);
+				canvas.drawPaint(back);
+			}
+		}
+	}
 }
