@@ -324,7 +324,7 @@ index 3c3bfb8186..24302e8edf 100644
      cursor_control coff(false);
      textcolour(LIGHTGREY);
  
-@@ -1559,66 +1618,82 @@ void print_stats()
+@@ -1559,66 +1618,112 @@ void print_stats()
      else if (you.redraw_magic_points)
          _print_stats_mp(1, 4);
  
@@ -439,13 +439,44 @@ index 3c3bfb8186..24302e8edf 100644
 -        _print_stats_qv(11 - rows_hidden);
 +        _print_stats_qv(9 - rows_hidden);
  
-     if (you.redraw_status_lights)
+-    if (you.redraw_status_lights)
 -        _print_status_lights(12 - rows_hidden);
-+        _print_status_lights(10 - rows_hidden);
++    if (you.redraw_status_lights)
++    {
++        extern void android_send_status_lights(
++            const char** texts, const int* colours, int count);
++        vector<status_light> lights;
++        _get_status_lights(lights);
++        const int n = (int)lights.size();
++        if (n > 0)
++        {
++            const char** texts = new const char*[n];
++            int* cols = new int[n];
++            for (int i = 0; i < n; i++)
++            {
++                texts[i] = lights[i].text.c_str();
++                cols[i] = (int)lights[i].colour;
++            }
++            android_send_status_lights(texts, cols, n);
++            delete[] texts;
++            delete[] cols;
++        }
++        else
++            android_send_status_lights(nullptr, nullptr, 0);
++
++        const int sl_y = 10 - rows_hidden;
++        for (int row = sl_y; row <= sl_y + 1
++                && row <= (int)crawl_view.hudsz.y; row++)
++        {
++            CGOTOXY(1, row, GOTO_STAT);
++            clear_to_end_of_line();
++        }
++        you.redraw_status_lights = false;
++    }
  
  #ifndef USE_TILE_LOCAL
      assert_valid_cursor_pos();
-@@ -1627,23 +1702,13 @@ void print_stats()
+@@ -1627,23 +1732,13 @@ void print_stats()
  
  void print_stats_level()
  {
@@ -474,7 +505,7 @@ index 3c3bfb8186..24302e8edf 100644
  }
  
  void draw_border()
-@@ -1655,33 +1720,28 @@ void draw_border()
+@@ -1655,33 +1750,28 @@ void draw_border()
  
      textcolour(Options.status_caption_colour);
  
@@ -526,7 +557,7 @@ index 3c3bfb8186..24302e8edf 100644
  }
  
  #ifndef USE_TILE_LOCAL
-@@ -2171,15 +2231,10 @@ static string _overview_screen_title(int sw)
+@@ -2171,15 +2261,10 @@ static string _overview_screen_title(int sw)
                                        species::name(you.species).c_str(),
                                        get_job_name(you.char_class));
  
@@ -543,7 +574,7 @@ index 3c3bfb8186..24302e8edf 100644
  
      if (linelength >= sw)
      {
-@@ -2191,22 +2246,13 @@ static string _overview_screen_title(int sw)
+@@ -2191,22 +2276,13 @@ static string _overview_screen_title(int sw)
  
      // Still not enough?
      if (linelength >= sw)
@@ -566,7 +597,7 @@ index 3c3bfb8186..24302e8edf 100644
      text += "</yellow>\n";
  
      return text;
-@@ -2296,15 +2342,15 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2296,15 +2372,15 @@ static vector<formatted_string> _get_overview_stats()
  {
      formatted_string entry;
  
@@ -585,7 +616,7 @@ index 3c3bfb8186..24302e8edf 100644
  
      entry.textcolour(HUD_CAPTION_COLOUR);
      if (player_drained())
-@@ -2423,6 +2469,24 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2423,6 +2499,24 @@ static vector<formatted_string> _get_overview_stats()
      cols.add_formatted(2, entry.to_colour_string(), false);
      entry.clear();
  
@@ -610,7 +641,7 @@ index 3c3bfb8186..24302e8edf 100644
      entry.textcolour(HUD_CAPTION_COLOUR);
      entry.cprintf("XL:     ");
  
-@@ -2438,7 +2502,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2438,7 +2532,7 @@ static vector<formatted_string> _get_overview_stats()
          entry.cprintf("%d%%", get_exp_progress());
      }
  
@@ -619,7 +650,7 @@ index 3c3bfb8186..24302e8edf 100644
      entry.clear();
  
      entry.textcolour(HUD_CAPTION_COLOUR);
-@@ -2453,7 +2517,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2453,7 +2547,7 @@ static vector<formatted_string> _get_overview_stats()
  #endif
      entry += formatted_string::parse_string(godpowers);
  
@@ -628,7 +659,7 @@ index 3c3bfb8186..24302e8edf 100644
      entry.clear();
  
      if (!you.has_mutation(MUT_INNATE_CASTER))
-@@ -2465,7 +2529,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2465,7 +2559,7 @@ static vector<formatted_string> _get_overview_stats()
          entry.cprintf("%d/%d levels left",
                        player_spell_levels(), player_total_spell_levels());
  
@@ -637,7 +668,7 @@ index 3c3bfb8186..24302e8edf 100644
          entry.clear();
      }
  
-@@ -2483,11 +2547,11 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2483,11 +2577,11 @@ static vector<formatted_string> _get_overview_stats()
          entry.textcolour(HUD_VALUE_COLOUR);
          entry.cprintf("%d", you.deaths);
  
@@ -651,7 +682,7 @@ index 3c3bfb8186..24302e8edf 100644
  }
  
  // generator of resistance strings:
-@@ -2658,6 +2722,10 @@ void print_overview_screen()
+@@ -2658,6 +2752,10 @@ void print_overview_screen()
          overview.add_formatted_string(bline, true);
      overview.add_text("\n");
  
@@ -662,7 +693,7 @@ index 3c3bfb8186..24302e8edf 100644
      {
          vector<formatted_string> blines =
              _get_overview_resistances(overview.equip_chars, num_cols);
-@@ -2683,6 +2751,13 @@ string dump_overview_screen()
+@@ -2683,6 +2781,13 @@ string dump_overview_screen()
      }
      text += "\n";
  

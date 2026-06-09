@@ -139,6 +139,15 @@ public class NativeWrapper
 		}
 	}
 
+	public void updateStatusLights(String texts, int[] colours)
+	{
+		synchronized (display_lock)
+		{
+			if (renderer != null)
+				renderer.updateStatusLights(texts, colours);
+		}
+	}
+
 	// Ask DCSS to repaint the current screen state. Used after a font scale
 	// change recreates the underlying bitmap (which is then blank): DCSS
 	// re-issues drawPoint calls for every cell, refilling the new bitmap.

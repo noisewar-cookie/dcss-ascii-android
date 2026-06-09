@@ -109,6 +109,7 @@ static jmethodID NativeWrapper_getch;
 static jmethodID NativeWrapper_printTerminalChar;
 static jmethodID NativeWrapper_invalidateTerminal;
 static jmethodID NativeWrapper_preStormHint;
+static jmethodID NativeWrapper_updateStatusLights;
 
 // Terminal stuff
 class TerminalChar //I guess this could be a struct.
@@ -185,12 +186,15 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"invalidateTerminal", "()V");
 	NativeWrapper_preStormHint = e->GetMethodID(NativeWrapperClass,
 		"preStormHint", "(Z)V");
+	NativeWrapper_updateStatusLights = e->GetMethodID(NativeWrapperClass,
+		"updateStatusLights", "(Ljava/lang/String;[I)V");
 
 	return NativeWrapper_fatal
 		&& NativeWrapper_getch
 		&& NativeWrapper_printTerminalChar
 		&& NativeWrapper_invalidateTerminal
-		&& NativeWrapper_preStormHint;
+		&& NativeWrapper_preStormHint
+		&& NativeWrapper_updateStatusLights;
 }
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/)
@@ -328,6 +332,54 @@ void sendTerminalToScreen()
 	}
 	JAVA_CALL(NativeWrapper_invalidateTerminal);
 	dirtyTerminalChars.clear();
+}
+
+void android_send_status_lights(const char** texts, const int* colours,
+	int count)
+{
+	if (count <= 0 || !texts || !colours)
+	{
+		jstring empty = env->NewStringUTF("");
+		jintArray arr = env->NewIntArray(0);
+		if (!empty || !arr)
+		{
+			env->ExceptionClear();
+			if (empty) env->DeleteLocalRef(empty);
+			if (arr) env->DeleteLocalRef(arr);
+			return;
+		}
+		JAVA_CALL(NativeWrapper_updateStatusLights, empty, arr);
+		env->DeleteLocalRef(empty);
+		env->DeleteLocalRef(arr);
+		return;
+	}
+	std::string joined;
+	jint* argb = new jint[count];
+	for (int i = 0; i < count; i++)
+	{
+		if (i > 0)
+			joined += '\t';
+		if (texts[i])
+			joined += texts[i];
+		argb[i] = colourMap[(COLOURS)(colours[i] & 0x0f)];
+	}
+	jstring jtext = env->NewStringUTF(joined.c_str());
+	jintArray jcolours = env->NewIntArray(count);
+	if (!jtext || !jcolours)
+	{
+		env->ExceptionClear();
+		delete[] argb;
+		if (jtext) env->DeleteLocalRef(jtext);
+		if (jcolours) env->DeleteLocalRef(jcolours);
+		return;
+	}
+	env->SetIntArrayRegion(jcolours, 0, count, argb);
+	delete[] argb;
+	JAVA_CALL(NativeWrapper_updateStatusLights, jtext, jcolours);
+	if (env->ExceptionCheck())
+		env->ExceptionClear();
+	env->DeleteLocalRef(jtext);
+	env->DeleteLocalRef(jcolours);
 }
 
 int getchk()

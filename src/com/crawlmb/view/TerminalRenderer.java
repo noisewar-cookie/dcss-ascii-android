@@ -20,4 +20,6 @@ public interface TerminalRenderer
 	// split panels on a gameplay->menu transition). Default is no-op for
 	// renderers that don't care (e.g. landscape TermView).
 	default void preStormHint(boolean isGameplay) {}
+
+	default void updateStatusLights(String texts, int[] colours) {}
 }

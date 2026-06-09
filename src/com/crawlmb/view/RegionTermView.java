@@ -308,9 +308,7 @@ public class RegionTermView extends View
 						boolean changed = false;
 						if (scrollH)
 						{
-							int contentW = maxContentCol >= 0
-									? (int)((maxContentCol + 1) * char_width)
-									: canvas_width;
+							int contentW = computeContentWidth();
 							int maxX = Math.max(0, contentW - getWidth());
 							int newX = Math.max(0,
 									Math.min(maxX, scrollOffsetX + (int) distanceX));
@@ -364,6 +362,28 @@ public class RegionTermView extends View
 			return true;
 		}
 		return super.onTouchEvent(event);
+	}
+
+	private int computeContentWidth()
+	{
+		synchronized (renderLock)
+		{
+			if (cellChar == null)
+				return canvas_width;
+			int maxCol = -1;
+			for (int r = 0; r < mirrorRows; r++)
+			{
+				for (int c = mirrorCols - 1; c > maxCol; c--)
+				{
+					if (cellChar[r][c] != 0 && cellChar[r][c] != ' ')
+					{
+						maxCol = c;
+						break;
+					}
+				}
+			}
+			return maxCol >= 0 ? (int)((maxCol + 1) * char_width) : 0;
+		}
 	}
 
 	public void setCenterHorizontally(boolean center)

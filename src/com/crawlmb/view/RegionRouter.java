@@ -43,9 +43,11 @@ public class RegionRouter implements TerminalRenderer
 
 	// 0-based region boundaries for the 80x24 inline layout
 	public static final int HUD_START_ROW = 0;
-	// Trimmed 17 → 15: rows 1-10 stats/wp/qv, 11-14 status lights.
-	// Frees 2 rows for the map; overflow past row 14 is clipped.
-	public static final int HUD_END_ROW = 15;
+	// Stats only: rows 0-8 (stats/wp/qv). Status-light terminal rows
+	// (9-10) are suppressed — the native StatusBarView replaces them.
+	public static final int HUD_END_ROW = 9;
+	public static final int MLIST_START_ROW = 11;
+	public static final int MLIST_END_ROW = 15;
 	public static final int HUD_START_COL = 37;
 	public static final int HUD_END_COL = 80;
 
@@ -287,6 +289,7 @@ public class RegionRouter implements TerminalRenderer
 	// GameActivity from assets/quick_controls.txt.
 	private View quickControlsView;
 	private ViewGroup splitContainer;
+	private StatusBarView statusBarView;
 	// Newgame panel containers. Each holds a vertical stack of
 	// RegionTermViews — those panels are also added to splitRegions so
 	// drawPoint forwards into their fixed terminal rectangles. The
@@ -459,6 +462,11 @@ public class RegionRouter implements TerminalRenderer
 	public void setQuickControlsView(View view)
 	{
 		this.quickControlsView = view;
+	}
+
+	public void setStatusBarView(StatusBarView view)
+	{
+		this.statusBarView = view;
 	}
 
 	public void setSplitContainer(ViewGroup container)
@@ -1224,6 +1232,13 @@ public class RegionRouter implements TerminalRenderer
 	{
 		skipSplitRegionsThisStorm =
 				(currentMode == LayoutMode.GAMEPLAY) && !isGameplay;
+	}
+
+	@Override
+	public void updateStatusLights(String texts, int[] colours)
+	{
+		if (statusBarView != null)
+			statusBarView.post(() -> statusBarView.updateLights(texts, colours));
 	}
 
 	// Remap the 24x80 two-column skills layout into a compact

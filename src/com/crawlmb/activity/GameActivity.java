@@ -22,6 +22,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
@@ -68,6 +69,7 @@ import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
+import com.crawlmb.view.StatusBarView;
 import com.crawlmb.view.TerminalRenderer;
 import com.crawlmb.view.TermView;
 
@@ -95,6 +97,7 @@ public class GameActivity extends Activity
 	private RegionTermView portraitSkillsView = null;
 	private RegionTermView portraitItemsView = null;
 	private RegionTermView portraitMapView = null;
+	private StatusBarView portraitStatusBar = null;
 	private FontConfig portraitFontConfig = null;
 	private RegionRouter portraitRouter = null;
 	private RegionTermView[] portraitExtraScrollTargets = null;
@@ -605,10 +608,11 @@ public class GameActivity extends Activity
 		gamePanel.addView(itemsView, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
-		// msg anchored to bottom, hud above msg, map fills the remaining
-		// gap from the top. Only the map/HUD seam can overlap; the
-		// onGlobalLayout listener below shrinks map font to resolve it.
+		// Stack bottom-to-top: msg → mlist → statusBar → hud → map.
+		// The onGlobalLayout listener below shrinks map font if the
+		// panels overflow the available height.
 		RelativeLayout splitContainer = new RelativeLayout(this);
+		splitContainer.setBackgroundColor(Color.BLACK);
 		splitContainer.setVisibility(View.INVISIBLE);
 
 		RegionTermView mapView = new RegionTermView(this,
@@ -617,10 +621,6 @@ public class GameActivity extends Activity
 		mapView.setId(View.generateViewId());
 		mapView.setFontScaleMultiplier(fontConfig.portraitMapFontScale);
 		mapView.setCenterHorizontally(true);
-		// DCSS only draws the dungeon view in cols 0-32 (33 cols); the map
-		// region samples through col 36 so the empty cols 33-36 sit between
-		// it and the HUD. Center on the visible 33 cols so the trailing
-		// whitespace doesn't bias the dungeon view to the left.
 		mapView.setCenterContentCols(33);
 		mapView.setOffsetCols(fontConfig.portraitMapOffsetCols);
 		portraitMapView = mapView;
@@ -632,6 +632,13 @@ public class GameActivity extends Activity
 		hudView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
 		hudView.setOffsetCols(fontConfig.portraitHudOffsetCols);
 
+		RegionTermView mlistView = new RegionTermView(this,
+				RegionRouter.MLIST_START_ROW, RegionRouter.HUD_START_COL,
+				RegionRouter.MLIST_END_ROW, RegionRouter.HUD_END_COL);
+		mlistView.setId(View.generateViewId());
+		mlistView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
+		mlistView.setOffsetCols(fontConfig.portraitHudOffsetCols);
+
 		RegionTermView msgView = new RegionTermView(this,
 				RegionRouter.MSG_START_ROW, RegionRouter.MSG_START_COL,
 				RegionRouter.MSG_END_ROW, RegionRouter.MSG_END_COL);
@@ -640,14 +647,52 @@ public class GameActivity extends Activity
 		msgView.setHorizontalScrollEnabled(true);
 		portraitMsgView = msgView;
 
+		StatusBarView statusBar = new StatusBarView(this);
+		statusBar.setId(View.generateViewId());
+		portraitStatusBar = statusBar;
+		Typeface gameTf = StatusBarView.loadGameTypeface(this,
+				Preferences.getFontFace());
+		statusBar.setTypeface(gameTf);
+		int screenWidth = getResources().getDisplayMetrics().widthPixels;
+		int hudCols = RegionRouter.HUD_END_COL - RegionRouter.HUD_START_COL;
+		Paint sizingPaint = new Paint();
+		sizingPaint.setTypeface(gameTf);
+		int baseFontSize = 1;
+		do
+		{
+			baseFontSize++;
+			sizingPaint.setTextSize(baseFontSize);
+		}
+		while (sizingPaint.measureText("X") * hudCols <= screenWidth
+				&& baseFontSize < 200);
+		baseFontSize--;
+		float statusFontPx = Math.round(baseFontSize
+				* fontConfig.portraitHudFontScale);
+		statusBar.setFontSizePx(statusFontPx);
+		sizingPaint.setTextSize(statusFontPx);
+		int statusBarHeight = (int) Math.ceil(sizingPaint.getFontSpacing());
+		int charWidthPx = (int) sizingPaint.measureText("X");
+		statusBar.setPadding(
+				charWidthPx * fontConfig.portraitHudOffsetCols, 0, 0, 0);
+
 		RelativeLayout.LayoutParams msgParams = new RelativeLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
 		msgParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
 		splitContainer.addView(msgView, msgParams);
 
+		RelativeLayout.LayoutParams mlistParams = new RelativeLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+		mlistParams.addRule(RelativeLayout.ABOVE, msgView.getId());
+		splitContainer.addView(mlistView, mlistParams);
+
+		RelativeLayout.LayoutParams statusParams = new RelativeLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, statusBarHeight);
+		statusParams.addRule(RelativeLayout.ABOVE, mlistView.getId());
+		splitContainer.addView(statusBar, statusParams);
+
 		RelativeLayout.LayoutParams hudParams = new RelativeLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-		hudParams.addRule(RelativeLayout.ABOVE, msgView.getId());
+		hudParams.addRule(RelativeLayout.ABOVE, statusBar.getId());
 		splitContainer.addView(hudView, hudParams);
 
 		RelativeLayout.LayoutParams mapParams = new RelativeLayout.LayoutParams(
@@ -786,8 +831,10 @@ public class GameActivity extends Activity
 		router.setItemsView(itemsView);
 		router.setQuickControlsView(quickControlsView);
 		router.setSplitContainer(splitContainer);
+		router.setStatusBarView(statusBar);
 		router.addRegion(mapView);
 		router.addRegion(hudView);
+		router.addRegion(mlistView);
 		router.addRegion(msgView);
 		router.addRegion(ngsWelcome);
 		router.addRegion(ngsSimple);
@@ -830,18 +877,16 @@ public class GameActivity extends Activity
 				ngsDesc, ngbDesc, quickControlsView };
 
 		final float MIN_FONT_SCALE = 0.3f;
-		// Below this, char_height rounding swallows the delta or thrashes.
 		final float MIN_SCALE_DELTA = 0.01f;
 
 		gamePanel.getViewTreeObserver().addOnGlobalLayoutListener(
 				new ViewTreeObserver.OnGlobalLayoutListener()
 				{
-					// Re-run only when gamePanel/hud/msg height changes.
-					// RegionTermView's mirror repaints after the bitmap
-					// recreate, so no DCSS redraw is needed.
 					private int lastAvailable = -1;
 					private int lastHudH = -1;
 					private int lastMsgH = -1;
+					private int lastStatusH = -1;
+					private int lastMlistH = -1;
 
 					@Override
 					public void onGlobalLayout()
@@ -852,18 +897,24 @@ public class GameActivity extends Activity
 						int available = gamePanel.getHeight();
 						int hudH = hudView.getMeasuredHeight();
 						int msgH = msgView.getMeasuredHeight();
+						int statusH = statusBar.getMeasuredHeight();
+						int mlistH = mlistView.getMeasuredHeight();
 						if (available <= 0 || hudH <= 0 || msgH <= 0)
 							return;
 
-						// Idempotent: only recompute when an input changed.
 						if (available == lastAvailable
-								&& hudH == lastHudH && msgH == lastMsgH)
+								&& hudH == lastHudH && msgH == lastMsgH
+								&& statusH == lastStatusH
+								&& mlistH == lastMlistH)
 							return;
 						lastAvailable = available;
 						lastHudH = hudH;
 						lastMsgH = msgH;
+						lastStatusH = statusH;
+						lastMlistH = mlistH;
 
-						int mapTarget = available - hudH - msgH;
+						int mapTarget = available - hudH - statusH
+								- mlistH - msgH;
 						if (mapTarget <= 0)
 							return;
 						int mapH = mapView.getMeasuredHeight();
@@ -874,7 +925,6 @@ public class GameActivity extends Activity
 						if (curMapScale <= MIN_FONT_SCALE)
 							return;
 
-						// -1px margin absorbs char_height integer rounding.
 						float ratio = (mapTarget - 1f) / mapH;
 						float newScale = Math.max(MIN_FONT_SCALE,
 								curMapScale * ratio);
@@ -1032,6 +1082,8 @@ public class GameActivity extends Activity
 
 		if (portraitMsgView != null)
 			view.setMessageView(portraitMsgView);
+		if (portraitStatusBar != null)
+			view.setStatusBarView(portraitStatusBar);
 		if (portraitFullView != null)
 			view.setMenuView(portraitFullView);
 		if (portraitSkillsView != null)
