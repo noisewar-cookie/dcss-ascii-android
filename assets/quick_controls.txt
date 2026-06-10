@@ -1,18 +1,19 @@
 __________________________________________________
 
  QUICK CONTROLS
-    2-Finger Long Press = app menu
      ? = help
-    ?? = keymap
+    ?? = keyboard controls
 
- Game screen 9-grid touch overlay:
-     ↖ | ↑ | ↗   • Pinch to zoom map
+ Touch screen edges for overlay controls:
+     ↖ | ↑ | ↗   • Drag to scroll text
     ---+---+---  • Tap or hold to move / attack
      ← | ↻ | →   • Tap center to wait a turn
     ---+---+---  • Hold center to rest
-     ↙ | ↓ | ↘   • Drag to scroll text
+     ↙ | ↓ | ↘   • Pinch to zoom map
 
-    Tab / o = auto-fight / auto-explore
+ Important Keys:
+        Tab = auto-fight
+          o = auto-explore
         ./5 = wait a turn / long rest
           i = inventory
           m = skills training
@@ -22,8 +23,9 @@ __________________________________________________
         f/Q = fire / Quiver
       z/I/M = cast / list / Memorize spells
 
- Check help (?) for full controls list.
+ Use 2-finger long press to access App Menu
 
+ Press help (?) twice for extended controls list.
 __________________________________________________
 
  * NEW PLAYERS *
@@ -31,16 +33,13 @@ __________________________________________________
     know that it's the hardest yet fairest RPG
     ever made. There's a BIG learning curve!
 
-    Start with a tough, easy combo like a
+    Start with a strong, easy combo like a
     Minotaur or Troll Fighter.
 
-    Explore cautiously, examine everything,
-    and be ready to run from danger.
-
+    Train skills, explore, examine everything.
     Use your items to survive, don't hoard!
+    And ALWAYS be ready to run from danger.
 
-    Focus on training useful skills, and
-    try to survive until you reach the Temple
-    with powerful Gods to worship. GOOD LUCK!
-
+    Train your skills wisely, and find a
+    powerful God to worship. GOOD LUCK!
 __________________________________________________

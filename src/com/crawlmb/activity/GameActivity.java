@@ -554,8 +554,6 @@ public class GameActivity extends Activity
 		// is consistent at the same font scale) and exactly enough rows for
 		// the loaded content — sizing rows to content avoids trailing empty
 		// rows that would otherwise appear as whitespace when scrolling.
-		// loadQuickControls() prepends one blank line so there's a visual gap
-		// between the main menu and the start of the panel.
 		String[] qcLines = loadQuickControls();
 		int qcRows = Math.max(1, qcLines.length);
 		QuickControlsView quickControlsView = new QuickControlsView(this, qcRows, 80);
@@ -992,9 +990,6 @@ public class GameActivity extends Activity
 		final String QUICK_CONTROLS_ASSET = "quick_controls.txt";
 		final String TAB = "    ";
 		List<String> lines = new ArrayList<>();
-		// Leading blank row provides a visual gap between the main menu's
-		// last line and the start of the quick-controls content.
-		lines.add("");
 		try (InputStream is = getAssets().open(QUICK_CONTROLS_ASSET);
 				BufferedReader br = new BufferedReader(
 						new InputStreamReader(is, StandardCharsets.UTF_8)))
