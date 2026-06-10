@@ -8,10 +8,16 @@ import android.os.Handler;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.widget.ImageView;
 
 import com.crawlmb.R;
 
 public class ControlsInfoActivity extends Activity {
+
+	private static final int[] SCREENS = {
+			R.drawable.controls_info,
+			R.drawable.controls_info_2,
+	};
 
 	private final Handler handler = new Handler();
 	private final Runnable advanceRunnable = new Runnable() {
@@ -20,7 +26,8 @@ public class ControlsInfoActivity extends Activity {
 			advance();
 		}
 	};
-	private boolean advanced = false;
+	private int screenIndex = 0;
+	private boolean finished = false;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -39,12 +46,19 @@ public class ControlsInfoActivity extends Activity {
 	}
 
 	private void advance() {
-		if (advanced)
+		if (finished)
 			return;
-		advanced = true;
 		handler.removeCallbacks(advanceRunnable);
-		startActivity(new Intent(this, SplashActivity.class));
-		finish();
+		screenIndex++;
+		if (screenIndex >= SCREENS.length) {
+			finished = true;
+			startActivity(new Intent(this, SplashActivity.class));
+			finish();
+			return;
+		}
+		((ImageView) findViewById(R.id.controls_info_image))
+				.setImageResource(SCREENS[screenIndex]);
+		handler.postDelayed(advanceRunnable, 5000);
 	}
 
 	private void hideSystemBars() {

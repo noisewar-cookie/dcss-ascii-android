@@ -3,7 +3,7 @@ __________________________________________________
  QUICK CONTROLS
     2-Finger Long Press = app menu
      ? = help
-    ?? = default keymap ("<>" to scroll)
+    ?? = keymap
 
  Game screen 9-grid touch overlay:
      ↖ | ↑ | ↗   • Pinch to zoom map
