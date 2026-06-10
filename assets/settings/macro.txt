@@ -1,0 +1,23 @@
+# DCSS macro file.
+#
+# Each macro is two lines: M:<key> then C:<command-sequence>.
+#
+### Example combat macro
+# If you uncomment the two macro lines below, your Enter key 
+# will use the smart_explore_fight function in the default
+# init.txt config file. This will conveniently let you
+# auto-fight and auto-explore with one key, choosing the most
+# appropriate action
+#
+# M:\{13}
+# A:===smart_explore_fight
+#
+### Easy rest macro
+# If you uncomment the two macro lines below, your Space key
+# will wait a turn during combat, and attempt to rest fully
+# when not in combat.
+#
+# M:\{32}
+# A:.5
+
+
