@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/mutation.cc b/crawl-ref/source/mutation.cc
-index b89403bb8a..43b62ee2dc 100644
+index b89403bb8a..0a677cb7ed 100644
 --- a/crawl-ref/source/mutation.cc
 +++ b/crawl-ref/source/mutation.cc
 @@ -1036,6 +1036,7 @@ public:
@@ -10,3 +10,15 @@ index b89403bb8a..43b62ee2dc 100644
          set_title(new MenuEntry("Innate Abilities, Weirdness & Mutations",
                                  MEL_TITLE));
          menu_action = ACT_EXAMINE;
+@@ -2454,9 +2455,9 @@ string get_mutation_desc(mutation_type mut)
+     string mut_tags = get_mutation_tags(mut);
+     if (!mut_tags.empty())
+     {
++        // Android: left-align on its own line; original right-aligned to 80 cols.
+         mut_tags = "Category: " + mut_tags;
+-        const int spacing = 80 - formatted_string::parse_string(mut_tags).width();
+-        desc << "\n" << string(spacing, ' ') << mut_tags;
++        desc << "\n" << mut_tags;
+     }
+ 
+     // TODO: consider adding other fun facts here

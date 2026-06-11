@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/shopping.cc b/crawl-ref/source/shopping.cc
-index b06d65869c..8ce9b7aa9d 100644
+index b06d65869c..e58d943b7e 100644
 --- a/crawl-ref/source/shopping.cc
 +++ b/crawl-ref/source/shopping.cc
 @@ -1053,7 +1053,6 @@ ShopMenu::ShopMenu(shop_struct& _shop, const level_pos& _pos, bool _can_purchase
@@ -10,7 +10,7 @@ index b06d65869c..8ce9b7aa9d 100644
  
      set_tag("shop");
  
-@@ -1170,32 +1169,30 @@ void ShopMenu::update_help()
+@@ -1170,32 +1169,37 @@ void ShopMenu::update_help()
                                  && (!can_purchase ||
                                      no_selection && !from_shopping_list)
                  || menu_action == ACT_EXAMINE && !is_set(MF_ARROWS_SELECT);
@@ -32,16 +32,23 @@ index b06d65869c..8ce9b7aa9d 100644
              + (menu_action == ACT_EXECUTE ? " <w>buy</w>|examine items"
                                            : " buy|<w>examine</w> items");
 -    string m = menu_keyhelp_cmd(CMD_MENU_EXIT)+ " exit          ";
-+    string m = menu_keyhelp_cmd(CMD_MENU_EXIT)+ " exit  ";
-     m += mode_desc;
+-    m += mode_desc;
 -    m = pad_more_with(m, make_stringf("%s %s",
 -        hyphenated_hotkey_letters(item_count(), 'a').c_str(),
 -        menu_action == ACT_EXECUTE ? "mark item for purchase   "
 -                                   : "examine item             "));
 -    m += make_stringf("\n[<w>/</w>] sort (%s)%s  %s",
++    // Android: keep mode/action left-aligned; put exit on its own last line.
++    string m = mode_desc;
 +    if (!action_desc.empty())
-+        m += "  " + action_desc;
-+    m += make_stringf("\n[<w>/</w>] sort (%s)  %s %s",
++    {
++        if (!m.empty())
++            m += "  ";
++        m += action_desc;
++    }
++    if (!m.empty())
++        m += "\n";
++    m += make_stringf("[<w>/</w>] sort (%s)  %s %s",
          shopping_order_names[order],
 -        string(7 - strwidth(shopping_order_names[order]), ' ').c_str(),
 -        action_desc.c_str());
@@ -53,6 +60,7 @@ index b06d65869c..8ce9b7aa9d 100644
 +                                   : "examine item");
 +    m += "\n" + hyphenated_hotkey_letters(item_count(), 'A')
 +                                  + " put item on shopping list";
++    m += "\n" + menu_keyhelp_cmd(CMD_MENU_EXIT) + " exit";
  
  
      const string col = colour_to_str(channel_to_colour(MSGCH_PROMPT));

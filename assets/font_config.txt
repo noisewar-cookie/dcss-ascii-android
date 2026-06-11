@@ -20,7 +20,7 @@
 # single-column help pages (Manual, Aptitudes, Quickstart), and any other
 # menu without an explicit category.
 # Terminal region: 80 cols x 24 rows
-portrait_default_font_scale=1.5
+portrait_default_font_scale=1.6
 portrait_default_scrollable=true
 portrait_default_vscrollable=true
 
@@ -28,7 +28,7 @@ portrait_default_vscrollable=true
 # Shown during: the static loading screen (text from string-array.xml,
 # starting with "Launching game. May take a while the first time.")
 # Defaults: falls back to portrait_default_* if unset
-portrait_pregame_font_scale=1.5
+portrait_pregame_font_scale=1.6
 portrait_pregame_scrollable=true
 
 # Portrait: DCSS main menu

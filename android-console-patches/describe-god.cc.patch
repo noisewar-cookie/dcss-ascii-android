@@ -1,0 +1,40 @@
+diff --git a/crawl-ref/source/describe-god.cc b/crawl-ref/source/describe-god.cc
+index fa5d01a209..39994f1200 100644
+--- a/crawl-ref/source/describe-god.cc
++++ b/crawl-ref/source/describe-god.cc
+@@ -714,11 +714,9 @@ static formatted_string _describe_god_powers(god_type which_god)
+     int piety = you_worship(which_god) ? you.piety() : 0;
+ 
+     desc.textcolour(LIGHTGREY);
+-    const char *header = "Granted powers:";
+-    const char *cost   = "(Cost)";
+-    desc.cprintf("\n\n%s%*s%s\n", header,
+-            80 - strwidth(header) - strwidth(cost),
+-            "", cost);
++    // Android: drop the right-aligned "(Cost)" header (each power's cost is
++    // shown inline below). Original right-padded to 80 cols.
++    desc.cprintf("\n\nGranted powers:\n");
+ 
+     bool have_any = false;
+ 
+@@ -967,14 +965,17 @@ static formatted_string _describe_god_powers(god_type which_god)
+ 
+         if (!isupper(buf[0])) // Complete sentence given?
+             buf = "You can " + buf + ".";
+-        const int desc_len = buf.size();
+ 
+         string abil_cost = "(" + make_cost_description(power.abil) + ")";
+         if (abil_cost == "(None)")
+             abil_cost = "";
+ 
+-        desc.cprintf("%s%*s%s\n", buf.c_str(), 80 - desc_len - (int)abil_cost.size(),
+-                "", abil_cost.c_str());
++        // Android: print cost inline (separated by 2 spaces) instead of
++        // right-aligning it against an 80-col edge.
++        if (abil_cost.empty())
++            desc.cprintf("%s\n", buf.c_str());
++        else
++            desc.cprintf("%s  %s\n", buf.c_str(), abil_cost.c_str());
+     }
+ 
+     if (!have_any)
