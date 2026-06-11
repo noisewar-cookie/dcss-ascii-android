@@ -843,9 +843,22 @@ public class RegionRouter implements TerminalRenderer
 			{
 				activeMenu = fullView;
 				scaleChanged = applyFullConfig(menuType);
-				if (scaleChanged
-						&& fullView.getVisibility() != View.VISIBLE)
-					fullView.clearBitmap();
+				// drawPoint forwards to fullView unconditionally, so gameplay
+				// map/HUD/msg chars accumulate in the mirror while fullView is
+				// INVISIBLE. The next menu's popup writes only its own region
+				// (popup natural width < 80); cells outside it are never re-sent
+				// in the post-storm dirty set, so the mirror keeps stale gameplay
+				// values there. repaintAllFromMirrorLocked replays the mirror on
+				// every bitmap recreate, restoring corruption even when
+				// clearBitmap ran. Wipe the mirror on the INVISIBLE→VISIBLE edge
+				// and force scheduleRedrawAfterLayout (below) to repopulate it
+				// via refreshTerminal — symptom was scattered gameplay glyphs on
+				// the post-death leaderboard and persisting into the main menu.
+				if (fullView.getVisibility() != View.VISIBLE)
+				{
+					fullView.clear();
+					scaleChanged = true;
+				}
 			}
 		}
 
@@ -2082,12 +2095,20 @@ public class RegionRouter implements TerminalRenderer
 
 		// Custom-rendered screens — scan distinctive markers across rows.
 		// Hiscores: title widget renders "<game name>: High Scores" near
-		// top. The death/quit screen (end.cc) renders "Best Crawlers"
-		// as its leaderboard header — same screen, different trigger.
+		// top of the High Scores menu (rows 0-8). The death/quit screen
+		// (end.cc) renders "Best Crawlers - <game type>" as the header
+		// above its embedded leaderboard, but the goodbye_msg block
+		// (death summary, stats) above it can push that header past
+		// row 8 — scan the full visible window for it. Both phrases are
+		// unique strings, no false-positive risk elsewhere.
 		for (int r = 0; r <= 8; r++)
 		{
-			if (rowContains(r, "High Scores")
-					|| rowContains(r, "Best Crawlers"))
+			if (rowContains(r, "High Scores"))
+				return MenuType.HISCORES;
+		}
+		for (int r = 0; r <= 23; r++)
+		{
+			if (rowContains(r, "Best Crawlers"))
 				return MenuType.HISCORES;
 		}
 		// Overview (%): _get_overview_progress emits "Turns:" at the start
@@ -2230,11 +2251,14 @@ public class RegionRouter implements TerminalRenderer
 
 		// Compress fullView footer for menus whose keyhelp renders past
 		// row 23. ITEMS/HELP/SKILLS use their own views; GAMEPLAY and
-		// PREGAME don't have keyhelp footers.
+		// PREGAME don't have keyhelp footers. HISCORES content extends
+		// past row 23 as continuous entries with no keyhelp gap, so
+		// compression would create a phantom spacer at row 24.
 		if (detected == LayoutMode.MENU
 				&& detectedType != MenuType.ITEMS
 				&& detectedType != MenuType.HELP
 				&& detectedType != MenuType.SKILLS
+				&& detectedType != MenuType.HISCORES
 				&& fullView != null)
 			recomputeFullViewFooter();
 
