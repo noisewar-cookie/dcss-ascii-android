@@ -311,6 +311,9 @@ public class GameActivity extends Activity
 					}
 				}
 
+				Log.d("Crawl", "insets: l=" + left + " t=" + top
+						+ " r=" + right + " b=" + bottom);
+
 				// Distribute the safe-area insets per-child instead of padding
 				// screenLayout as a whole. The crawl keyboard is a fixed-size
 				// KeyboardView whose key grid can't reflow to a narrower width
@@ -1183,13 +1186,14 @@ public class GameActivity extends Activity
 		WindowCompatAdapter.applyFullscreen(this, Preferences.getFullScreen());
 	}
 
-	// Radius of one display corner, or 0 if the device reports none. Only
-	// called from the API 35+ branch of the inset listener.
+	// Scale raw corner radius to inscribed-rectangle inset: R*(1-cos45°).
 	@android.annotation.SuppressLint("NewApi")
 	private static int cornerRadius(android.view.WindowInsets insets, int position)
 	{
 		android.view.RoundedCorner corner = insets.getRoundedCorner(position);
-		return corner == null ? 0 : corner.getRadius();
+		if (corner == null)
+			return 0;
+		return (int) Math.ceil(corner.getRadius() * (1.0 - Math.cos(Math.PI / 4)));
 	}
 
 	public Handler getHandler() {
