@@ -10,6 +10,7 @@ import android.widget.LinearLayout;
 
 import com.crawlmb.FontConfig;
 import com.crawlmb.R;
+import com.crawlmb.keyboard.CrawlKeyboardView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -282,6 +283,7 @@ public class RegionRouter implements TerminalRenderer
 	private RegionTermView fullView;
 	private RegionTermView skillsView;
 	private RegionTermView itemsView;
+	private CrawlKeyboardView keyboardView;
 	// App-only static panel shown only while the DCSS main menu is active.
 	// Sits in a LinearLayout sibling-pair with fullView so its slot expands
 	// to fill the gap between fullView's bottom and the virtual keyboard.
@@ -331,6 +333,11 @@ public class RegionRouter implements TerminalRenderer
 	private final int[][] terminalBg = new int[TERMINAL_ROWS][TERMINAL_COLS];
 	private volatile LayoutMode currentMode = LayoutMode.PREGAME;
 	private volatile MenuType currentMenuType = MenuType.DEFAULT;
+
+	public LayoutMode getCurrentMode()
+	{
+		return currentMode;
+	}
 
 	public MenuType getCurrentMenuType()
 	{
@@ -457,6 +464,11 @@ public class RegionRouter implements TerminalRenderer
 	public void setItemsView(RegionTermView view)
 	{
 		this.itemsView = view;
+	}
+
+	public void setKeyboardView(CrawlKeyboardView view)
+	{
+		this.keyboardView = view;
 	}
 
 	public void setQuickControlsView(View view)
@@ -2226,6 +2238,9 @@ public class RegionRouter implements TerminalRenderer
 			final MenuType targetType = detectedType;
 			if (fullView != null)
 				fullView.post(() -> applyMode(targetMode, targetType));
+			if (keyboardView != null)
+				keyboardView.setArrowsVisible(
+						targetMode == LayoutMode.GAMEPLAY);
 		}
 
 		// While in newgame, re-detect sub-items grid bounds every frame.

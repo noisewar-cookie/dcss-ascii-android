@@ -59,6 +59,7 @@ import com.crawlmb.CrawlDialog;
 import com.crawlmb.FontConfig;
 import com.crawlmb.PassThroughListener;
 import com.crawlmb.keylistener.GameKeyListener;
+import com.crawlmb.keyboard.CrawlKeyboardView;
 import com.crawlmb.keyboard.CrawlKeyboardWrapper;
 import com.crawlmb.keyboard.DirectionalTouchView;
 import com.crawlmb.GameThread;
@@ -363,6 +364,9 @@ public class GameActivity extends Activity
 						.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 				screenLayout.addView(virtualKeyboard.virtualKeyboardView);
 				portraitKeyboardView = virtualKeyboard.virtualKeyboardView;
+				if (portraitRouter != null)
+					portraitRouter.setKeyboardView(
+							virtualKeyboard.virtualKeyboardView);
 
 				// Constrain game panel to sit above keyboard
 				if (gamePanelId != View.NO_ID)

@@ -27,6 +27,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.Typeface;
@@ -77,6 +78,7 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
 
     private int keyAlphaLevel;
     private Paint trianglePaint;
+    private volatile boolean arrowsVisible = true;
 
 
     /**
@@ -378,6 +380,14 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
         initGestureDetector();
     }
 
+    public void setArrowsVisible(boolean visible)
+    {
+        if (visible == arrowsVisible)
+            return;
+        arrowsVisible = visible;
+        postInvalidate();
+    }
+
     private void initGestureDetector() {
         mGestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
             @Override
@@ -630,7 +640,12 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
     public void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        if (Preferences.getKeyboardArrowsEnabled()) {
+        if (mDrawPending || mBuffer == null || mKeyboardChanged) {
+            onBufferDraw();
+        }
+        canvas.drawBitmap(mBuffer, 0, 0, null);
+
+        if (Preferences.getKeyboardArrowsEnabled() && arrowsVisible) {
             SharedPreferences currentKeyboardPreferences = Preferences.getCurrentKeyboardPreferences(getContext(), keyboardType);
             Key key;
             for (int i = 0; i < mKeys.length; i++) {
@@ -642,7 +657,6 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                         code = currentKeyboardPreferences.getInt(codePreferenceKey, code);
                     }
                 }
-                //H key
                 switch (code) {
                     case 104: {
                         float triangle[] = {
@@ -653,7 +667,6 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                         drawTriangle(canvas, trianglePaint, triangle);
                         break;
                     }
-                    //L key
                     case 108: {
                         float triangle[] = {
                                 key.x + key.width - (key.width / 10), key.y + (key.height / 2),
@@ -663,7 +676,6 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                         drawTriangle(canvas, trianglePaint, triangle);
                         break;
                     }
-                    //K key
                     case 107: {
                         float triangle[] = {
                                 key.x + (key.width / 2), key.y + (key.height / 10),
@@ -673,7 +685,6 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                         drawTriangle(canvas, trianglePaint, triangle);
                         break;
                     }
-                    //J key
                     case 106: {
                         float triangle[] = {
                                 key.x + (key.width / 2), key.y + key.height - (key.height / 10),
@@ -683,7 +694,6 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                         drawTriangle(canvas, trianglePaint, triangle);
                         break;
                     }
-                    //Y key
                     case 121: {
                         float triangle[] = {
                                 key.x + (key.width / 10), key.y + (key.height / 11),
@@ -693,7 +703,6 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                         drawTriangle(canvas, trianglePaint, triangle);
                         break;
                     }
-                    //U Key
                     case 117: {
                         float triangle[] = {
                                 key.x + (key.width) - (key.width / 10), key.y + (key.height / 11),
@@ -703,7 +712,6 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                         drawTriangle(canvas, trianglePaint, triangle);
                         break;
                     }
-                    //B key
                     case 98: {
                         float triangle[] = {
                                 key.x + (key.width / 10), key.y + key.height - (key.height / 11),
@@ -713,7 +721,6 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                         drawTriangle(canvas, trianglePaint, triangle);
                         break;
                     }
-                    //N Key
                     case 110: {
                         float triangle[] = {
                                 key.x + key.width - (key.width / 10), key.y + key.height - (key.height / 11),
@@ -726,22 +733,17 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                 }
             }
         }
-
-
-        if (mDrawPending || mBuffer == null || mKeyboardChanged) {
-            onBufferDraw();
-        }
-        canvas.drawBitmap(mBuffer, 0, 0, null);
     }
 
+    private final Path trianglePath = new Path();
+
     private void drawTriangle(Canvas canvas, Paint paint, float[] triangle) {
-        canvas.drawVertices(
-                Canvas.VertexMode.TRIANGLES,
-                triangle.length, triangle, 0,
-                null, 0,
-                null, 0,
-                null, 0, 0,
-                paint);
+        trianglePath.rewind();
+        trianglePath.moveTo(triangle[0], triangle[1]);
+        trianglePath.lineTo(triangle[2], triangle[3]);
+        trianglePath.lineTo(triangle[4], triangle[5]);
+        trianglePath.close();
+        canvas.drawPath(trianglePath, paint);
     }
 
     private void onBufferDraw() {
