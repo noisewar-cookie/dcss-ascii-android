@@ -27,7 +27,7 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	private RegionTermView menuView;
 	private RegionTermView skillsView;
 	private RegionTermView itemsView;
-	private RegionTermView[] extraScrollTargets = null;
+	private View[] extraScrollTargets = null;
 	private RegionRouter router;
 	private View activeForwardTarget = null;
 	private boolean targetAreaTouch = false;
@@ -172,7 +172,7 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	// is still checked per-touch via isScrollEnabled() and visibility, so
 	// passing every newgame panel is safe — only ones that are both VISIBLE
 	// and have a scroll axis enabled will be picked.
-	public void setExtraScrollTargets(RegionTermView... targets)
+	public void setExtraScrollTargets(View... targets)
 	{
 		this.extraScrollTargets = targets;
 	}

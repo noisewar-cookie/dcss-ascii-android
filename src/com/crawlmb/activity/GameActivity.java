@@ -45,6 +45,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.os.Handler;
 import android.os.Message;
@@ -101,7 +102,7 @@ public class GameActivity extends Activity
 	private StatusBarView portraitStatusBar = null;
 	private FontConfig portraitFontConfig = null;
 	private RegionRouter portraitRouter = null;
-	private RegionTermView[] portraitExtraScrollTargets = null;
+	private View[] portraitExtraScrollTargets = null;
 	private View portraitContextHost = null;
 	// Inset targets, populated per rebuildViews(). The window is edge-to-edge
 	// on every OS version (see WindowCompatAdapter), so the safe-area insets
@@ -717,7 +718,6 @@ public class GameActivity extends Activity
 		// RegionRouter detects the matching newgame screen.
 		LinearLayout newgameSpecies = new LinearLayout(this);
 		newgameSpecies.setOrientation(LinearLayout.VERTICAL);
-		newgameSpecies.setVisibility(View.INVISIBLE);
 
 		RegionTermView ngsWelcome = new RegionTermView(this,
 				RegionRouter.NEWGAME_WELCOME_ROW0, RegionRouter.NEWGAME_COL_LEFT,
@@ -763,16 +763,19 @@ public class GameActivity extends Activity
 		newgameSpecies.addView(ngsSubRight, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
-		gamePanel.addView(newgameSpecies, new FrameLayout.LayoutParams(
+		ScrollView ngsScroll = new ScrollView(this);
+		ngsScroll.setVisibility(View.INVISIBLE);
+		ngsScroll.addView(newgameSpecies, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		gamePanel.addView(ngsScroll, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
 		LinearLayout newgameBackground = new LinearLayout(this);
 		newgameBackground.setOrientation(LinearLayout.VERTICAL);
-		newgameBackground.setVisibility(View.INVISIBLE);
 
 		RegionTermView ngbWelcome = new RegionTermView(this,
 				RegionRouter.NEWGAME_WELCOME_ROW0, RegionRouter.NEWGAME_COL_LEFT,
-				RegionRouter.NEWGAME_WELCOME_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
+				RegionRouter.NEWGAME_BG_WELCOME_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
 		ngbWelcome.setFontScaleMultiplier(fontConfig.portraitNewgameWelcomeFontScale);
 		ngbWelcome.setHorizontalScrollEnabled(fontConfig.portraitNewgameWelcomeScrollable);
 		ngbWelcome.setVerticalScrollEnabled(fontConfig.portraitNewgameWelcomeVScrollable);
@@ -816,8 +819,12 @@ public class GameActivity extends Activity
 		newgameBackground.addView(ngbSubRight, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
-		gamePanel.addView(newgameBackground, new FrameLayout.LayoutParams(
+		ScrollView ngbScroll = new ScrollView(this);
+		ngbScroll.setVisibility(View.INVISIBLE);
+		ngbScroll.addView(newgameBackground, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		gamePanel.addView(ngbScroll, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
 		RelativeLayout.LayoutParams gamePanelParams = new RelativeLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
@@ -857,8 +864,8 @@ public class GameActivity extends Activity
 		router.addRegion(ngbDesc);
 		router.addRegion(ngbSubLeft);
 		router.addRegion(ngbSubRight);
-		router.setNewgameSpeciesContainer(newgameSpecies);
-		router.setNewgameBackgroundContainer(newgameBackground);
+		router.setNewgameSpeciesContainer(ngsScroll);
+		router.setNewgameBackgroundContainer(ngbScroll);
 		router.setNewgameSpeciesPanels(ngsSimple, ngsIntermediate, ngsAdvanced);
 		router.setNewgameBackgroundPanels(ngbWarrior, ngbZealot, ngbAdventurer,
 				ngbWarMage, ngbMage);
@@ -878,8 +885,8 @@ public class GameActivity extends Activity
 		// skillsView/msgView, so without this registration drags over the
 		// QC panel are swallowed by DirectionalTouchView's 9-grid tap
 		// handler and the panel never scrolls.
-		portraitExtraScrollTargets = new RegionTermView[] {
-				ngsDesc, ngbDesc, quickControlsView };
+		portraitExtraScrollTargets = new View[] {
+				ngsDesc, ngbDesc, quickControlsView, ngsScroll, ngbScroll };
 
 		final float MIN_FONT_SCALE = 0.3f;
 		final float MIN_SCALE_DELTA = 0.01f;

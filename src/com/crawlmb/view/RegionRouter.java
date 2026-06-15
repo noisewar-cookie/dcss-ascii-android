@@ -6,7 +6,6 @@ import android.graphics.Color;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
-import android.widget.LinearLayout;
 
 import com.crawlmb.FontConfig;
 import com.crawlmb.R;
@@ -270,14 +269,14 @@ public class RegionRouter implements TerminalRenderer
 	public static final int NEWGAME_SPECIES_ROW0 = 2;
 	public static final int NEWGAME_SPECIES_ROW1 = 12;  // rows 2..11
 
-	// Background: Warrior 5 items → rows 2..7. Zealot 3 items at y=6 → rows 8..11.
-	// Adventurer 4 items → rows 2..6. Warrior-mage 4 items at y=5 → rows 7..11.
-	// Mage 10 items → rows 2..12.
-	public static final int NEWGAME_BG_WARRIOR_ROW0    = 2,  NEWGAME_BG_WARRIOR_ROW1    = 8;
-	public static final int NEWGAME_BG_ZEALOT_ROW0     = 8,  NEWGAME_BG_ZEALOT_ROW1     = 12;
-	public static final int NEWGAME_BG_ADVENTURER_ROW0 = 2,  NEWGAME_BG_ADVENTURER_ROW1 = 7;
-	public static final int NEWGAME_BG_WARMAGE_ROW0    = 7,  NEWGAME_BG_WARMAGE_ROW1    = 12;
-	public static final int NEWGAME_BG_MAGE_ROW0       = 2,  NEWGAME_BG_MAGE_ROW1       = 13;
+	// Background welcome panel includes the CRT margin row as a visible spacer.
+	public static final int NEWGAME_BG_WELCOME_ROW1 = 3;
+	// Background categories start one row later than species (extra prompt row).
+	public static final int NEWGAME_BG_WARRIOR_ROW0    = 3,  NEWGAME_BG_WARRIOR_ROW1    = 9;
+	public static final int NEWGAME_BG_ZEALOT_ROW0     = 9,  NEWGAME_BG_ZEALOT_ROW1     = 13;
+	public static final int NEWGAME_BG_ADVENTURER_ROW0 = 3,  NEWGAME_BG_ADVENTURER_ROW1 = 8;
+	public static final int NEWGAME_BG_WARMAGE_ROW0    = 8,  NEWGAME_BG_WARMAGE_ROW1    = 13;
+	public static final int NEWGAME_BG_MAGE_ROW0       = 3,  NEWGAME_BG_MAGE_ROW1       = 14;
 
 	private final List<RegionTermView> splitRegions = new ArrayList<>();
 	private RegionTermView fullView;
@@ -296,8 +295,8 @@ public class RegionRouter implements TerminalRenderer
 	// RegionTermViews — those panels are also added to splitRegions so
 	// drawPoint forwards into their fixed terminal rectangles. The
 	// container visibility gates whether the user sees them.
-	private LinearLayout newgameSpeciesContainer;
-	private LinearLayout newgameBackgroundContainer;
+	private View newgameSpeciesContainer;
+	private View newgameBackgroundContainer;
 	// Per-category panel refs so we can re-aim each one at the actual
 	// terminal column slice once the upstream Grid widget has settled. The
 	// welcome and sub panels are full-width and don't need adjustment.
@@ -486,12 +485,12 @@ public class RegionRouter implements TerminalRenderer
 		this.splitContainer = container;
 	}
 
-	public void setNewgameSpeciesContainer(LinearLayout container)
+	public void setNewgameSpeciesContainer(View container)
 	{
 		this.newgameSpeciesContainer = container;
 	}
 
-	public void setNewgameBackgroundContainer(LinearLayout container)
+	public void setNewgameBackgroundContainer(View container)
 	{
 		this.newgameBackgroundContainer = container;
 	}
@@ -680,7 +679,7 @@ public class RegionRouter implements TerminalRenderer
 		// bottom margin and descriptions' top margin are blank → 1 stripped,
 		// 1 kept. Either way the user sees one empty row between the last
 		// category item and the description.
-		int descStart = NEWGAME_SUB_ROW0;
+		int descStart = isSpecies ? NEWGAME_SUB_ROW0 : NEWGAME_SUB_ROW0 + 1;
 		while (descStart + 1 < subItemRow
 				&& rowIsBlank(descStart) && rowIsBlank(descStart + 1))
 			descStart++;
@@ -721,9 +720,9 @@ public class RegionRouter implements TerminalRenderer
 				|| ngbAdventurerView == null || ngbWarMageView == null
 				|| ngbMageView == null)
 			return;
-		int cWarrior = findColInRow(2, "Warrior");
-		int cAdv     = findColInRow(2, "Adventurer");
-		int cMage    = findColInRow(2, "Mage");
+		int cWarrior = findColInRow(NEWGAME_BG_WARRIOR_ROW0, "Warrior");
+		int cAdv     = findColInRow(NEWGAME_BG_WARRIOR_ROW0, "Adventurer");
+		int cMage    = findColInRow(NEWGAME_BG_WARRIOR_ROW0, "Mage");
 		if (cWarrior < 0 || cAdv < 0 || cMage < 0)
 			return;
 		ngbWarriorView.setRegionCols(cWarrior, cAdv);
@@ -2351,7 +2350,8 @@ public class RegionRouter implements TerminalRenderer
 		{
 			if (rowContains(0, NEWGAME_SPECIES_TOKEN))
 				return MenuType.NEWGAME_SPECIES;
-			if (rowContains(0, NEWGAME_BACKGROUND_TOKEN))
+			if (rowContains(0, NEWGAME_BACKGROUND_TOKEN)
+					|| rowContains(1, NEWGAME_BACKGROUND_TOKEN))
 				return MenuType.NEWGAME_BACKGROUND;
 		}
 		// Character naming popup (_choose_name). The popup is vertically
