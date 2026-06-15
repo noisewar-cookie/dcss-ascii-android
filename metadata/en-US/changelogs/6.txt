@@ -1,0 +1,6 @@
+Release 6 (0.34.1)
+
+• Minor improvements to character creation screens.
+
+Bug Fixes:
+• Better support for phones reporting highly rounded edges.
