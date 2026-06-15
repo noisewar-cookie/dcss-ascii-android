@@ -826,6 +826,27 @@ public class GameActivity extends Activity
 		gamePanel.addView(ngbScroll, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
+		LinearLayout newgameWeapon = new LinearLayout(this);
+		newgameWeapon.setOrientation(LinearLayout.VERTICAL);
+
+		RegionTermView ngwContent = makeNewgameSubView();
+		RegionTermView ngwSubLeft = makeNewgameSubView();
+		RegionTermView ngwSubRight = makeNewgameSubView();
+
+		newgameWeapon.addView(ngwContent, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameWeapon.addView(ngwSubLeft, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		newgameWeapon.addView(ngwSubRight, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+		ScrollView ngwScroll = new ScrollView(this);
+		ngwScroll.setVisibility(View.INVISIBLE);
+		ngwScroll.addView(newgameWeapon, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+		gamePanel.addView(ngwScroll, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+
 		RelativeLayout.LayoutParams gamePanelParams = new RelativeLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
 		gamePanelParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
@@ -864,6 +885,9 @@ public class GameActivity extends Activity
 		router.addRegion(ngbDesc);
 		router.addRegion(ngbSubLeft);
 		router.addRegion(ngbSubRight);
+		router.addRegion(ngwContent);
+		router.addRegion(ngwSubLeft);
+		router.addRegion(ngwSubRight);
 		router.setNewgameSpeciesContainer(ngsScroll);
 		router.setNewgameBackgroundContainer(ngbScroll);
 		router.setNewgameSpeciesPanels(ngsSimple, ngsIntermediate, ngsAdvanced);
@@ -871,6 +895,8 @@ public class GameActivity extends Activity
 				ngbWarMage, ngbMage);
 		router.setNewgameSubPanels(ngsDesc, ngsSubLeft, ngsSubRight,
 				ngbDesc, ngbSubLeft, ngbSubRight);
+		router.setNewgameWeaponContainer(ngwScroll);
+		router.setNewgameWeaponPanels(ngwContent, ngwSubLeft, ngwSubRight);
 		router.setFontConfig(fontConfig);
 		router.setShowLoadingMessage(getIntent().getBooleanExtra(
 				SplashActivity.EXTRA_ASSETS_FRESHLY_INSTALLED, false));
@@ -886,7 +912,8 @@ public class GameActivity extends Activity
 		// QC panel are swallowed by DirectionalTouchView's 9-grid tap
 		// handler and the panel never scrolls.
 		portraitExtraScrollTargets = new View[] {
-				ngsDesc, ngbDesc, quickControlsView, ngsScroll, ngbScroll };
+				ngsDesc, ngbDesc, quickControlsView, ngsScroll, ngbScroll,
+				ngwScroll };
 
 		final float MIN_FONT_SCALE = 0.3f;
 		final float MIN_SCALE_DELTA = 0.01f;

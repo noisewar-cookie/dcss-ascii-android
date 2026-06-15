@@ -3,7 +3,7 @@ index 8ac5d80673..ec194e782c 100644
 --- a/crawl-ref/source/newgame.cc
 +++ b/crawl-ref/source/newgame.cc
 @@ -1175,16 +1175,27 @@ public:
- 
+
          welcome.textcolour(BROWN);
          welcome.cprintf("%s", _welcome(m_ng).c_str());
 -        welcome.textcolour(YELLOW);
@@ -24,9 +24,9 @@ index 8ac5d80673..ec194e782c 100644
 +            welcome.cprintf(" Please select your species.");
 +            m_vbox->add_child(make_shared<Text>(welcome));
 +        }
- 
+
          descriptions = make_shared<Switcher>();
- 
+
          m_main_items = make_shared<OuterMenu>(true, 3, 20);
          m_main_items->menu_id = m_choice_type == C_JOB ?
              "background-main" : "species-main";
@@ -42,3 +42,11 @@ index 8ac5d80673..ec194e782c 100644
          m_sub_items->descriptions = descriptions;
          m_vbox->add_child(m_sub_items);
          _add_choice_menu_options(m_choice_type, m_ng, m_defaults);
+@@ -1858,6 +1870,7 @@ static bool _prompt_weapon(const newgame_def& ng, newgame_def& ng_choice,
+
+     auto sub_items = make_shared<OuterMenu>(false, 2, 3);
+     sub_items->menu_id = "weapon-sub";
++    sub_items->linear_nav = true;
+     vbox->add_child(sub_items);
+
+     main_items->linked_menus[2] = sub_items;

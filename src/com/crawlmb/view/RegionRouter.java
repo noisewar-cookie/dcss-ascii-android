@@ -31,7 +31,7 @@ public class RegionRouter implements TerminalRenderer
 		// panel container (one panel per category) and per-panel scales
 		// from font_config.txt. Detected via row-0 "Welcome" + the
 		// "species." / "background." disambiguator from newgame.cc.
-		NEWGAME_SPECIES, NEWGAME_BACKGROUND, NEWGAME_NAME
+		NEWGAME_SPECIES, NEWGAME_BACKGROUND, NEWGAME_WEAPON, NEWGAME_NAME
 	}
 
 	public interface ScrollStateListener
@@ -233,6 +233,7 @@ public class RegionRouter implements TerminalRenderer
 	private static final String NEWGAME_WELCOME_PREFIX = "Welcome";
 	private static final String NEWGAME_SPECIES_TOKEN = "species.";
 	private static final String NEWGAME_BACKGROUND_TOKEN = "background.";
+	private static final String NEWGAME_WEAPON_ANCHOR = "choice of weapons";
 
 	// Character naming screen anchor. _choose_name in newgame.cc renders
 	// "What is your name today? " via formatted_string into a popup; the
@@ -325,6 +326,10 @@ public class RegionRouter implements TerminalRenderer
 	private RegionTermView ngbDescView;
 	private RegionTermView ngbSubLeftView;
 	private RegionTermView ngbSubRightView;
+	private View newgameWeaponContainer;
+	private RegionTermView ngwContentView;
+	private RegionTermView ngwSubLeftView;
+	private RegionTermView ngwSubRightView;
 	private final Context context;
 
 	private final char[][] terminalShadow = new char[TERMINAL_ROWS][TERMINAL_COLS];
@@ -527,6 +532,19 @@ public class RegionRouter implements TerminalRenderer
 		this.ngbSubRightView = backgroundRight;
 	}
 
+	public void setNewgameWeaponContainer(View container)
+	{
+		this.newgameWeaponContainer = container;
+	}
+
+	public void setNewgameWeaponPanels(RegionTermView content,
+			RegionTermView subLeft, RegionTermView subRight)
+	{
+		this.ngwContentView = content;
+		this.ngwSubLeftView = subLeft;
+		this.ngwSubRightView = subRight;
+	}
+
 	// True iff every cell on the row is whitespace or unset.
 	private boolean rowIsBlank(int row)
 	{
@@ -607,6 +625,7 @@ public class RegionRouter implements TerminalRenderer
 	// covering the whole sub block and hides the two grid panels via 0-width
 	// regions; the next frame will retry detection.
 	private static final int SUB_GRID_ROWS = 4;
+	private static final int WEAPON_SUB_GRID_ROWS = 3;
 
 	private void applyNewgameSubBounds(boolean isSpecies)
 	{
@@ -711,6 +730,76 @@ public class RegionRouter implements TerminalRenderer
 		right.setRowColShift(shifts);
 	}
 
+	private void applyNewgameWeaponSubBounds()
+	{
+		if (ngwContentView == null || ngwSubLeftView == null
+				|| ngwSubRightView == null)
+			return;
+
+		int subItemRow = -1;
+		int cLeft = -1;
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+		{
+			int c = findColInRow(r, "+ - Recommended");
+			if (c >= 0)
+			{
+				subItemRow = r;
+				cLeft = c;
+				break;
+			}
+		}
+
+		int cMid = -1;
+		if (subItemRow >= 0)
+		{
+			for (int r = subItemRow; r < subItemRow + WEAPON_SUB_GRID_ROWS
+					&& r < TERMINAL_ROWS; r++)
+			{
+				int c = findColInRow(r, "* - Random");
+				if (c >= 0)
+				{
+					cMid = c;
+					break;
+				}
+			}
+		}
+
+		if (subItemRow < 0 || cLeft < 0 || cMid <= cLeft)
+		{
+			ngwContentView.setRegionRows(0, TERMINAL_ROWS);
+			ngwContentView.setRegionCols(0, TERMINAL_COLS);
+			ngwSubLeftView.setRegionRows(TERMINAL_ROWS, TERMINAL_ROWS);
+			ngwSubLeftView.setRegionCols(0, 0);
+			ngwSubRightView.setRegionRows(TERMINAL_ROWS, TERMINAL_ROWS);
+			ngwSubRightView.setRegionCols(0, 0);
+			return;
+		}
+
+		int gridEnd = Math.min(subItemRow + WEAPON_SUB_GRID_ROWS, TERMINAL_ROWS);
+
+		ngwContentView.setRegionRows(0, subItemRow);
+		ngwContentView.setRegionCols(0, TERMINAL_COLS);
+
+		ngwSubLeftView.setRegionRows(subItemRow, gridEnd);
+		ngwSubLeftView.setRegionCols(cLeft, cMid);
+		ngwSubLeftView.setRowColShift(null);
+
+		ngwSubRightView.setRegionRows(subItemRow, gridEnd);
+		ngwSubRightView.setRegionCols(cMid, TERMINAL_COLS);
+		int rows = gridEnd - subItemRow;
+		int[] shifts = new int[rows];
+		for (int i = 0; i < rows; i++)
+		{
+			int row = subItemRow + i;
+			int shift = 0;
+			while (cMid + shift < TERMINAL_COLS
+					&& terminalShadow[row][cMid + shift] == ' ')
+				shift++;
+			shifts[i] = shift;
+		}
+		ngwSubRightView.setRowColShift(shifts);
+	}
+
 	// Background row 2 has only the col-0 group titles — Warrior, Adventurer,
 	// Mage. Zealot (col 0) and Warrior-mage (col 1) sit further down their
 	// columns and share the col-0/col-1 x ranges respectively.
@@ -795,7 +884,8 @@ public class RegionRouter implements TerminalRenderer
 				ngbWarriorView, ngbZealotView, ngbAdventurerView,
 				ngbWarMageView, ngbMageView,
 				ngsDescView, ngsSubLeftView, ngsSubRightView,
-				ngbDescView, ngbSubLeftView, ngbSubRightView };
+				ngbDescView, ngbSubLeftView, ngbSubRightView,
+				ngwContentView, ngwSubLeftView, ngwSubRightView };
 		for (RegionTermView v : ng)
 			if (v != null)
 				v.resetScroll();
@@ -817,9 +907,13 @@ public class RegionRouter implements TerminalRenderer
 		boolean newgameBackgroundVisible = !splitVisible
 				&& menuType == MenuType.NEWGAME_BACKGROUND
 				&& newgameBackgroundContainer != null;
+		boolean newgameWeaponVisible = !splitVisible
+				&& menuType == MenuType.NEWGAME_WEAPON
+				&& newgameWeaponContainer != null;
 		boolean fullVisible = !splitVisible && !skillsVisible
 				&& !itemsVisible
-				&& !newgameSpeciesVisible && !newgameBackgroundVisible;
+				&& !newgameSpeciesVisible && !newgameBackgroundVisible
+				&& !newgameWeaponVisible;
 
 		// Apply scale/scroll config BEFORE visibility changes. When
 		// fullView transitions INVISIBLE→VISIBLE, its bitmap may hold
@@ -900,6 +994,9 @@ public class RegionRouter implements TerminalRenderer
 		if (newgameBackgroundContainer != null)
 			newgameBackgroundContainer.setVisibility(
 					newgameBackgroundVisible ? View.VISIBLE : View.INVISIBLE);
+		if (newgameWeaponContainer != null)
+			newgameWeaponContainer.setVisibility(
+					newgameWeaponVisible ? View.VISIBLE : View.INVISIBLE);
 		// Quick Controls panel: only visible while the DCSS main menu is on
 		// screen. fullVisible alone is not enough — every other in-game menu
 		// (inventory, overview, etc.) is also "full" and the QC panel must
@@ -930,6 +1027,10 @@ public class RegionRouter implements TerminalRenderer
 			applyNewgameBackgroundBounds();
 			applyNewgameSubBounds(false);
 		}
+		if (newgameWeaponVisible)
+		{
+			applyNewgameWeaponSubBounds();
+		}
 
 		if (scrollStateListener != null)
 		{
@@ -956,6 +1057,8 @@ public class RegionRouter implements TerminalRenderer
 			redrawTarget = newgameSpeciesContainer;
 		else if (newgameBackgroundVisible && newgameBackgroundContainer != null)
 			redrawTarget = newgameBackgroundContainer;
+		else if (newgameWeaponVisible && newgameWeaponContainer != null)
+			redrawTarget = newgameWeaponContainer;
 		else if (activeMenu != null
 				&& (scaleChanged || activeMenu == skillsView
 						|| activeMenu == itemsView))
@@ -2254,6 +2357,8 @@ public class RegionRouter implements TerminalRenderer
 			fullView.post(() -> applyNewgameSubBounds(true));
 		else if (currentMenuType == MenuType.NEWGAME_BACKGROUND && fullView != null)
 			fullView.post(() -> applyNewgameSubBounds(false));
+		else if (currentMenuType == MenuType.NEWGAME_WEAPON && fullView != null)
+			fullView.post(() -> applyNewgameWeaponSubBounds());
 
 		// Recompute items/help fold anchor every frame while active.
 		// Content changes when the user scrolls, switches pages,
@@ -2353,6 +2458,11 @@ public class RegionRouter implements TerminalRenderer
 			if (rowContains(0, NEWGAME_BACKGROUND_TOKEN)
 					|| rowContains(1, NEWGAME_BACKGROUND_TOKEN))
 				return MenuType.NEWGAME_BACKGROUND;
+			for (int r = 1; r < 5; r++)
+			{
+				if (rowContains(r, NEWGAME_WEAPON_ANCHOR))
+					return MenuType.NEWGAME_WEAPON;
+			}
 		}
 		// Character naming popup (_choose_name). The popup is vertically
 		// centered, so the exact row varies; scan all rows.
