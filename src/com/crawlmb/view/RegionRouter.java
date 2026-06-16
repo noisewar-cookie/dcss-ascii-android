@@ -1226,8 +1226,10 @@ public class RegionRouter implements TerminalRenderer
 			vscrollable = fontConfig.portraitDefaultVScrollable;
 			break;
 		}
-		int endRow = (type == MenuType.SPELLS) ? TERMINAL_ROWS : 28;
+		int endRow = (type == MenuType.SPELLS || type == MenuType.LEVELMAP)
+				? TERMINAL_ROWS : 28;
 		fullView.setRegionRows(0, endRow);
+		fullView.setAnchorToContent(type == MenuType.MAINMENU);
 		float prevScale = fullView.getFontScaleMultiplier();
 		fullView.setFontScaleMultiplier(scale);
 		fullView.setHorizontalScrollEnabled(scrollable);
@@ -2373,16 +2375,23 @@ public class RegionRouter implements TerminalRenderer
 		// PREGAME don't have keyhelp footers. HISCORES content extends
 		// past row 23 as continuous entries with no keyhelp gap, so
 		// compression would create a phantom spacer at row 24.
+		// LEVELMAP (Shift+X) renders dungeon map content continuously
+		// across all terminal rows — no keyhelp footer to compress.
 		if (detected == LayoutMode.MENU
 				&& detectedType != MenuType.ITEMS
 				&& detectedType != MenuType.HELP
 				&& detectedType != MenuType.SKILLS
 				&& detectedType != MenuType.HISCORES
+				&& detectedType != MenuType.LEVELMAP
 				&& fullView != null)
 			recomputeFullViewFooter();
 
 		if (fullView != null)
+		{
 			fullView.postInvalidate();
+			if (currentMenuType == MenuType.MAINMENU)
+				fullView.post(() -> fullView.requestLayout());
+		}
 		if (skillsView != null)
 			skillsView.postInvalidate();
 		if (itemsView != null)

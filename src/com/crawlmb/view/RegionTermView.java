@@ -97,6 +97,7 @@ public class RegionTermView extends View
 	private boolean verticalScrollEnabled = false;
 	private int scrollOffsetX = 0;
 	private int scrollOffsetY = 0;
+	private boolean anchorToContent = false;
 	private int maxContentRow = -1;
 	private int maxContentCol = -1;
 	private GestureDetector scrollDetector;
@@ -155,6 +156,20 @@ public class RegionTermView extends View
 	public int getStartCol() { return startCol; }
 	public int getEndCol() { return endCol; }
 	public int getEndRow() { return endRow; }
+
+	// When true, onMeasure reports height based on maxContentRow (the lowest
+	// row with non-space content) + 1 spacer row, instead of the full
+	// canvas_height. The bitmap stays full-size; only the reported height
+	// shrinks, so a LinearLayout sibling (e.g. Quick Controls) anchors
+	// directly below the actual content.
+	public void setAnchorToContent(boolean anchor)
+	{
+		if (this.anchorToContent == anchor)
+			return;
+		this.anchorToContent = anchor;
+		if (canvas != null)
+			requestLayout();
+	}
 
 	// Set per-row col shift for drawPoint. Length must equal regionRows;
 	// pass null to clear. See rowColShift field comment.
@@ -726,6 +741,12 @@ public class RegionTermView extends View
 		// visible window via scrollOffsetY. Without scroll on, report the
 		// full bitmap height as before so no scroll is needed.
 		int reportedHeight = canvas_height;
+		if (anchorToContent && char_height > 0 && maxContentRow >= 0)
+		{
+			int cap = (maxContentRow + 2) * char_height;
+			if (cap < reportedHeight)
+				reportedHeight = cap;
+		}
 		if (verticalScrollEnabled)
 		{
 			int parentLimit = MeasureSpec.getSize(heightMeasureSpec);
