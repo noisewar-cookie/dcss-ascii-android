@@ -462,8 +462,11 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 
 		// A drag beyond touch slop is a scroll/swipe, not a hold — drop any
 		// pending 9-grid hold so it doesn't fire after the finger moved off
-		// the original cell.
-		if (gridHoldCell != 0 && actionMasked == MotionEvent.ACTION_MOVE)
+		// the original cell. Once the hold has already fired (gridHoldFired),
+		// the user has committed to a repeat; ignore drift so a small finger
+		// shift doesn't terminate the in-progress traversal.
+		if (gridHoldCell != 0 && !gridHoldFired
+				&& actionMasked == MotionEvent.ACTION_MOVE)
 		{
 			float gdx = event.getX() - gridHoldX;
 			float gdy = event.getY() - gridHoldY;
@@ -482,7 +485,11 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			return true;
 		}
 
-		if (targetAreaTouch && !forwardingToTarget
+		// Don't switch into drag-scroll forwarding once a hold has fired —
+		// the user is repeating a direction, and any small finger drift over
+		// a scroll target would otherwise hijack the touch into a scroll and
+		// silently end the traversal.
+		if (targetAreaTouch && !forwardingToTarget && !gridHoldFired
 				&& action == MotionEvent.ACTION_MOVE)
 		{
 			float dx = event.getRawX() - downX;
