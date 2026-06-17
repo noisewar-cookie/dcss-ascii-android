@@ -390,6 +390,25 @@ public class RegionRouter implements TerminalRenderer
 	private volatile int[] skillsLeftDest;
 	private volatile int[] skillsRightDest;
 	private volatile int skillsBottomStart = -1;
+	// True when the SkillMenu is in SKMF_SIMPLE (tutorial/hints) mode.
+	// Detected by absence of the "Apt " column header -- SKMF_APTITUDE is
+	// only set when !game_is_hints_tutorial(), so an "Apt"-less header
+	// means SIMPLE. In SIMPLE mode the C++ side does m_pos.y -= 1 before
+	// placing the help block (a row-stealing trick to fit longer tutorial
+	// help + buttons in 24 terminal rows), which makes the first help line
+	// land on what would otherwise be the last skill row of the grid.
+	// We respond by:
+	//   1) shrinking the fold range by 1 so source row (headerRow + 17)
+	//      is treated as bottom content, not as a fold-grid row -- this
+	//      stops the help text getting interleaved with col-1 skills;
+	//   2) shifting button rows down by 1 destRow to insert a blank gap
+	//      between the help text and the [?]/[=] buttons, matching how
+	//      the main game's help bounds naturally leave a trailing blank.
+	// Threshold (skillsSimpleButtonRow) is the source terminal row where
+	// the first switch row begins -- terminal row 22 with help_height=5
+	// and m_pos.y -= 1 applied.
+	private volatile boolean skillsSimpleMode = false;
+	private static final int SKILL_SIMPLE_BUTTON_ROW = 22;
 
 	// Anchor for the single-column fold of item menus. Recomputed each
 	// frame while in MenuType.ITEMS. itemsColSplit is the column where
@@ -1280,6 +1299,7 @@ public class RegionRouter implements TerminalRenderer
 		skillsHeaderRow = -1;
 		skillsLeftCol = -1;
 		skillsRightCol = -1;
+		skillsSimpleMode = false;
 		itemsColSplit = -1;
 		itemsFirstContentRow = -1;
 		itemsFoldRows = -1;
@@ -1405,7 +1425,7 @@ public class RegionRouter implements TerminalRenderer
 			skillsView.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
 			return;
 		}
-		int fold = SKILL_FOLD_ROWS;
+		int fold = skillsSimpleMode ? SKILL_FOLD_ROWS - 1 : SKILL_FOLD_ROWS;
 		int colShift = rightCol - leftCol;
 		if (r < headerRow)
 		{
@@ -1437,6 +1457,13 @@ public class RegionRouter implements TerminalRenderer
 		else
 		{
 			int offset = r - (headerRow + fold + 1);
+			// SIMPLE: shift the button rows down by one destRow so the
+			// fold output gets a blank gap between the (now contiguous)
+			// help text and the first switch row, matching the trailing
+			// blank that the main game's 3-row help bounds produce for
+			// its 2-line description.
+			if (skillsSimpleMode && r >= SKILL_SIMPLE_BUTTON_ROW)
+				offset += 1;
 			skillsView.drawPoint(bottom + offset, c, ch, fcolor,
 					bcolor, extendedErase);
 		}
@@ -1466,6 +1493,7 @@ public class RegionRouter implements TerminalRenderer
 		skillsLeftDest = null;
 		skillsRightDest = null;
 		skillsBottomStart = -1;
+		skillsSimpleMode = false;
 		int patLen = SKILL_HEADER.length();
 		for (int r = 0; r <= 3; r++)
 		{
@@ -1490,6 +1518,16 @@ public class RegionRouter implements TerminalRenderer
 					skillsHeaderRow = r;
 					skillsLeftCol = firstCol;
 					skillsRightCol = c;
+					boolean simple = true;
+					for (int rr = 0; rr <= 3; rr++)
+					{
+						if (rowContains(rr, "Apt "))
+						{
+							simple = false;
+							break;
+						}
+					}
+					skillsSimpleMode = simple;
 					buildSkillsCompactMap();
 					return;
 				}
@@ -1502,12 +1540,22 @@ public class RegionRouter implements TerminalRenderer
 	// and one before the help/button block.
 	private void buildSkillsCompactMap()
 	{
-		int fold = SKILL_FOLD_ROWS;
+		// SIMPLE (tutorial) shortens the fold range by 1 -- see the
+		// skillsSimpleMode comment for why. ld/rd are still allocated at
+		// SKILL_FOLD_ROWS so forwardToSkillsView's idx lookup is safe even
+		// when iteration stops one short; the unused trailing slot stays
+		// at its default -1 (skip).
+		int fold = skillsSimpleMode ? SKILL_FOLD_ROWS - 1 : SKILL_FOLD_ROWS;
 		int hdr = skillsHeaderRow;
 		int rCol = skillsRightCol;
 
-		int[] leftDest = new int[fold];
-		int[] rightDest = new int[fold];
+		int[] leftDest = new int[SKILL_FOLD_ROWS];
+		int[] rightDest = new int[SKILL_FOLD_ROWS];
+		for (int i = 0; i < SKILL_FOLD_ROWS; i++)
+		{
+			leftDest[i] = -1;
+			rightDest[i] = -1;
+		}
 		int destRow = hdr + 1;
 
 		for (int i = 0; i < fold; i++)
@@ -2252,13 +2300,17 @@ public class RegionRouter implements TerminalRenderer
 			if (rowContains(r, "Granted powers:"))
 				return MenuType.RELIGION;
 		}
-		// Skill training (m): SkillMenu column header text. "Apt " (with
-		// trailing space) matches the literal aptitude column header and
-		// is very unlikely to appear elsewhere with that exact byte
-		// sequence. Constrained to top rows where the header lives.
+		// Skill training (m): SkillMenu column title. SKILL_HEADER
+		// ("     Skill", 5 leading spaces + "Skill") is emitted by
+		// SkillMenuEntry::set_title for every column-title row in both
+		// regular and tutorial/hints (SKMF_SIMPLE) mode -- unlike "Apt ",
+		// which is only emitted when SKMF_APTITUDE is set (regular mode
+		// only). Using SKILL_HEADER keeps detection aligned with the
+		// fold anchor in recomputeSkillsAnchor() so the tutorial gets
+		// the same single-column layout as the main game.
 		for (int r = 0; r <= 3; r++)
 		{
-			if (rowContains(r, "Apt "))
+			if (rowContains(r, SKILL_HEADER))
 				return MenuType.SKILLS;
 		}
 
