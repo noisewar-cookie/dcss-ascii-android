@@ -1,0 +1,6 @@
+Release 8 (0.34.1)
+
+Bug Fixes:
+• Single apostrophe ['] added back to virtual keyboard.
+• Holding cursor on lists less likely to interrupt.
+• Tutorial skills screen fixed (single-stack).
