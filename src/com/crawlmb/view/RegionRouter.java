@@ -357,7 +357,21 @@ public class RegionRouter implements TerminalRenderer
 	// detection read without explicit synchronisation; the flag is single-
 	// writer (game thread inside _replay_messages_core) so torn reads aren't
 	// a concern.
-	private volatile boolean messageHistoryMode = false;
+	//
+	// Static so the popup-active signal survives across RegionRouter
+	// recreations. rebuildViews() (Activity.onStart) constructs a new
+	// RegionRouter on every sleep/wake cycle; a fresh instance would start
+	// with this flag false even though the C++ game thread is still blocked
+	// inside _replay_messages_core. detectMenuType would then return DEFAULT
+	// instead of MESSAGES, applyMenuType would set endRow back to 28, and
+	// the bottom 20 rows of the popup (the latest messages) would be clipped
+	// — exactly the pre-fix symptom, just triggered by background/foreground
+	// instead of by opening Ctrl+P. Same rationale as gameplayEverDetected
+	// above: the flag represents C++ runtime state (are we inside
+	// _replay_messages_core), which is invariant across Java-side recreations
+	// for as long as the process lives. Process death resets it to false on
+	// next class load, which matches reality (the popup is gone too).
+	private static volatile boolean messageHistoryMode = false;
 
 	@Override
 	public void setMessageHistoryMode(boolean active)
@@ -889,6 +903,32 @@ public class RegionRouter implements TerminalRenderer
 	public void setShowLoadingMessage(boolean show)
 	{
 		this.showLoadingMessage = show;
+	}
+
+	// Called from buildPortraitLayout after this RegionRouter and all of its
+	// views have been wired up, before onResume's redrawScreen runs. If a
+	// Ctrl+P / startup message history popup is open on the C++ side
+	// (static messageHistoryMode), pre-applies the MESSAGES layout to
+	// fullView so its region is already 48 rows when the first refreshTerminal
+	// arrives. Without this, the new fullView is constructed at the default
+	// 28 rows; refreshTerminal's drawPoint calls for rows 28..47 are dropped
+	// by drawPoint's range check, only rows 0..27 land in the mirror, and the
+	// subsequent detection-driven applyMode that widens the region then
+	// reallocates the mirror as an empty 48-row array — erasing the rows
+	// 0..27 we just drew and leaving the panel blank until the user taps to
+	// wake DCSS into a fresh storm. Setting currentMenuType to MESSAGES here
+	// matches the layout so the first postInvalidate after refreshTerminal
+	// sees no transition and doesn't re-run resetAllScroll — the
+	// pendingScrollToBottom armed by applyFullConfig persists through the
+	// empty-mirror onMeasure pass and is consumed by the post-refresh onDraw
+	// once maxContentRow reflects the populated mirror.
+	public void prepareForResume()
+	{
+		if (!messageHistoryMode || fullView == null)
+			return;
+		applyFullConfig(MenuType.MESSAGES);
+		currentMode = LayoutMode.MENU;
+		currentMenuType = MenuType.MESSAGES;
 	}
 
 	public void setReloadCompleteListener(Runnable r)

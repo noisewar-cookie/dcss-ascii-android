@@ -901,6 +901,12 @@ public class GameActivity extends Activity
 		router.setShowLoadingMessage(getIntent().getBooleanExtra(
 				SplashActivity.EXTRA_ASSETS_FRESHLY_INSTALLED, false));
 		router.setRedrawRequester(() -> gameKeyListener.nativew.redrawScreen());
+		// If we're resuming with the Ctrl+P / startup message history popup
+		// still open on the C++ side, widen fullView's region to 48 rows now
+		// — before onResume's redrawScreen pushes drawPoint calls. Otherwise
+		// the freshly-constructed 28-row fullView drops rows 28..47, and the
+		// later detection-driven setRegionRows reallocates the mirror empty.
+		router.prepareForResume();
 		portraitRouter = router;
 		// The newgame desc panels live in their own LinearLayout containers
 		// (newgameSpecies/newgameBackground), so DirectionalTouchView's
