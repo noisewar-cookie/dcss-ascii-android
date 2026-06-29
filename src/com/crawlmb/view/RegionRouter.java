@@ -27,6 +27,17 @@ public class RegionRouter implements TerminalRenderer
 	{
 		DEFAULT, PREGAME, MAINMENU, ITEMS, SPELLS, OVERVIEW, SKILLS,
 		RELIGION, HISCORES, TRAVEL, LEVELMAP, DESCRIBE, HELP,
+		// Message history (Ctrl+P). The formatted_scroller is sized to the
+		// full 48-row terminal with FS_START_AT_END, so the newest messages
+		// land at terminal rows past 28 — fullView's default 0..28 region
+		// clips them off. This MenuType widens fullView to TERMINAL_ROWS so
+		// the full scroller is drawn into the bitmap and the user can
+		// scroll to the bottom (latest messages). Detected via a JNI flag
+		// set by the patched _replay_messages_core in message.cc, not by
+		// terminal content, because the popup has no title row to anchor
+		// on and the per-row "_" turn-end prefix also appears in normal
+		// gameplay messages.
+		MESSAGES,
 		// Newgame sub-states. Each picks a different vertically-stacked
 		// panel container (one panel per category) and per-panel scales
 		// from font_config.txt. Detected via row-0 "Welcome" + the
@@ -337,6 +348,22 @@ public class RegionRouter implements TerminalRenderer
 	private final int[][] terminalBg = new int[TERMINAL_ROWS][TERMINAL_COLS];
 	private volatile LayoutMode currentMode = LayoutMode.PREGAME;
 	private volatile MenuType currentMenuType = MenuType.DEFAULT;
+
+	// Set true by libandroid.cc → NativeWrapper.setMessageHistoryMode() while
+	// the Ctrl+P / startup message history popup is open. Read on the game
+	// thread by detectMenuType() to short-circuit content scanning and
+	// return MenuType.MESSAGES regardless of what the terminal grid contains
+	// at that moment. Volatile so the C++-side write is visible to the
+	// detection read without explicit synchronisation; the flag is single-
+	// writer (game thread inside _replay_messages_core) so torn reads aren't
+	// a concern.
+	private volatile boolean messageHistoryMode = false;
+
+	@Override
+	public void setMessageHistoryMode(boolean active)
+	{
+		messageHistoryMode = active;
+	}
 
 	public LayoutMode getCurrentMode()
 	{
@@ -1230,6 +1257,15 @@ public class RegionRouter implements TerminalRenderer
 			scrollable = fontConfig.portraitDescribeScrollable;
 			vscrollable = fontConfig.portraitDescribeVScrollable;
 			break;
+		case MESSAGES:
+			// Ctrl+P / startup message history. fullView is widened to
+			// TERMINAL_ROWS below so the full 48-row scroller is drawn
+			// into the bitmap; vscroll lets the user pan to the latest
+			// messages at the bottom.
+			scale = fontConfig.portraitMessagesFontScale;
+			scrollable = fontConfig.portraitMessagesScrollable;
+			vscrollable = fontConfig.portraitMessagesVScrollable;
+			break;
 		case NEWGAME_NAME:
 			scale = fontConfig.portraitNewgameNameFontScale;
 			scrollable = fontConfig.portraitNewgameNameScrollable;
@@ -1245,7 +1281,8 @@ public class RegionRouter implements TerminalRenderer
 			vscrollable = fontConfig.portraitDefaultVScrollable;
 			break;
 		}
-		int endRow = (type == MenuType.SPELLS || type == MenuType.LEVELMAP)
+		int endRow = (type == MenuType.SPELLS || type == MenuType.LEVELMAP
+				|| type == MenuType.MESSAGES)
 				? TERMINAL_ROWS : 28;
 		fullView.setRegionRows(0, endRow);
 		fullView.setAnchorToContent(type == MenuType.MAINMENU);
@@ -1253,6 +1290,14 @@ public class RegionRouter implements TerminalRenderer
 		fullView.setFontScaleMultiplier(scale);
 		fullView.setHorizontalScrollEnabled(scrollable);
 		fullView.setVerticalScrollEnabled(vscrollable);
+		// Ctrl+P opens at the latest messages (bottom of content). The
+		// scroller fills the 48-row bitmap with FS_START_AT_END, but
+		// resetAllScroll has just zeroed scrollOffsetY to the top, so without
+		// this snap the user would land at the start of the log and have to
+		// scroll down. Consumed by RegionTermView.onDraw once content and
+		// viewport size are both available.
+		if (type == MenuType.MESSAGES)
+			fullView.requestScrollToBottom();
 		return prevScale != scale;
 	}
 
@@ -2203,6 +2248,15 @@ public class RegionRouter implements TerminalRenderer
 
 	private MenuType detectMenuType()
 	{
+		// Message history popup (Ctrl+P, startup error log). Flag is set by
+		// the patched _replay_messages_core in message.cc via JNI before
+		// hist.show() runs and cleared after it returns, so this branch is
+		// only taken while the popup is actually open. Checked first so it
+		// wins over any content-anchor match (e.g. a "_Welcome back" line
+		// quoted in the history would otherwise look pregame-ish).
+		if (messageHistoryMode)
+			return MenuType.MESSAGES;
+
 		// Pregame-style screens reachable from MENU mode after the first
 		// gameplay frame: once gameplayEverDetected sticks at true,
 		// detectMode() returns MENU (not PREGAME) for every non-gameplay

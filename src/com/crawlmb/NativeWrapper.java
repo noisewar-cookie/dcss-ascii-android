@@ -148,6 +148,19 @@ public class NativeWrapper
 		}
 	}
 
+	// Called from libandroid.cc at entry and exit of the Ctrl+P / startup
+	// message history popup. Forwarded to the renderer so RegionRouter can
+	// classify the popup as MenuType.MESSAGES and widen fullView's region
+	// to the full 48-row terminal.
+	public void setMessageHistoryMode(boolean active)
+	{
+		synchronized (display_lock)
+		{
+			if (renderer != null)
+				renderer.setMessageHistoryMode(active);
+		}
+	}
+
 	// Ask DCSS to repaint the current screen state. Used after a font scale
 	// change recreates the underlying bitmap (which is then blank): DCSS
 	// re-issues drawPoint calls for every cell, refilling the new bitmap.

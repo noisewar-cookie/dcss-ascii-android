@@ -110,6 +110,7 @@ static jmethodID NativeWrapper_printTerminalChar;
 static jmethodID NativeWrapper_invalidateTerminal;
 static jmethodID NativeWrapper_preStormHint;
 static jmethodID NativeWrapper_updateStatusLights;
+static jmethodID NativeWrapper_setMessageHistoryMode;
 
 // Terminal stuff
 class TerminalChar //I guess this could be a struct.
@@ -188,13 +189,29 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"preStormHint", "(Z)V");
 	NativeWrapper_updateStatusLights = e->GetMethodID(NativeWrapperClass,
 		"updateStatusLights", "(Ljava/lang/String;[I)V");
+	NativeWrapper_setMessageHistoryMode = e->GetMethodID(NativeWrapperClass,
+		"setMessageHistoryMode", "(Z)V");
 
 	return NativeWrapper_fatal
 		&& NativeWrapper_getch
 		&& NativeWrapper_printTerminalChar
 		&& NativeWrapper_invalidateTerminal
 		&& NativeWrapper_preStormHint
-		&& NativeWrapper_updateStatusLights;
+		&& NativeWrapper_updateStatusLights
+		&& NativeWrapper_setMessageHistoryMode;
+}
+
+// Called from the patched _replay_messages_core (message.cc) at entry and
+// exit of the Ctrl+P / startup message history popup. Forwards to the Java
+// side so RegionRouter can classify the popup as MenuType.MESSAGES and
+// give fullView the full 48-row terminal region (default fullView caps at
+// row 28, which clips the latest messages because FS_START_AT_END anchors
+// them to the bottom of the scroller viewport).
+extern "C" void android_message_history_mode(bool active)
+{
+	if (env == NULL || NativeWrapperObj == NULL)
+		return;
+	JAVA_CALL(NativeWrapper_setMessageHistoryMode, (jboolean)(active ? JNI_TRUE : JNI_FALSE));
 }
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/)

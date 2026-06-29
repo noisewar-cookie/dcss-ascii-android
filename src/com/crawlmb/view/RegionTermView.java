@@ -248,6 +248,20 @@ public class RegionTermView extends View
 		invalidate();
 	}
 
+	// Single-shot: snap scrollOffsetY to the bottom of content on the next
+	// onDraw that has measurable height and content. Used by RegionRouter
+	// when entering MenuType.MESSAGES so the Ctrl+P popup opens at the
+	// latest messages (FS_START_AT_END places newest content at the bottom
+	// of the bitmap, but resetScroll has just zeroed the offset to the top).
+	// Consumed inside onDraw; if conditions aren't met (no content yet, view
+	// not laid out), the flag persists until the next paint can satisfy it.
+	private volatile boolean pendingScrollToBottom = false;
+
+	public void requestScrollToBottom()
+	{
+		pendingScrollToBottom = true;
+	}
+
 	public boolean isScrollEnabled()
 	{
 		return horizontalScrollEnabled || verticalScrollEnabled;
@@ -439,6 +453,18 @@ public class RegionTermView extends View
 	{
 		if (bitmap == null)
 			return;
+		if (pendingScrollToBottom && verticalScrollEnabled
+				&& char_height > 0 && maxContentRow >= 0)
+		{
+			int viewportH = getHeight();
+			if (viewportH > 0)
+			{
+				int contentH = (maxContentRow + 1) * char_height;
+				int maxY = Math.max(0, contentH - viewportH);
+				scrollOffsetY = maxY;
+				pendingScrollToBottom = false;
+			}
+		}
 		if (contentZoom != 1.0f)
 		{
 			// Scale around the panel's geometric center so the dungeon view

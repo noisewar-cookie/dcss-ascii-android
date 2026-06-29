@@ -22,4 +22,13 @@ public interface TerminalRenderer
 	default void preStormHint(boolean isGameplay) {}
 
 	default void updateStatusLights(String texts, int[] colours) {}
+
+	// Called from libandroid.cc (via NativeWrapper) at entry/exit of the
+	// Ctrl+P / startup message history popup. RegionRouter uses this to
+	// classify the popup as MenuType.MESSAGES so fullView's region widens
+	// from rows 0..28 to the full 48-row terminal — otherwise the
+	// scroller's FS_START_AT_END places newest messages at rows past 28
+	// which the default region clips. Default no-op for renderers that
+	// don't care (e.g. landscape TermView).
+	default void setMessageHistoryMode(boolean active) {}
 }

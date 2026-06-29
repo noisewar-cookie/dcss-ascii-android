@@ -1,0 +1,32 @@
+diff --git a/crawl-ref/source/message.cc b/crawl-ref/source/message.cc
+--- a/crawl-ref/source/message.cc
++++ b/crawl-ref/source/message.cc
+@@ -2261,11 +2261,19 @@
+     buffer.append_store(load_msgs);
+     clear_messages(); // check for Options.message_clear
+ }
+
++// Android: widens fullView from rows 0..28 to the full 48-row terminal for
++// the duration of the Ctrl+P message history popup. Without this the
++// scroller's FS_START_AT_END places the newest messages at terminal rows
++// past 28, which fullView's default region clips off (latest invisible,
++// older rows shown). Defined in libandroid.cc.
++extern "C" void android_message_history_mode(bool active);
++
+ static void _replay_messages_core(formatted_scroller &hist)
+ {
++    android_message_history_mode(true);
+     flush_prev_message();
+
+     const store_t msgs = buffer.get_store();
+     formatted_string lines;
+     for (int i = 0; i < msgs.size(); ++i)
+@@ -2293,7 +2301,8 @@
+         }
+
+     hist.add_formatted_string(lines);
+     hist.show();
++    android_message_history_mode(false);
+ }
+
+ void replay_messages()
