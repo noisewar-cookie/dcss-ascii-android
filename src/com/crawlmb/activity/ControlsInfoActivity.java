@@ -10,6 +10,7 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.ImageView;
 
+import com.crawlmb.Preferences;
 import com.crawlmb.R;
 
 public class ControlsInfoActivity extends Activity {
@@ -41,6 +42,18 @@ public class ControlsInfoActivity extends Activity {
 				advance();
 			}
 		});
+
+		if (Preferences.getSkipControlsInfo()) {
+			// Hide the help image and seed screenIndex so a single advance()
+			// jumps straight to SplashActivity through the existing path.
+			// Posted (not called directly) so it runs after onResume — calling
+			// finish() before the activity is resumed prevents SplashActivity's
+			// window from becoming visible, so the splash art never appears.
+			findViewById(R.id.controls_info_image).setVisibility(View.GONE);
+			screenIndex = SCREENS.length - 1;
+			handler.post(advanceRunnable);
+			return;
+		}
 
 		handler.postDelayed(advanceRunnable, 5000);
 	}

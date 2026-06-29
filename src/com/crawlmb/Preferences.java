@@ -22,6 +22,7 @@ final public class Preferences
 	public static final String KEY_FULLSCREEN = "crawl.fullscreen";
 	public static final String KEY_ORIENTATION = "crawl.orientation";
 	public static final String KEY_SKIPSPLASH = "crawl.skipsplash";
+	public static final String KEY_SKIPCONTROLSINFO = "crawl.skipcontrolsinfo";
 	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
 
 	public static final String KEY_FONTFACE = "crawl.fontface";
@@ -87,6 +88,11 @@ final public class Preferences
 	public static boolean getSkipSplash()
 	{
 		return sharedPreferences.getBoolean(Preferences.KEY_SKIPSPLASH, false);
+	}
+
+	public static boolean getSkipControlsInfo()
+	{
+		return sharedPreferences.getBoolean(Preferences.KEY_SKIPCONTROLSINFO, false);
 	}
 
 	// One-shot flag marking that the next launch follows a save-restore

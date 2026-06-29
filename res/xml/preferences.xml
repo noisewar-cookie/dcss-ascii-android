@@ -24,11 +24,16 @@
 	   android:entryValues="@array/orientations" />
 	-->
 
-	<CheckBoxPreference 
+	<CheckBoxPreference
 	   android:key="crawl.skipsplash"
-	   android:defaultValue="false" 
+	   android:defaultValue="false"
 	   android:title="@string/preferences_skipsplash_title"
 	   android:summary="@string/preferences_skipsplash_summary" />
+	<CheckBoxPreference
+	   android:key="crawl.skipcontrolsinfo"
+	   android:defaultValue="false"
+	   android:title="@string/preferences_skipcontrolsinfo_title"
+	   android:summary="@string/preferences_skipcontrolsinfo_summary" />
 	  <ListPreference
 		  android:key="crawl.fontface"
 		  android:defaultValue="VeraMoBd.ttf"

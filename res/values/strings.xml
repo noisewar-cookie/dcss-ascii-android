@@ -46,6 +46,8 @@
     <string name="preferences_fullscreen_summary">Enable or disable game in full screen</string>
     <string name="preferences_skipsplash_title">Skip splash screen</string>
     <string name="preferences_skipsplash_summary">Automatically skip the splash screen on startup</string>
+    <string name="preferences_skipcontrolsinfo_title">Skip startup help screens</string>
+    <string name="preferences_skipcontrolsinfo_summary">Automatically skip the controls info screens on startup</string>
     <string name="preferences_orientation_title">Orientation</string>
     <string name="preferences_orientation_summary">Select screen orientation</string>
     <string name="preferences_fontface_title">Font</string>
