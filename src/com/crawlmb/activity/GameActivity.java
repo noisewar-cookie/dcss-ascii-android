@@ -925,6 +925,7 @@ public class GameActivity extends Activity
 		final float MIN_FONT_SCALE = 0.3f;
 		final float MIN_SCALE_DELTA = 0.01f;
 
+		// Fallback map shrinker for UNSPECIFIED-height layouts.
 		gamePanel.getViewTreeObserver().addOnGlobalLayoutListener(
 				new ViewTreeObserver.OnGlobalLayoutListener()
 				{
@@ -1139,6 +1140,7 @@ public class GameActivity extends Activity
 			view.setExtraScrollTargets(portraitExtraScrollTargets);
 		if (portraitMapView != null && portraitFontConfig != null)
 			view.setMapZoom(portraitMapView,
+					portraitFontConfig.portraitMapZoomStepOut,
 					portraitFontConfig.portraitMapZoomStep1,
 					portraitFontConfig.portraitMapZoomStep2);
 

@@ -35,16 +35,10 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	private float downX, downY;
 	private int touchSlop;
 
-	// Map panel pinch-zoom (portrait). A scale gesture whose focal point
-	// starts over mapView zooms the rendered bitmap inside the panel — the
-	// panel's measured size doesn't change, so content past its edges is
-	// clipped. Zoom is stepped through three fixed levels [1.0, step1, step2]
-	// and zoom-in only — pinch-out advances one level, pinch-in retreats one
-	// level. Exactly one step fires per pinch gesture (regardless of how far
-	// the fingers spread), so reaching step2 from the default takes two
-	// separate pinch-out gestures. Zoom is session-only: mapZoomLevel resets
-	// to 0 every time the view is wired.
+	// Map pinch-zoom (portrait): stepped levels [stepOut, 1.0, step1, step2],
+	// one step per pinch gesture. Session-only — resets on rewire.
 	private RegionTermView mapView;
+	private float mapZoomStepOut = 0.88f;
 	private float mapZoomStep1 = 1.25f;
 	private float mapZoomStep2 = 1.5f;
 	private int mapZoomLevel = 0;
@@ -177,14 +171,12 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		this.extraScrollTargets = targets;
 	}
 
-	// Wire the map panel as a pinch-zoom target. step1/step2 are the two
-	// zoom-in levels above the default (1.0). One pinch-out advances to
-	// step1, a second pinch-out advances to step2; pinch-in reverses one
-	// level per gesture. Zoom is applied as a content-scale transform in
-	// RegionTermView.onDraw, so no DCSS redraw is needed — only an invalidate.
-	public void setMapZoom(RegionTermView mapView, float step1, float step2)
+	// Applied as a content-scale transform in RegionTermView.onDraw —
+	// no DCSS redraw needed, just invalidate.
+	public void setMapZoom(RegionTermView mapView, float stepOut, float step1, float step2)
 	{
 		this.mapView = mapView;
+		this.mapZoomStepOut = stepOut;
 		this.mapZoomStep1 = step1;
 		this.mapZoomStep2 = step2;
 		this.mapZoomLevel = 0;
@@ -614,23 +606,22 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
         && screenY >= mapLoc[1] && screenY < mapLoc[1] + mapView.getHeight();
   }
 
-  // Step the map zoom one level in the given direction (+1 = zoom in,
-  // -1 = zoom out) through the fixed level list [1.0, step1, step2].
-  // Zoom-in only: clamped to [0, 2]. Returns true when the level actually
-  // changed (so callers can mark the pinch's step as consumed).
+  // Step zoom level by ±1 through [stepOut, 1.0, step1, step2] (clamped
+  // to [-1, 2]). Returns true if the level changed.
   private boolean applyMapZoomStep(int direction)
   {
     if (mapView == null)
       return false;
     int next = mapZoomLevel + direction;
-    if (next < 0)
-      next = 0;
+    if (next < -1)
+      next = -1;
     else if (next > 2)
       next = 2;
     if (next == mapZoomLevel)
       return false;
     mapZoomLevel = next;
-    float factor = mapZoomLevel == 0 ? 1.0f
+    float factor = mapZoomLevel == -1 ? mapZoomStepOut
+        : mapZoomLevel == 0 ? 1.0f
         : mapZoomLevel == 1 ? mapZoomStep1
         : mapZoomStep2;
     performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);

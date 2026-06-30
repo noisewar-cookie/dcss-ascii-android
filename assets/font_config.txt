@@ -59,14 +59,10 @@ portrait_map_font_scale=0.93
 # Use this only to bias the centering (e.g. +1 to shift one col right).
 portrait_map_offset_cols=0
 
-# Portrait: map pinch-zoom levels (zoom-in only)
-# The map panel has three fixed zoom levels: 1.00 (default), step1, step2.
-# Each pinch-out gesture advances one level (default → step1 → step2);
-# each pinch-in gesture retreats one level. Exactly one step fires per
-# pinch — reaching step2 from the default requires two separate pinch-out
-# gestures. The pinch scales rendered content around the panel center
-# without resizing the panel, so zoom-in crops at the panel edges. Zoom
-# is session-only (resets on app restart).
+# Portrait: map pinch-zoom levels [step_out, 1.00, step1, step2].
+# Default starts at 1.00; one pinch gesture = one level step.
+# Session-only (resets on restart). Zoom-in crops at panel edges.
+portrait_map_zoom_step_out=0.88
 portrait_map_zoom_step1=1.14
 portrait_map_zoom_step2=1.54
 

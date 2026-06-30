@@ -729,6 +729,24 @@ public class RegionTermView extends View
 		autoSizeFontByWidth(width);
 		computeCanvasSize();
 
+		// Height self-fit for tall-aspect screens (Galaxy Fold class):
+		// shrink font until canvas fits the AT_MOST ceiling. Skip when
+		// vscroll (overflow is intentional) or anchorToContent (reported
+		// height tracks content, not bitmap).
+		int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+		int heightLimit = MeasureSpec.getSize(heightMeasureSpec);
+		if (!verticalScrollEnabled && !anchorToContent
+				&& heightMode == MeasureSpec.AT_MOST && heightLimit > 0
+				&& regionRows > 0 && canvas_height > heightLimit)
+		{
+			while (font_text_size > MIN_FONT_SIZE
+					&& canvas_height > heightLimit)
+			{
+				setFontSize(font_text_size - 1, false);
+				computeCanvasSize();
+			}
+		}
+
 		if (centerHorizontally)
 		{
 			int contentWidth = centerContentCols > 0
