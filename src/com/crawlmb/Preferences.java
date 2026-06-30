@@ -36,6 +36,16 @@ final public class Preferences
 	public static final String KEY_PROFILES = "crawl.profiles";
 	public static final String KEY_ACTIVEPROFILE = "crawl.activeprofile";
 
+	// Custom data folder (SAF tree URI). When set, the game runs against a
+	// staging mirror of this folder instead of the live app-private dirs.
+	// Empty string means custom mode is off. See Paths.isCustomMode().
+	public static final String KEY_CUSTOMFOLDERURI = "crawl.customfolderuri";
+
+	// SAF URI the current staging tree was last set up for. Compared
+	// against the newly-picked URI on enable: a mismatch means staging
+	// holds another folder's data and must be wiped before pulling.
+	public static final String KEY_STAGINGORIGINURI = "crawl.stagingoriginuri";
+
     private static final String KEYBOARD_LAYOUT_COUNT = "layout_count";
     public static final String KEYBOARD_LAYOUT_CURRENT = "layout_current";
     public static final String KEYBOARD_LABEL_PREFIX = "label_";
@@ -107,6 +117,35 @@ final public class Preferences
 	{
 		sharedPreferences.edit()
 				.putBoolean(Preferences.KEY_RELOADINPROGRESS, value).commit();
+	}
+
+	// Persisted SAF tree URI for the custom data folder, or "" if custom
+	// mode is off. Whether the URI permission is still held is a separate
+	// runtime check — see CustomFolderSync.hasPersistedPermission.
+	public static String getCustomFolderUri()
+	{
+		return sharedPreferences.getString(Preferences.KEY_CUSTOMFOLDERURI, "");
+	}
+
+	public static void setCustomFolderUri(String uri)
+	{
+		sharedPreferences.edit()
+				.putString(Preferences.KEY_CUSTOMFOLDERURI,
+						uri == null ? "" : uri)
+				.commit();
+	}
+
+	public static String getStagingOriginUri()
+	{
+		return sharedPreferences.getString(Preferences.KEY_STAGINGORIGINURI, "");
+	}
+
+	public static void setStagingOriginUri(String uri)
+	{
+		sharedPreferences.edit()
+				.putString(Preferences.KEY_STAGINGORIGINURI,
+						uri == null ? "" : uri)
+				.commit();
 	}
 
 	// Reads and clears the reload flag in one shot. Cleared on read so a

@@ -57,6 +57,7 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.crawlmb.CrawlDialog;
+import com.crawlmb.CustomFolderSync;
 import com.crawlmb.FontConfig;
 import com.crawlmb.PassThroughListener;
 import com.crawlmb.keylistener.GameKeyListener;
@@ -1181,7 +1182,15 @@ public class GameActivity extends Activity
 	@Override
 	protected void onPause() {
 		super.onPause();
+		// nativeSaveGame is synchronous: by the time it returns the
+		// staging tree has the latest save data. Kick the SAF push
+		// immediately on a non-daemon background thread (see
+		// CustomFolderSync.pushExecutor) so it gets as much time as
+		// possible before the OS can kill us. Push is incremental and
+		// idempotent — re-running it on a later launch costs nothing
+		// when nothing changed.
 		NativeWrapper.nativeSaveGame();
+		CustomFolderSync.pushAsync(this);
 	}
 
 	@Override

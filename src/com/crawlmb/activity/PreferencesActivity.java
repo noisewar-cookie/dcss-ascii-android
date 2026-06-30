@@ -34,12 +34,16 @@ import android.preference.PreferenceScreen;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.crawlmb.CustomFolderSync;
 import com.crawlmb.EditConfigFilePreference;
 import com.crawlmb.Paths;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.keymap.KeyMapPreference;
+
+import android.content.ContentResolver;
+import android.provider.DocumentsContract;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -84,6 +88,14 @@ public class PreferencesActivity extends PreferenceActivity implements
         setCustomizeKeyboardIntent();
 
         addBackupRestorePreferences();
+
+        addCustomFolderPreferences();
+
+        // Greys out backup/restore/editor/morgue rows whenever custom mode
+        // is active. Must run AFTER addBackupRestorePreferences /
+        // setConfigFilePreferences / setCharacterFilesIntent so all the
+        // targets exist by the time we walk them.
+        applyCustomModeGuards();
     }
 
     // Tap a backup/restore preference -> launch a single-file SAF picker
@@ -96,6 +108,7 @@ public class PreferencesActivity extends PreferenceActivity implements
     private static final int REQ_RESTORE_MORGUE = 1004;
     private static final int REQ_BACKUP_CONFIG = 1005;
     private static final int REQ_RESTORE_CONFIG = 1006;
+    private static final int REQ_PICK_CUSTOM_FOLDER = 1007;
 
     private void addBackupRestorePreferences() {
         addZipPreference("configFiles", R.string.backup_config_files,
@@ -154,6 +167,10 @@ public class PreferencesActivity extends PreferenceActivity implements
         Uri uri = data.getData();
         if (uri == null)
             return;
+        if (requestCode == REQ_PICK_CUSTOM_FOLDER) {
+            onCustomFolderPicked(uri);
+            return;
+        }
         File savesDir = new File(getFilesDir(), "saves");
         File morgueDir = Paths.getMorgueDir(this);
         File settingsDir = Paths.getSettingsDir(this);
@@ -384,6 +401,189 @@ public class PreferencesActivity extends PreferenceActivity implements
                 break;
         }
         return null;
+    }
+
+    // --- Custom data folder (SAF, API 30+) ---------------------------------
+
+    private Preference customFolderPickPref;
+    private Preference customFolderDisablePref;
+
+    private void addCustomFolderPreferences() {
+        PreferenceCategory cat = (PreferenceCategory) findPreference("customFolder");
+        if (cat == null)
+            return;
+        if (!Paths.isCustomFolderSupported()) {
+            // Pre-API-30: show an explanatory note instead of the picker.
+            // The category title still makes the section discoverable, but
+            // the row is purely informational.
+            Preference note = new Preference(this);
+            note.setTitle(R.string.custom_folder_min_sdk_note);
+            note.setSelectable(false);
+            cat.addPreference(note);
+            return;
+        }
+
+        customFolderPickPref = new Preference(this);
+        customFolderPickPref.setTitle(R.string.custom_folder_pick);
+        customFolderPickPref.setOnPreferenceClickListener(p -> {
+            launchCustomFolderPicker();
+            return true;
+        });
+        cat.addPreference(customFolderPickPref);
+
+        customFolderDisablePref = new Preference(this);
+        customFolderDisablePref.setTitle(R.string.custom_folder_disable);
+        customFolderDisablePref.setSummary(R.string.custom_folder_disable_summary);
+        customFolderDisablePref.setOnPreferenceClickListener(p -> {
+            disableCustomFolder();
+            return true;
+        });
+        cat.addPreference(customFolderDisablePref);
+
+        refreshCustomFolderRowState();
+    }
+
+    // Update visibility of the picker/disable rows + the picker's summary
+    // based on whether a custom folder is currently set. Called from
+    // addCustomFolderPreferences and after a successful pick.
+    private void refreshCustomFolderRowState() {
+        if (customFolderPickPref == null)
+            return;
+        boolean active = Paths.isCustomMode(this);
+        if (active) {
+            String uri = Preferences.getCustomFolderUri();
+            String shown = prettyFolderName(uri);
+            customFolderPickPref.setSummary(
+                    getString(R.string.custom_folder_active_summary, shown));
+        } else {
+            customFolderPickPref.setSummary(R.string.custom_folder_pick_summary);
+        }
+        if (customFolderDisablePref != null)
+            customFolderDisablePref.setEnabled(active);
+    }
+
+    // Best-effort display name for a SAF tree URI. Falls back to the raw
+    // URI string if the docId can't be parsed.
+    private String prettyFolderName(String uriStr) {
+        if (uriStr == null || uriStr.isEmpty())
+            return "";
+        try {
+            Uri u = Uri.parse(uriStr);
+            String docId = DocumentsContract.getTreeDocumentId(u);
+            int colon = docId.indexOf(':');
+            return colon >= 0 ? docId.substring(colon + 1) : docId;
+        } catch (Exception e) {
+            return uriStr;
+        }
+    }
+
+    private void launchCustomFolderPicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, REQ_PICK_CUSTOM_FOLDER);
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.custom_folder_pick_failed,
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    // Custom folder = a separate, switchable game instance. The local
+    // staging tree is the working copy; the SAF folder is the sync bridge.
+    // Staging persists across enable/disable, so re-enabling the same
+    // folder resumes its saves with no transfer. A different folder
+    // wipes staging so the two folders' data don't merge.
+    //
+    // Permission is taken BEFORE persisting the URI so a failed take
+    // doesn't leave a stale pref pointing at a folder we can't read.
+    private void onCustomFolderPicked(Uri uri) {
+        ContentResolver cr = getContentResolver();
+        int flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+        try {
+            cr.takePersistableUriPermission(uri, flags);
+        } catch (SecurityException e) {
+            Toast.makeText(this, R.string.custom_folder_pick_failed,
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        String picked = uri.toString();
+        if (!picked.equals(Preferences.getStagingOriginUri())) {
+            // Switching to a different folder than staging was set up for.
+            // Wipe so the new folder's pull starts from a clean slate
+            // and doesn't merge with the previous folder's saves.
+            CustomFolderSync.clearStaging(this);
+            Preferences.setStagingOriginUri(picked);
+        }
+        Preferences.setCustomFolderUri(picked);
+        killAndRelaunch(this);
+    }
+
+    // Disable is a pure UI toggle: clear the URI, drop the SAF claim,
+    // restart. Staging is preserved so re-enabling the same folder
+    // resumes its saves. Anything not yet pushed to SAF stays in staging.
+    private void disableCustomFolder() {
+        CustomFolderSync.releasePermission(this);
+        Preferences.setCustomFolderUri("");
+        killAndRelaunch(this);
+    }
+
+    // Hard kill + fresh launch. DCSS holds file handles into saves/ and
+    // has the rc file parsed in memory; paths are wired once at startup
+    // and can't switch live, so a clean restart is the only safe option.
+    static void killAndRelaunch(android.app.Activity ctx) {
+        Intent i = ctx.getPackageManager().getLaunchIntentForPackage(
+                ctx.getPackageName());
+        if (i != null) {
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            ctx.startActivity(i);
+        }
+        ctx.finishAffinity();
+        android.os.Process.killProcess(android.os.Process.myPid());
+    }
+
+    // Wrap relevant prefs so taps surface the "not available in custom
+    // mode" dialog instead of running their normal action. Applies whether
+    // the pref's action is an intent (setIntent) or a click listener:
+    // setting a click listener that returns true preempts both.
+    private void applyCustomModeGuards() {
+        if (!Paths.isCustomMode(this))
+            return;
+        String[] guardKeys = {
+                "character_files",      // CharacterFilesActivity intent
+        };
+        for (String key : guardKeys) {
+            Preference p = findPreference(key);
+            if (p != null)
+                guardPref(p);
+        }
+
+        // Backup/restore prefs and the config-file editor prefs were added
+        // programmatically by addBackupRestorePreferences /
+        // setConfigFilePreferences. Walk their categories and wrap every
+        // child.
+        guardCategoryChildren("configFiles");
+        guardCategoryChildren("morgue");
+        guardCategoryChildren("saveFiles");
+    }
+
+    private void guardCategoryChildren(String categoryKey) {
+        PreferenceCategory cat = (PreferenceCategory) findPreference(categoryKey);
+        if (cat == null)
+            return;
+        for (int i = 0; i < cat.getPreferenceCount(); i++)
+            guardPref(cat.getPreference(i));
+    }
+
+    // setEnabled(false) greys out title and summary and blocks both
+    // clicks and any attached intent, so we don't need to null the
+    // intent or attach a click handler.
+    private void guardPref(Preference p) {
+        p.setEnabled(false);
+        p.setSummary(R.string.unavailable_in_custom_mode_title);
     }
 
     private void setHelpIntent() {

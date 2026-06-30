@@ -294,6 +294,8 @@
 	   android:entries="@array/virtKeyActionDescriptions"
 	   android:entryValues="@array/virtKeyActions"/-->
   </PreferenceCategory>
+    <PreferenceCategory android:key="customFolder" android:title="@string/custom_folder_category">
+    </PreferenceCategory>
     <PreferenceCategory android:key="configFiles" android:title="Config Files" >
     </PreferenceCategory>
     <PreferenceCategory android:key="morgue" android:title="@string/morgue">

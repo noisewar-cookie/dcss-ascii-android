@@ -40,6 +40,27 @@
     <string name="restore_config_files">Restore config files</string>
     <string name="config_backup_filename">crawl-config-backup.zip</string>
 
+    <!-- Custom data folder (SAF, API 30+) -->
+    <string name="custom_folder_category">Custom Data Folder</string>
+    <string name="custom_folder_pick">Choose custom folder…</string>
+    <string name="custom_folder_pick_summary">Pick a custom game data folder location. Default game data folder will not be used while this is set.</string>
+    <string name="custom_folder_active_summary">Currently using: %s</string>
+    <string name="custom_folder_disable">Disable custom folder</string>
+    <string name="custom_folder_disable_summary">Stop using the custom folder and revert to default game data.</string>
+    <string name="custom_folder_min_sdk_note">Requires Android 11 or newer.</string>
+    <string name="custom_folder_unreachable_title">Custom folder unavailable</string>
+    <string name="custom_folder_unreachable_message">The chosen custom data folder is no longer available. Disable the custom folder to continue with default data, or choose a new folder in Preferences.</string>
+    <string name="custom_folder_disable_button">Disable custom folder</string>
+    <string name="custom_folder_pulling">Syncing from custom folder…</string>
+    <string name="custom_folder_seeding">Setting up custom folder…</string>
+    <string name="custom_folder_set_restart_title">Custom folder set</string>
+    <string name="custom_folder_set_restart_message">The app will now restart with the custom data folder.</string>
+    <string name="custom_folder_cleared_restart_title">Custom folder disabled</string>
+    <string name="custom_folder_cleared_restart_message">The app will now restart with the default data folder.</string>
+    <string name="custom_folder_pick_failed">Couldn\'t take permission for that folder.</string>
+    <string name="custom_folder_seed_failed">Couldn\'t copy current data into the custom folder.</string>
+    <string name="unavailable_in_custom_mode_title">Not available with custom folders.</string>
+
     <string name="preferences_vibrate_title">Vibrate</string>
     <string name="preferences_vibrate_summary">Enable or disable vibration in game</string>
     <string name="preferences_fullscreen_title">Full screen</string>

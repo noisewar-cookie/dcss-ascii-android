@@ -30,6 +30,7 @@ import android.util.Log;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import com.crawlmb.CustomFolderSync;
 import com.crawlmb.Paths;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
@@ -77,8 +78,19 @@ public class SplashActivity extends Activity {
         String expectedHash = readAssetHash();
         String installedHash = readInstalledHash();
 
-        if (expectedHash != null && expectedHash.equals(installedHash)) {
-            startGameActivity();
+        // dat/ must actually be on disk too — the hash file can match while
+        // the tree is missing (e.g. an earlier bug deleted live dat/ via a
+        // symlink in the custom-folder staging area). Treat a missing or
+        // empty dat/ as "needs install" so users in that broken state
+        // auto-recover on next launch instead of crashing forever.
+        File datDir = new File(getFilesDir(), "dat");
+        String[] datEntries = datDir.list();
+        boolean datPresent = datDir.isDirectory()
+                && datEntries != null && datEntries.length > 0;
+
+        if (expectedHash != null && expectedHash.equals(installedHash)
+                && datPresent) {
+            beforeGameStart();
             return;
         }
 
@@ -89,6 +101,51 @@ public class SplashActivity extends Activity {
         }
         assetsFreshlyInstalled = true;
         new InstallProgramTask().execute();
+    }
+
+    // Bridge step between install (when needed) and game launch. In custom
+    // mode this is where the SAF pull happens; otherwise it's a straight
+    // hand-off to startGameActivity. Always runs on the UI thread.
+    private void beforeGameStart() {
+        if (!Paths.isCustomMode(this)) {
+            startGameActivity();
+            return;
+        }
+        if (!CustomFolderSync.hasPersistedPermission(this)) {
+            showCustomFolderUnreachableDialog();
+            return;
+        }
+        new CustomFolderPullTask().execute();
+    }
+
+    // Re-pick is intentionally NOT offered here — launching a SAF picker
+    // from a splash screen with the install flow above it gets tangled.
+    // Direct the user to preferences to re-pick instead.
+    private void showCustomFolderUnreachableDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.custom_folder_unreachable_title)
+                .setMessage(R.string.custom_folder_unreachable_message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.custom_folder_disable_button,
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface d, int w) {
+                                // Preserve staging so re-picking the same
+                                // folder later resumes its saves.
+                                CustomFolderSync.releasePermission(
+                                        SplashActivity.this);
+                                Preferences.setCustomFolderUri("");
+                                startGameActivity();
+                            }
+                        })
+                .setNegativeButton(R.string.menu_quit,
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface d, int w) {
+                                finish();
+                            }
+                        })
+                .show();
     }
 
     private String readAssetHash() {
@@ -600,7 +657,28 @@ public class SplashActivity extends Activity {
         @Override
         protected void onPostExecute(Void result) {
             removeDialog(INSTALL_DIALOG_ID);
-            startGameActivity();
+            beforeGameStart();
+        }
+    }
+
+    // SAF -> staging incremental merge before launching the game. Runs
+    // on every custom-mode launch. Cheap when nothing changed (a few
+    // listFiles calls, no copies) — the splash screen stays visible
+    // throughout, so no modal progress dialog is shown for the typical
+    // sub-second case. Only failures surface UI (the unreachable dialog).
+    private class CustomFolderPullTask extends AsyncTask<Void, Void, Boolean> {
+        @Override
+        protected Boolean doInBackground(Void... voids) {
+            return CustomFolderSync.pull(SplashActivity.this);
+        }
+
+        @Override
+        protected void onPostExecute(Boolean ok) {
+            if (Boolean.TRUE.equals(ok)) {
+                startGameActivity();
+            } else {
+                showCustomFolderUnreachableDialog();
+            }
         }
     }
 

@@ -20,9 +20,14 @@ public class NativeWrapper
 	public void gameStart()
 	{
 		android.content.Context ctx = renderer.getContext();
-		String dataDir = ctx.getFilesDir().getPath();
-		String settingsDir = Paths.getSettingsDir(ctx).getPath();
-		String morgueDir = Paths.getMorgueDir(ctx).getPath();
+		// Active paths resolve to either the live app-private dirs (default)
+		// or the custom-staging mirror of the user's SAF folder (custom
+		// mode). In custom mode the staging tree is pre-populated by the
+		// launch-time pull in SplashActivity, including a dat/ symlink to
+		// the live data dir so DCSS finds bundled game content.
+		String dataDir = Paths.getActiveDataDir(ctx).getPath();
+		String settingsDir = Paths.getActiveSettingsDir(ctx).getPath();
+		String morgueDir = Paths.getActiveMorgueDir(ctx).getPath();
 		initGame(dataDir, settingsDir, morgueDir);
 	}
 
