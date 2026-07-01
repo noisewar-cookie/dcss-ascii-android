@@ -1,0 +1,11 @@
+Release 9 (0.34.1)
+
+New Features:
+• Skip option for startup help screens.
+• Experimental support for custom data folders (Android 11+ only).
+• New opensource fonts to choose.
+
+Bug Fixes:
+• Fixed full screen message log getting cut off.
+• Tweaks to map scale and added extra zoom out level.
+• Improved map centering on folding devices.
