@@ -542,6 +542,7 @@ public class GameActivity extends Activity
 		term = null;
 		FontConfig fontConfig = FontConfig.load(getAssets());
 		portraitFontConfig = fontConfig;
+		com.crawlmb.view.GameFontShaper.configure(fontConfig);
 
 		FrameLayout gamePanel = new FrameLayout(this);
 		gamePanel.setId(View.generateViewId());
@@ -628,6 +629,7 @@ public class GameActivity extends Activity
 		mapView.setId(View.generateViewId());
 		mapView.setFontScaleMultiplier(fontConfig.portraitMapFontScale);
 		mapView.setCenterHorizontally(true);
+		mapView.setCenterVertically(true);
 		mapView.setCenterContentCols(33);
 		mapView.setOffsetCols(fontConfig.portraitMapOffsetCols);
 		portraitMapView = mapView;
@@ -657,13 +659,15 @@ public class GameActivity extends Activity
 		StatusBarView statusBar = new StatusBarView(this);
 		statusBar.setId(View.generateViewId());
 		portraitStatusBar = statusBar;
-		Typeface gameTf = StatusBarView.loadGameTypeface(this,
-				Preferences.getFontFace());
-		statusBar.setTypeface(gameTf);
+		String gameFontFace = Preferences.getFontFace();
+		Typeface gameTf = StatusBarView.loadGameTypeface(this, gameFontFace);
+		statusBar.setTypeface(gameTf, gameFontFace);
 		int screenWidth = getResources().getDisplayMetrics().widthPixels;
 		int hudCols = RegionRouter.HUD_END_COL - RegionRouter.HUD_START_COL;
 		Paint sizingPaint = new Paint();
 		sizingPaint.setTypeface(gameTf);
+		sizingPaint.setTextScaleX(
+				com.crawlmb.view.GameFontShaper.scaleXFor(gameTf, gameFontFace));
 		int baseFontSize = 1;
 		do
 		{

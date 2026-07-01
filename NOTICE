@@ -28,3 +28,55 @@ may be complex, especially for older pieces. For information regarding the
 licenses of our tiles and artwork, see https://github.com/crawl/tiles
 
 The full text of the GNU General Public License, version 2, is in LICENSE.
+
+*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*
+
+Bundled fonts
+
+The following selectable fonts in assets/ are part of "The Ultimate Oldschool
+PC Font Pack" v2.2 (2020-11-21) by VileR (https://int10h.org/oldschool-pc-fonts/)
+and are distributed under the Creative Commons Attribution-ShareAlike 4.0
+International License (CC BY-SA 4.0). Full license text is in
+assets/FONTS_LICENSE.txt and at https://creativecommons.org/licenses/by-sa/4.0/.
+
+  Flexi_IBM_VGA_True.ttf      Px437_Acer710_Mono.ttf
+  Px437_HP_100LX_6x8.ttf      Px437_IBM_EGA_9x14.ttf
+
+These font files are bundled unmodified. The application code is not a
+derivative work of the fonts (mere aggregation under CC BY-SA 4.0 §2(a)(5)(B)).
+
+The bundled font VeraMoBd.ttf (Bitstream Vera Sans Mono Bold) is distributed
+under the Bitstream Vera Fonts Copyright (https://www.gnome.org/fonts/).
+The bundled font 8514oemreg.ttf is freely distributable (VGA OEM font).
+The bundled font 6x12.ttf is the low-resolution fallback bitmap font.
+
+*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*
+
+The following selectable fonts are distributed under the SIL Open Font License
+Version 1.1 (OFL 1.1). Full license text is in assets/OFL_FONTS_LICENSE.txt
+and at https://openfontlicense.org/.
+
+  IBMPlexMono-Regular.ttf
+  IBMPlexMono-Bold.ttf
+    Copyright 2017 IBM Corp. with Reserved Font Name "Plex"
+    (https://www.ibm.com/plex/)
+
+  JetBrainsMonoNL-Regular.ttf
+  JetBrainsMonoNL-ExtraBold.ttf
+    Copyright 2020 The JetBrains Mono Project Authors
+    (https://github.com/JetBrains/JetBrainsMono)
+    "NL" = no-ligatures variant.
+
+These font files are bundled unmodified.
+
+*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*
+
+The following selectable fonts are distributed under the MIT License.
+Full license text is in assets/MIT_FONTS_LICENSE.txt.
+
+  Hack-Regular.ttf
+  Hack-Bold.ttf
+    Copyright 2018 Source Foundry Authors
+    (https://github.com/source-foundry/Hack)
+
+These font files are bundled unmodified.

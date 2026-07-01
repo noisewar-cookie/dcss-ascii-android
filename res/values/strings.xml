@@ -130,12 +130,32 @@
       <item>2</item>
     </string-array>
     <string-array name="fontsDescriptions">
-        <item>VeraMoBd</item>
+        <item>VeraMoBd (default)</item>
         <item>8514oemreg</item>
+        <item>Flexi_IBM_VGA_True</item>
+        <item>Hack_Bold</item>
+        <item>Hack_Regular</item>
+        <item>IBMPlexMono_Bold</item>
+        <item>IBMPlexMono_Regular</item>
+        <item>JetBrainsMono_NL_ExtraBold</item>
+        <item>JetBrainsMono_NL_Regular</item>
+        <item>Px437_Acer710_Mono</item>
+        <item>Px437_HP_100LX_6x8</item>
+        <item>Px437_IBM_EGA_9x14</item>
     </string-array>
     <string-array name="fonts">
         <item>VeraMoBd.ttf</item>
         <item>8514oemreg.ttf</item>
+        <item>Flexi_IBM_VGA_True.ttf</item>
+        <item>Hack-Bold.ttf</item>
+        <item>Hack-Regular.ttf</item>
+        <item>IBMPlexMono-Bold.ttf</item>
+        <item>IBMPlexMono-Regular.ttf</item>
+        <item>JetBrainsMonoNL-ExtraBold.ttf</item>
+        <item>JetBrainsMonoNL-Regular.ttf</item>
+        <item>Px437_Acer710_Mono.ttf</item>
+        <item>Px437_HP_100LX_6x8.ttf</item>
+        <item>Px437_IBM_EGA_9x14.ttf</item>
     </string-array>
     <string-array name="virtualKeyboardValues">
         <item>0</item>

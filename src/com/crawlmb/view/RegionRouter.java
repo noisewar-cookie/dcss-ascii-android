@@ -1225,7 +1225,15 @@ public class RegionRouter implements TerminalRenderer
 				ViewTreeObserver o = target.getViewTreeObserver();
 				if (o.isAlive())
 					o.removeOnGlobalLayoutListener(this);
-				if (redrawRequester != null)
+				// Prefer the Java-side replay from terminalShadow: it hits
+				// the same views via drawPoint but skips ~3840 JNI round
+				// trips per transition (C++ refreshTerminal → per-cell
+				// printTerminalChar). Falls back to the C++ redraw path
+				// only when the router hasn't seen a storm yet (shadow all
+				// zeros), so the initial resume-repaint still works.
+				if (hasShadowContent())
+					replayAllFromShadow();
+				else if (redrawRequester != null)
 					redrawRequester.run();
 			}
 		});
@@ -1324,6 +1332,14 @@ public class RegionRouter implements TerminalRenderer
 		int endRow = (type == MenuType.SPELLS || type == MenuType.LEVELMAP
 				|| type == MenuType.MESSAGES)
 				? TERMINAL_ROWS : 28;
+		// A regionRows change reallocates fullView's mirror in the next layout
+		// pass (ensureMirrorSizedLocked), dropping every drawPoint the ongoing
+		// storm has already delivered. Treat it as a bitmap-recreate event so
+		// applyMode schedules a repaint request — otherwise a transition
+		// between two menus that share a font scale (e.g. spells 1.75 <->
+		// describe 1.75) leaves the surface blank/corrupt because scaleChanged
+		// alone stays false.
+		int prevEndRow = fullView.getEndRow();
 		fullView.setRegionRows(0, endRow);
 		fullView.setAnchorToContent(type == MenuType.MAINMENU);
 		float prevScale = fullView.getFontScaleMultiplier();
@@ -1338,7 +1354,7 @@ public class RegionRouter implements TerminalRenderer
 		// viewport size are both available.
 		if (type == MenuType.MESSAGES)
 			fullView.requestScrollToBottom();
-		return prevScale != scale;
+		return prevScale != scale || prevEndRow != endRow;
 	}
 
 	// Returns true if the font scale multiplier on skillsView changed.
@@ -2196,6 +2212,47 @@ public class RegionRouter implements TerminalRenderer
 			for (int c = 0; c < TERMINAL_COLS; c++)
 				forwardToFullView(r, c, terminalShadow[r][c],
 						terminalFg[r][c], terminalBg[r][c], false);
+	}
+
+	// True once at least one storm has populated terminalShadow. Cheap scan:
+	// bails on the first non-zero, non-space cell.
+	private boolean hasShadowContent()
+	{
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+			for (int c = 0; c < TERMINAL_COLS; c++)
+			{
+				char ch = terminalShadow[r][c];
+				if (ch != 0 && ch != ' ')
+					return true;
+			}
+		return false;
+	}
+
+	// Replay the full 48x80 terminal state to every active view via drawPoint
+	// (same routing DCSS's refreshTerminal would trigger, minus ~3840 JNI
+	// round trips). Runs on the UI thread after a layout pass that recreated
+	// bitmaps; the game thread may be updating terminalShadow concurrently
+	// but drawPoint's per-view renderLock serialises the writes and a stale
+	// cell just gets overwritten by the next storm.
+	private void replayAllFromShadow()
+	{
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+			for (int c = 0; c < TERMINAL_COLS; c++)
+			{
+				char ch = terminalShadow[r][c];
+				if (ch == 0)
+					ch = ' ';
+				drawPoint(r, c, ch, terminalFg[r][c],
+						terminalBg[r][c], false);
+			}
+		if (fullView != null)
+			fullView.postInvalidate();
+		if (skillsView != null)
+			skillsView.postInvalidate();
+		if (itemsView != null)
+			itemsView.postInvalidate();
+		for (RegionTermView region : splitRegions)
+			region.postInvalidate();
 	}
 
 	private void forwardToFullView(int r, int c, char ch, int fcolor,

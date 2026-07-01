@@ -92,6 +92,12 @@ public class RegionTermView extends View
 	private int centerContentCols = 0;
 	private int drawOffsetX = 0;
 	private int offsetCols = 0;
+	// When true, reports the parent's height allocation and offsets the
+	// bitmap down so short content sits centered in the panel. Prevents a
+	// gap between map and HUD when a wide-cell font makes the width-bound
+	// canvas_height shorter than the parent's allocation.
+	private boolean centerVertically = false;
+	private int drawOffsetY = 0;
 
 	private boolean horizontalScrollEnabled = false;
 	private boolean verticalScrollEnabled = false;
@@ -420,6 +426,11 @@ public class RegionTermView extends View
 		this.centerHorizontally = center;
 	}
 
+	public void setCenterVertically(boolean center)
+	{
+		this.centerVertically = center;
+	}
+
 	public void setCenterContentCols(int cols)
 	{
 		this.centerContentCols = cols;
@@ -475,13 +486,13 @@ public class RegionTermView extends View
 			canvas.scale(contentZoom, contentZoom,
 					getWidth() / 2f, getHeight() / 2f);
 			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX,
-					-scrollOffsetY, null);
+					drawOffsetY - scrollOffsetY, null);
 			canvas.restore();
 		}
 		else
 		{
 			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX,
-					-scrollOffsetY, null);
+					drawOffsetY - scrollOffsetY, null);
 		}
 	}
 
@@ -589,13 +600,23 @@ public class RegionTermView extends View
 		return true;
 	}
 
-	// (Re)allocate the mirror to match regionRows/regionCols. Drops prior
-	// content. Caller must hold renderLock.
+	// (Re)allocate the mirror to match regionRows/regionCols. Preserves the
+	// overlapping cell content so a regionRows/regionCols change carries the
+	// current storm's chars through to the new bitmap via
+	// repaintAllFromMirrorLocked — without this, applyMode transitions that
+	// shrink the region (e.g. fullView 48→28 rows for SPELLS→DESCRIBE) drop
+	// the storm's popup chars and force a full JNI refreshTerminal round-
+	// trip to refill. Caller must hold renderLock.
 	private void ensureMirrorSizedLocked()
 	{
 		if (mirrorRows == regionRows && mirrorCols == regionCols
 				&& cellChar != null)
 			return;
+		char[][] oldCh = cellChar;
+		int[][]  oldFg = cellFg;
+		int[][]  oldBg = cellBg;
+		int oldRows = mirrorRows;
+		int oldCols = mirrorCols;
 		mirrorRows = regionRows;
 		mirrorCols = regionCols;
 		if (mirrorRows > 0 && mirrorCols > 0)
@@ -603,6 +624,17 @@ public class RegionTermView extends View
 			cellChar = new char[mirrorRows][mirrorCols];
 			cellFg = new int[mirrorRows][mirrorCols];
 			cellBg = new int[mirrorRows][mirrorCols];
+			if (oldCh != null)
+			{
+				int copyRows = Math.min(oldRows, mirrorRows);
+				int copyCols = Math.min(oldCols, mirrorCols);
+				for (int r = 0; r < copyRows; r++)
+				{
+					System.arraycopy(oldCh[r], 0, cellChar[r], 0, copyCols);
+					System.arraycopy(oldFg[r], 0, cellFg[r], 0, copyCols);
+					System.arraycopy(oldBg[r], 0, cellBg[r], 0, copyCols);
+				}
+			}
 		}
 		else
 		{
@@ -680,12 +712,14 @@ public class RegionTermView extends View
 		{
 			tfTiny = getTypeface("6x12.ttf");
 			fore.setTypeface(tfTiny);
+			fore.setTextScaleX(GameFontShaper.scaleXFor(tfTiny, "6x12.ttf"));
 		}
 		else
 		{
 			String fontFace = Preferences.getFontFace();
 			tfStd = getTypeface(fontFace);
 			fore.setTypeface(tfStd);
+			fore.setTextScaleX(GameFontShaper.scaleXFor(tfStd, fontFace));
 		}
 	}
 
@@ -807,6 +841,22 @@ public class RegionTermView extends View
 			int maxY = Math.max(0, contentH - reportedHeight);
 			if (scrollOffsetY > maxY)
 				scrollOffsetY = maxY;
+		}
+
+		// Vertical center: when the parent gives us a real height allocation
+		// (AT_MOST/EXACTLY) larger than canvas_height, fill the allocation and
+		// offset the bitmap down so content sits centered. Skip for scrollable
+		// or content-anchored panels since those manage height themselves.
+		drawOffsetY = 0;
+		if (centerVertically && !verticalScrollEnabled && !anchorToContent)
+		{
+			int mode = MeasureSpec.getMode(heightMeasureSpec);
+			int limit = MeasureSpec.getSize(heightMeasureSpec);
+			if (mode != MeasureSpec.UNSPECIFIED && limit > canvas_height)
+			{
+				drawOffsetY = (limit - canvas_height) / 2;
+				reportedHeight = limit;
+			}
 		}
 
 		setMeasuredDimension(width, reportedHeight);

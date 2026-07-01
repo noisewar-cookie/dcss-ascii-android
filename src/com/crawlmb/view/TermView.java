@@ -264,6 +264,7 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 		{
 			tfTiny = getTypeface("6x12.ttf");
 			fore.setTypeface(tfTiny);
+			fore.setTextScaleX(GameFontShaper.scaleXFor(tfTiny, "6x12.ttf"));
 		}
 		else
 		{
@@ -271,6 +272,7 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 
 			tfStd = getTypeface(fontFace);
 			fore.setTypeface(tfStd);
+			fore.setTextScaleX(GameFontShaper.scaleXFor(tfStd, fontFace));
 		}
 	}
 
