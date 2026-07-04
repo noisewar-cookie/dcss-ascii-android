@@ -58,6 +58,7 @@ public class FontConfig
     public final boolean portraitReligionScrollable;
     public final float portraitHiscoresFontScale;
     public final boolean portraitHiscoresScrollable;
+    public final boolean portraitHiscoresVScrollable;
     public final float portraitMorgueFontScale;
     public final boolean portraitMorgueScrollable;
     public final boolean portraitMorgueVScrollable;
@@ -148,6 +149,7 @@ public class FontConfig
         this.portraitReligionScrollable= getBool (props, "portrait_religion_scrollable", this.portraitDefaultScrollable);
         this.portraitHiscoresFontScale = getFloat(props, "portrait_hiscores_font_scale", this.portraitDefaultFontScale);
         this.portraitHiscoresScrollable= getBool (props, "portrait_hiscores_scrollable", this.portraitDefaultScrollable);
+        this.portraitHiscoresVScrollable=getBool (props, "portrait_hiscores_vscrollable", true);
         this.portraitMorgueFontScale   = getFloat(props, "portrait_morgue_font_scale", this.portraitHiscoresFontScale);
         this.portraitMorgueScrollable  = getBool (props, "portrait_morgue_scrollable", this.portraitHiscoresScrollable);
         this.portraitMorgueVScrollable = getBool (props, "portrait_morgue_vscrollable", true);

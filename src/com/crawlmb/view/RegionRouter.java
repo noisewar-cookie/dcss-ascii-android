@@ -1326,9 +1326,15 @@ public class RegionRouter implements TerminalRenderer
 			vscrollable = false;
 			break;
 		case HISCORES:
+			// fullView is widened to TERMINAL_ROWS below so the full 48-row
+			// scroller viewport is painted; vscroll lets the user pan when
+			// the rendered bitmap is taller than the physical screen. The
+			// DCSS scroll_button_into_view auto-follow inside OuterMenu
+			// can't help here because it computes deltas against DCSS's
+			// 48-row canvas, which is entirely visible from its own POV.
 			scale = fontConfig.portraitHiscoresFontScale;
 			scrollable = fontConfig.portraitHiscoresScrollable;
-			vscrollable = false;
+			vscrollable = fontConfig.portraitHiscoresVScrollable;
 			break;
 		case MORGUE:
 			// Character log popup. fullView is widened to TERMINAL_ROWS
@@ -1379,7 +1385,8 @@ public class RegionRouter implements TerminalRenderer
 			break;
 		}
 		int endRow = (type == MenuType.SPELLS || type == MenuType.LEVELMAP
-				|| type == MenuType.MESSAGES || type == MenuType.MORGUE)
+				|| type == MenuType.MESSAGES || type == MenuType.MORGUE
+				|| type == MenuType.HISCORES)
 				? TERMINAL_ROWS : 28;
 		// A regionRows change reallocates fullView's mirror in the next layout
 		// pass (ensureMirrorSizedLocked), dropping every drawPoint the ongoing
