@@ -67,10 +67,11 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
 			if (gridHoldCell == 5)
 			{
-				// Long rest: DCSS's default CMD_REST binding is the '5' key.
-				// The console port has no command channel, so we send the
-				// keystroke; this breaks only if the user rebinds '5'.
-				keyListener.addKey('5', 0);
+				// Long rest: fire KEY_SB2 (libandroid translates to
+				// CK_SHIFT_CLEAR, bound to CMD_REST in cmd-keys.h). Goes
+				// through the command table so it survives '5' rebinds,
+				// mirroring the tap-center KEY_B2 → CK_CLEAR → CMD_WAIT path.
+				keyListener.addDirectionKey(GameKeyListener.KEY_SB2);
 				return;
 			}
 			sendGridDirection(gridHoldCell);

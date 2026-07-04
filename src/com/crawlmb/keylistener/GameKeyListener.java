@@ -16,6 +16,7 @@ public class GameKeyListener implements KeyListener
 	public static final int KEY_B2 = 0536; /* center of keypad */
 	public static final int KEY_C1 = 0537; /* lower left of keypad */
 	public static final int KEY_C3 = 0540; /* lower right of keypad */
+	public static final int KEY_SB2 = 0700; /* shifted center of keypad (long-press = rest) */
 	public static final int KEY_DOWN = 0402; /* down-arrow key */
 	public static final int KEY_UP = 0403; /* up-arrow key */
 	public static final int KEY_LEFT = 0404; /* left-arrow key */
