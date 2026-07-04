@@ -39,8 +39,9 @@ and are distributed under the Creative Commons Attribution-ShareAlike 4.0
 International License (CC BY-SA 4.0). Full license text is in
 assets/FONTS_LICENSE.txt and at https://creativecommons.org/licenses/by-sa/4.0/.
 
-  Flexi_IBM_VGA_True.ttf      Px437_Acer710_Mono.ttf
-  Px437_HP_100LX_6x8.ttf      Px437_IBM_EGA_9x14.ttf
+  Flexi_IBM_VGA_False.ttf     Flexi_IBM_VGA_True.ttf
+  Px437_Acer710_Mono.ttf      Px437_HP_100LX_6x8.ttf
+  Px437_IBM_EGA_9x14.ttf
 
 These font files are bundled unmodified. The application code is not a
 derivative work of the fonts (mere aggregation under CC BY-SA 4.0 §2(a)(5)(B)).

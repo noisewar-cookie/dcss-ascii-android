@@ -132,6 +132,7 @@
     <string-array name="fontsDescriptions">
         <item>VeraMoBd (default)</item>
         <item>8514oemreg</item>
+        <item>Flexi_IBM_VGA_False</item>
         <item>Flexi_IBM_VGA_True</item>
         <item>Hack_Bold</item>
         <item>Hack_Regular</item>
@@ -146,6 +147,7 @@
     <string-array name="fonts">
         <item>VeraMoBd.ttf</item>
         <item>8514oemreg.ttf</item>
+        <item>Flexi_IBM_VGA_False.ttf</item>
         <item>Flexi_IBM_VGA_True.ttf</item>
         <item>Hack-Bold.ttf</item>
         <item>Hack-Regular.ttf</item>

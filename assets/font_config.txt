@@ -154,9 +154,12 @@ portrait_skills_vscrollable=false
 portrait_religion_font_scale=1.6
 portrait_religion_scrollable=true
 
-# Hi-score screen (end of game)
+# Hi-score screen (end of game). fullView is widened to the full 48-row
+# terminal so every entry is painted; vscrollable lets the user pan down
+# to entries that don't fit in the on-screen viewport with the keyboard up.
 portrait_hiscores_font_scale=1.6
 portrait_hiscores_scrollable=true
+portrait_hiscores_vscrollable=true
 
 # Character log popup (activate an entry on the High Scores screen)
 # Shown during: the morgue file viewer for a past character. Detected via a
