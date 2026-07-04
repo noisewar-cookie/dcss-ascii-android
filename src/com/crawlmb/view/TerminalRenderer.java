@@ -31,4 +31,13 @@ public interface TerminalRenderer
 	// which the default region clips. Default no-op for renderers that
 	// don't care (e.g. landscape TermView).
 	default void setMessageHistoryMode(boolean active) {}
+
+	// Called from libandroid.cc (via NativeWrapper) at entry/exit of the
+	// character-log popup opened from the High Scores menu. RegionRouter
+	// uses this to classify the popup as MenuType.MORGUE and hold that
+	// classification while the user scrolls, so morgue text lines don't
+	// trip other content anchors (Turns:/Skill/Granted powers:) and cause
+	// the font scale to ping-pong. Default no-op for renderers that don't
+	// care (e.g. landscape TermView).
+	default void setCharacterLogMode(boolean active) {}
 }

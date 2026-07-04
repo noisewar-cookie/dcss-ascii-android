@@ -158,6 +158,18 @@ portrait_religion_scrollable=true
 portrait_hiscores_font_scale=1.6
 portrait_hiscores_scrollable=true
 
+# Character log popup (activate an entry on the High Scores screen)
+# Shown during: the morgue file viewer for a past character. Detected via a
+# JNI flag set by the patched _show_morgue in hiscores.cc, not by content
+# scanning — morgue text contains "Turns:" / "Skill" / "Granted powers:"
+# etc. that would otherwise trip other menu anchors and ping-pong the scale
+# as the user scrolls. fullView is widened to the full 48-row terminal so
+# the entire scroller viewport is painted; vscrollable lets the user pan
+# vertically when the rendered bitmap is taller than the physical screen.
+portrait_morgue_font_scale=1.6
+portrait_morgue_scrollable=true
+portrait_morgue_vscrollable=true
+
 # Stash search results (Ctrl+F → match found)
 # Shown during: the menu listing matching items/features after a search.
 # Detected by the "[toggle:" marker in the title row.

@@ -180,6 +180,19 @@ public class NativeWrapper
 		}
 	}
 
+	// Called from libandroid.cc at entry and exit of the character-log
+	// popup opened from the High Scores menu. Forwarded to the renderer so
+	// RegionRouter can classify the popup as MenuType.MORGUE and hold that
+	// classification while the user scrolls through the morgue text.
+	public void setCharacterLogMode(boolean active)
+	{
+		synchronized (display_lock)
+		{
+			if (renderer != null)
+				renderer.setCharacterLogMode(active);
+		}
+	}
+
 	// Ask DCSS to repaint the current screen state. Used after a font scale
 	// change recreates the underlying bitmap (which is then blank): DCSS
 	// re-issues drawPoint calls for every cell, refilling the new bitmap.

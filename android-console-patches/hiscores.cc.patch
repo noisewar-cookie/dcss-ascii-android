@@ -1,0 +1,52 @@
+diff --git a/crawl-ref/source/hiscores.cc b/crawl-ref/source/hiscores.cc
+--- a/crawl-ref/source/hiscores.cc
++++ b/crawl-ref/source/hiscores.cc
+@@ -335,8 +335,19 @@
+     return ret;
+ }
+ 
++// Android: signals RegionRouter that the character-log popup (opened by
++// activating a hiscore entry) is on-screen. Without this, morgue text
++// scrolled through the popup trips content anchors like "Turns:" / "Skill" /
++// "Granted powers:" and the font scale ping-pongs. Defined in libandroid.cc.
++extern "C" void android_character_log_mode(bool active);
++
++#ifdef __ANDROID__
++#include <android/log.h>
++#endif
++
+ static void _show_morgue(scorefile_entry& se)
+ {
++    android_character_log_mode(true);
+     int flags = FS_PREWRAPPED_TEXT;
+     formatted_scroller morgue_file(flags);
+ 
+@@ -348,8 +359,19 @@
+                             strip_filename_unsafe_chars(morgue_base) + ".txt");
+     FILE* morgue = lk_open("r", morgue_path);
+ 
+-    if (!morgue) // TODO: add an error message
++#ifdef __ANDROID__
++    __android_log_print(ANDROID_LOG_INFO, "Crawl",
++            "_show_morgue: path='%s' opened=%s morgue_dir='%s'",
++            morgue_path.c_str(),
++            morgue ? "yes" : "no",
++            morgue_directory().c_str());
++#endif
++
++    if (!morgue)
++    {
++        android_character_log_mode(false);
+         return;
++    }
+ 
+     char buf[200];
+     string morgue_text = "";
+@@ -378,6 +400,7 @@
+         morgue_file.add_formatted_string(blines[i], true);
+ 
+     morgue_file.show();
++    android_character_log_mode(false);
+ }
+ 
+ class UIHiscoresMenu : public Widget

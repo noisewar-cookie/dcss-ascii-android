@@ -69,6 +69,7 @@ extern int main(int argc, char *argv[]);
 #define KEY_B2		0536		/* center of keypad */
 #define KEY_C1		0537		/* lower left of keypad */
 #define KEY_C3		0540		/* lower right of keypad */
+#define KEY_SB2		0700		/* shifted center of keypad (long-press = rest) */
 #define KEY_SHOME	0607		/* shifted home key */
 #define KEY_SEND	0602		/* shifted end key */
 #define KEY_SLEFT	0611		/* shifted left-arrow key */
@@ -111,6 +112,7 @@ static jmethodID NativeWrapper_invalidateTerminal;
 static jmethodID NativeWrapper_preStormHint;
 static jmethodID NativeWrapper_updateStatusLights;
 static jmethodID NativeWrapper_setMessageHistoryMode;
+static jmethodID NativeWrapper_setCharacterLogMode;
 static jmethodID NativeWrapper_notifyGameSaved;
 
 // Terminal stuff
@@ -192,6 +194,8 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"updateStatusLights", "(Ljava/lang/String;[I)V");
 	NativeWrapper_setMessageHistoryMode = e->GetMethodID(NativeWrapperClass,
 		"setMessageHistoryMode", "(Z)V");
+	NativeWrapper_setCharacterLogMode = e->GetMethodID(NativeWrapperClass,
+		"setCharacterLogMode", "(Z)V");
 	NativeWrapper_notifyGameSaved = e->GetMethodID(NativeWrapperClass,
 		"notifyGameSaved", "()V");
 
@@ -202,6 +206,7 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		&& NativeWrapper_preStormHint
 		&& NativeWrapper_updateStatusLights
 		&& NativeWrapper_setMessageHistoryMode
+		&& NativeWrapper_setCharacterLogMode
 		&& NativeWrapper_notifyGameSaved;
 }
 
@@ -216,6 +221,19 @@ extern "C" void android_message_history_mode(bool active)
 	if (env == NULL || NativeWrapperObj == NULL)
 		return;
 	JAVA_CALL(NativeWrapper_setMessageHistoryMode, (jboolean)(active ? JNI_TRUE : JNI_FALSE));
+}
+
+// Called from patched _show_morgue (hiscores.cc) at entry and exit of the
+// character-log viewer opened from the High Scores menu. Forwards to the
+// Java side so RegionRouter can classify the popup as MenuType.MORGUE and
+// hold that classification across scrolling. Without this, the morgue text
+// (which contains "Turns:", "Skill", "Granted powers:", etc.) trips other
+// content anchors as the user scrolls and the font scale ping-pongs.
+extern "C" void android_character_log_mode(bool active)
+{
+	if (env == NULL || NativeWrapperObj == NULL)
+		return;
+	JAVA_CALL(NativeWrapper_setCharacterLogMode, (jboolean)(active ? JNI_TRUE : JNI_FALSE));
 }
 
 // Called from patched save_game (files.cc) on Save & Quit.
@@ -454,6 +472,7 @@ int getch_ck()
     case KEY_B2:    return CK_CLEAR;
     case KEY_C1:    return CK_END;
     case KEY_C3:    return CK_PGDN;
+    case KEY_SB2:   return CK_SHIFT_CLEAR;
 
     default:         return c;
     }

@@ -38,6 +38,15 @@ public class RegionRouter implements TerminalRenderer
 		// on and the per-row "_" turn-end prefix also appears in normal
 		// gameplay messages.
 		MESSAGES,
+		// Character log popup (activate a hiscore entry). The
+		// formatted_scroller has no title and its content — the morgue
+		// file text — is arbitrary: "Turns:", "     Skill", "Granted
+		// powers:" and other strings that would trip OVERVIEW / SKILLS /
+		// RELIGION content anchors as the user scrolls. Detected via a
+		// JNI flag set by the patched _show_morgue in hiscores.cc, not by
+		// content scanning. fullView is widened to the full 48-row
+		// terminal so the entire scroller viewport is painted.
+		MORGUE,
 		// Newgame sub-states. Each picks a different vertically-stacked
 		// panel container (one panel per category) and per-panel scales
 		// from font_config.txt. Detected via row-0 "Welcome" + the
@@ -377,6 +386,19 @@ public class RegionRouter implements TerminalRenderer
 	public void setMessageHistoryMode(boolean active)
 	{
 		messageHistoryMode = active;
+	}
+
+	// Set true by libandroid.cc → NativeWrapper.setCharacterLogMode() while
+	// the morgue-viewer popup opened from the High Scores menu is on-screen.
+	// Same static/volatile rationale as messageHistoryMode above: represents
+	// C++ runtime state (are we inside _show_morgue → morgue_file.show()),
+	// invariant across RegionRouter recreations from sleep/wake cycles.
+	private static volatile boolean characterLogMode = false;
+
+	@Override
+	public void setCharacterLogMode(boolean active)
+	{
+		characterLogMode = active;
 	}
 
 	public LayoutMode getCurrentMode()
@@ -924,11 +946,26 @@ public class RegionRouter implements TerminalRenderer
 	// once maxContentRow reflects the populated mirror.
 	public void prepareForResume()
 	{
-		if (!messageHistoryMode || fullView == null)
+		if (fullView == null)
 			return;
-		applyFullConfig(MenuType.MESSAGES);
-		currentMode = LayoutMode.MENU;
-		currentMenuType = MenuType.MESSAGES;
+		// Same rationale as messageHistoryMode: pre-apply the widened
+		// region so the first refreshTerminal fills the full 48-row
+		// bitmap. Checked first so that if both flags are somehow set,
+		// MESSAGES wins (Ctrl+P can't be opened from the morgue viewer
+		// but the check is defensive).
+		if (messageHistoryMode)
+		{
+			applyFullConfig(MenuType.MESSAGES);
+			currentMode = LayoutMode.MENU;
+			currentMenuType = MenuType.MESSAGES;
+			return;
+		}
+		if (characterLogMode)
+		{
+			applyFullConfig(MenuType.MORGUE);
+			currentMode = LayoutMode.MENU;
+			currentMenuType = MenuType.MORGUE;
+		}
 	}
 
 	public void setReloadCompleteListener(Runnable r)
@@ -1034,22 +1071,25 @@ public class RegionRouter implements TerminalRenderer
 			{
 				activeMenu = fullView;
 				scaleChanged = applyFullConfig(menuType);
-				// drawPoint forwards to fullView unconditionally, so gameplay
-				// map/HUD/msg chars accumulate in the mirror while fullView is
-				// INVISIBLE. The next menu's popup writes only its own region
-				// (popup natural width < 80); cells outside it are never re-sent
-				// in the post-storm dirty set, so the mirror keeps stale gameplay
-				// values there. repaintAllFromMirrorLocked replays the mirror on
-				// every bitmap recreate, restoring corruption even when
-				// clearBitmap ran. Wipe the mirror on the INVISIBLE→VISIBLE edge
-				// and force scheduleRedrawAfterLayout (below) to repopulate it
-				// via refreshTerminal — symptom was scattered gameplay glyphs on
-				// the post-death leaderboard and persisting into the main menu.
-				if (fullView.getVisibility() != View.VISIBLE)
-				{
-					fullView.clear();
-					scaleChanged = true;
-				}
+				// Wipe fullView on every menuType change, matching how
+				// skillsView / itemsView clear below. Two independent staleness
+				// sources need this:
+				//   1. INVISIBLE→VISIBLE: drawPoint forwards to fullView
+				//      unconditionally, so gameplay map/HUD/msg chars
+				//      accumulate in the mirror while fullView is INVISIBLE
+				//      (popup natural width < 80 doesn't overwrite them).
+				//   2. VISIBLE→VISIBLE menu hops with matching scale (e.g.
+				//      HISCORES→MAINMENU, both 1.6): no bitmap recreate fires,
+				//      so repaintAllFromMirrorLocked never runs and pixels the
+				//      new menu didn't paint over survive. Symptom: scattered
+				//      leaderboard/gameplay glyphs persisting into the main
+				//      menu after death.
+				// Force scaleChanged so scheduleRedrawAfterLayout runs
+				// replayAllFromShadow to refill from terminalShadow (which
+				// clrscr already wiped to spaces where the old menu had
+				// content).
+				fullView.clear();
+				scaleChanged = true;
 			}
 		}
 
@@ -1290,6 +1330,15 @@ public class RegionRouter implements TerminalRenderer
 			scrollable = fontConfig.portraitHiscoresScrollable;
 			vscrollable = false;
 			break;
+		case MORGUE:
+			// Character log popup. fullView is widened to TERMINAL_ROWS
+			// below so the full 48-row scroller viewport is painted;
+			// vscroll lets the user pan when the rendered bitmap is
+			// taller than the physical screen.
+			scale = fontConfig.portraitMorgueFontScale;
+			scrollable = fontConfig.portraitMorgueScrollable;
+			vscrollable = fontConfig.portraitMorgueVScrollable;
+			break;
 		case TRAVEL:
 			scale = fontConfig.portraitTravelFontScale;
 			scrollable = fontConfig.portraitTravelScrollable;
@@ -1330,7 +1379,7 @@ public class RegionRouter implements TerminalRenderer
 			break;
 		}
 		int endRow = (type == MenuType.SPELLS || type == MenuType.LEVELMAP
-				|| type == MenuType.MESSAGES)
+				|| type == MenuType.MESSAGES || type == MenuType.MORGUE)
 				? TERMINAL_ROWS : 28;
 		// A regionRows change reallocates fullView's mirror in the next layout
 		// pass (ensureMirrorSizedLocked), dropping every drawPoint the ongoing
@@ -2354,6 +2403,15 @@ public class RegionRouter implements TerminalRenderer
 		if (messageHistoryMode)
 			return MenuType.MESSAGES;
 
+		// Character log popup opened from the High Scores menu. Same
+		// pattern as messageHistoryMode: the underlying formatted_scroller
+		// has no title anchor, and its content — the morgue file — hits
+		// several other menu anchors as the user scrolls (Turns:/Skill/
+		// Granted powers:). The JNI flag is single-writer (game thread
+		// inside _show_morgue) so torn reads aren't a concern.
+		if (characterLogMode)
+			return MenuType.MORGUE;
+
 		// Pregame-style screens reachable from MENU mode after the first
 		// gameplay frame: once gameplayEverDetected sticks at true,
 		// detectMode() returns MENU (not PREGAME) for every non-gameplay
@@ -2585,6 +2643,7 @@ public class RegionRouter implements TerminalRenderer
 				&& detectedType != MenuType.HELP
 				&& detectedType != MenuType.SKILLS
 				&& detectedType != MenuType.HISCORES
+				&& detectedType != MenuType.MORGUE
 				&& detectedType != MenuType.LEVELMAP
 				&& fullView != null)
 			recomputeFullViewFooter();
