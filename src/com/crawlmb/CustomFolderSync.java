@@ -23,6 +23,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 // SAF tree <-> custom-staging incremental mirror. API 30+ only.
 //
@@ -183,6 +186,38 @@ public final class CustomFolderSync
             try { push(app); }
             catch (Throwable t) { Log.w(TAG, "background push failed: " + t); }
         });
+    }
+
+    // FIFO-serialized behind any pushAsync already queued, so this can't
+    // race with a preceding notifyGameSaved on the same tmp filename.
+    public static boolean pushBlocking(Context ctx, long timeoutMs)
+    {
+        if (!Paths.isCustomMode(ctx))
+            return true;
+        Context app = ctx.getApplicationContext();
+        Future<Boolean> f = pushExecutor().submit(() -> {
+            try { return push(app); }
+            catch (Throwable t)
+            {
+                Log.w(TAG, "blocking push failed: " + t);
+                return false;
+            }
+        });
+        try
+        {
+            return f.get(timeoutMs, TimeUnit.MILLISECONDS);
+        }
+        catch (TimeoutException e)
+        {
+            Log.w(TAG, "blocking push timed out after " + timeoutMs + "ms"
+                    + " — task continues in background");
+            return false;
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "blocking push interrupted: " + e);
+            return false;
+        }
     }
 
     public static void clearStaging(Context ctx)
@@ -402,15 +437,33 @@ public final class CustomFolderSync
             return false;
         }
 
-        if (existingFinal != null)
-            existingFinal.delete();
+        // Some SAF providers (Syncthing) invalidate DocumentFile refs after
+        // sibling changes; the pushTree snapshot's .delete() silently
+        // no-ops, then renameDocument appends " (1)" instead of overwriting.
+        DocumentFile freshExisting = destDir.findFile(finalName);
+        if (freshExisting != null)
+        {
+            boolean deleted;
+            try { deleted = freshExisting.delete(); }
+            catch (Exception e) { deleted = false; }
+            if (!deleted || destDir.findFile(finalName) != null)
+            {
+                Log.w(TAG, "push delete-existing failed for " + finalName
+                        + " — aborting to avoid duplicate; will retry next push");
+                try { tmp.delete(); } catch (Exception ignored) {}
+                return false;
+            }
+        }
 
         try
         {
             Uri renamed = DocumentsContract.renameDocument(
                     ctx.getContentResolver(), tmp.getUri(), finalName);
             if (renamed == null)
+            {
+                Log.w(TAG, "push rename returned null " + tmpName + "->" + finalName);
                 return false;
+            }
         }
         catch (Exception e)
         {
@@ -419,17 +472,18 @@ public final class CustomFolderSync
             return false;
         }
 
-        // Align local mtime to the remote's post-rename mtime so subsequent
-        // pulls don't see the just-pushed file as "newer on remote" and
-        // copy it back. Provider-set mtime reflects the rename time, not
-        // the source's original mtime, so we mirror that into staging.
+        // Provider may still suffix " (n)" despite the delete above.
         DocumentFile finalDoc = destDir.findFile(finalName);
-        if (finalDoc != null)
+        if (finalDoc == null)
         {
-            long m = finalDoc.lastModified();
-            if (m > 0)
-                src.setLastModified(m);
+            Log.w(TAG, "push post-rename findFile null for " + finalName);
+            return false;
         }
+
+        // Align local mtime to remote so the next pull doesn't copy back.
+        long m = finalDoc.lastModified();
+        if (m > 0)
+            src.setLastModified(m);
         return true;
     }
 

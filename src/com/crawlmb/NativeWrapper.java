@@ -46,11 +46,25 @@ public class NativeWrapper
 		return key;
 	}
 
-	// this is called from native thread just before exiting
+	// LEGACY: no native caller since 0.34.1. Don't reactivate — the
+	// downstream GameThread.onGameExit clears game_thread_running and
+	// auto-posts StartGame, which misfires on Save & Quit.
 	public void onGameExit()
 	{
 		keyListener.handler.sendEmptyMessage(CrawlDialog.Action.OnGameExit.ordinal());
 		// Log.d(TAG, "onGameExit()");
+	}
+
+	// Called from native save_game() on Save & Quit paths where onPause
+	// won't fire (activity stays foreground at char-select).
+	public void notifyGameSaved()
+	{
+		if (renderer == null)
+			return;
+		android.content.Context ctx = renderer.getContext();
+		if (ctx == null)
+			return;
+		CustomFolderSync.pushAsync(ctx);
 	}
 
 	private native void refreshTerminal();

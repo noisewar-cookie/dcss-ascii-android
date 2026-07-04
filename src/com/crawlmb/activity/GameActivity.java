@@ -243,6 +243,8 @@ public class GameActivity extends Activity
 	public void finish() {
 		// Log.d("Crawl","finish");
 		gameKeyListener.gameThread.send(GameThread.Request.StopGame);
+		// 5s cap so a wedged DocumentsProvider can't stall quit.
+		CustomFolderSync.pushBlocking(this, 5000);
 		super.finish();
 	}
 

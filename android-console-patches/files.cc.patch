@@ -1,0 +1,27 @@
+diff --git a/crawl-ref/source/files.cc b/crawl-ref/source/files.cc
+index f2d101a424..18347d1b2c 100644
+--- a/crawl-ref/source/files.cc
++++ b/crawl-ref/source/files.cc
+@@ -2625,6 +2625,11 @@ static void _save_game_exit()
+     you.save = 0;
+ }
+ 
++#ifdef __ANDROID__
++// Defined in libandroid.cc.
++extern "C" void android_notify_game_saved();
++#endif
++
+ void save_game(bool leave_game, const char *farewellmsg)
+ {
+     unwind_bool saving_game(crawl_state.saving_game, true);
+@@ -2675,6 +2680,10 @@ void save_game(bool leave_game, const char *farewellmsg)
+     // so Valgrind doesn't complain.
+     _save_game_exit();
+ 
++#ifdef __ANDROID__
++    android_notify_game_saved();
++#endif
++
+     game_ended(game_exit::save, farewellmsg ? farewellmsg
+                                 : "See you soon, " + you.your_name + "!");
+ }

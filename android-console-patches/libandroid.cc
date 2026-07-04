@@ -111,6 +111,7 @@ static jmethodID NativeWrapper_invalidateTerminal;
 static jmethodID NativeWrapper_preStormHint;
 static jmethodID NativeWrapper_updateStatusLights;
 static jmethodID NativeWrapper_setMessageHistoryMode;
+static jmethodID NativeWrapper_notifyGameSaved;
 
 // Terminal stuff
 class TerminalChar //I guess this could be a struct.
@@ -191,6 +192,8 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"updateStatusLights", "(Ljava/lang/String;[I)V");
 	NativeWrapper_setMessageHistoryMode = e->GetMethodID(NativeWrapperClass,
 		"setMessageHistoryMode", "(Z)V");
+	NativeWrapper_notifyGameSaved = e->GetMethodID(NativeWrapperClass,
+		"notifyGameSaved", "()V");
 
 	return NativeWrapper_fatal
 		&& NativeWrapper_getch
@@ -198,7 +201,8 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		&& NativeWrapper_invalidateTerminal
 		&& NativeWrapper_preStormHint
 		&& NativeWrapper_updateStatusLights
-		&& NativeWrapper_setMessageHistoryMode;
+		&& NativeWrapper_setMessageHistoryMode
+		&& NativeWrapper_notifyGameSaved;
 }
 
 // Called from the patched _replay_messages_core (message.cc) at entry and
@@ -212,6 +216,14 @@ extern "C" void android_message_history_mode(bool active)
 	if (env == NULL || NativeWrapperObj == NULL)
 		return;
 	JAVA_CALL(NativeWrapper_setMessageHistoryMode, (jboolean)(active ? JNI_TRUE : JNI_FALSE));
+}
+
+// Called from patched save_game (files.cc) on Save & Quit.
+extern "C" void android_notify_game_saved()
+{
+	if (env == NULL || NativeWrapperObj == NULL)
+		return;
+	JAVA_CALL(NativeWrapper_notifyGameSaved);
 }
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/)
