@@ -1275,6 +1275,13 @@ public class RegionRouter implements TerminalRenderer
 					replayAllFromShadow();
 				else if (redrawRequester != null)
 					redrawRequester.run();
+				// Re-measure: onMeasure just ran with maxContentRow=-1
+				// (cleared by applyMode), so fullView reported its full
+				// canvas height and squeezed QuickControls. The refill
+				// above populated maxContentRow; ask for a fresh pass.
+				if (target == fullView
+						&& currentMenuType == MenuType.MAINMENU)
+					target.requestLayout();
 			}
 		});
 		// Force a layout pass so the listener is guaranteed to fire. A
