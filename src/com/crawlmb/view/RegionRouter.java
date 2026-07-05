@@ -81,8 +81,8 @@ public class RegionRouter implements TerminalRenderer
 	public static final int MSG_START_COL = 0;
 	public static final int MSG_END_COL = 80;
 
-	private static final int TERMINAL_ROWS = 48;
-	public static final int TERMINAL_COLS = 80;
+	private static final int TERMINAL_ROWS = TerminalRenderer.FRAME_ROWS;
+	public static final int TERMINAL_COLS = TerminalRenderer.FRAME_COLS;
 
 	// Gameplay anchor: any HUD caption present at terminal col 37 in the HUD
 	// rows. We OR over multiple labels because draw_border() (which prints
@@ -355,6 +355,10 @@ public class RegionRouter implements TerminalRenderer
 	private final char[][] terminalShadow = new char[TERMINAL_ROWS][TERMINAL_COLS];
 	private final int[][] terminalFg = new int[TERMINAL_ROWS][TERMINAL_COLS];
 	private final int[][] terminalBg = new int[TERMINAL_ROWS][TERMINAL_COLS];
+	// Per-frame dirty map built by onFrame's diff against terminalShadow.
+	// Reused across frames; only valid within a single onFrame call (frames
+	// arrive serialized under display_lock).
+	private final boolean[][] frameChanged = new boolean[TERMINAL_ROWS][TERMINAL_COLS];
 	private volatile LayoutMode currentMode = LayoutMode.PREGAME;
 	private volatile MenuType currentMenuType = MenuType.DEFAULT;
 
@@ -424,13 +428,13 @@ public class RegionRouter implements TerminalRenderer
 	// correct for a true cold start.
 	private static boolean gameplayEverDetected = false;
 
-	// Set by preStormHint when the next storm transitions GAMEPLAY -> a
-	// non-gameplay frame. Read by drawPoint to skip forwarding to
-	// splitRegions for the duration of the storm — without this, the storm
-	// writes menu chars at terminal coordinates into mapView/hudView/msgView
-	// and a UI-thread vsync mid-storm or post-storm-pre-applyMode draws
-	// those chars in the wrong panel ("on top of the game map"). Cleared
-	// in postInvalidate after the storm so the next frame starts clean.
+	// Set by onFrame when the frame transitions GAMEPLAY -> a non-gameplay
+	// state. Read by routeCell to skip forwarding to splitRegions for that
+	// frame — without this, menu chars at terminal coordinates would land
+	// in mapView/hudView/msgView while splitContainer is still VISIBLE
+	// (applyMode's hide runs later on the UI thread), painting them "on top
+	// of the game map". Volatile because replayAllFromShadow can route from
+	// the UI thread while the game thread owns the flag.
 	private volatile boolean skipSplitRegionsThisStorm = false;
 
 	// Anchor for the single-column fold of the skills menu. Recomputed on
@@ -514,11 +518,11 @@ public class RegionRouter implements TerminalRenderer
 	// Set by applyMode when it reaches the reload destination AND has just
 	// scheduled a repaint into a blank surface (scale change recreated
 	// fullView's bitmap, or gameplay cleared splitRegions). The next
-	// postInvalidate is that repaint's storm — it refills the bitmap before
-	// signalling, so dismissing the overlay there avoids exposing the blank
-	// surface (the flash that firing on the bare detection transition caused).
+	// onFrame is that repaint — it refills the bitmap before signalling,
+	// so dismissing the overlay there avoids exposing the blank surface
+	// (the flash that firing on the bare detection transition caused).
 	// Written on the UI thread (applyMode), read on the game thread
-	// (postInvalidate); volatile for cross-thread visibility.
+	// (onFrame); volatile for cross-thread visibility.
 	private volatile boolean reloadAwaitingRepaint = false;
 	// True only when SplashActivity ran InstallProgramTask on this launch
 	// (first install or dat-hash mismatch). On cached launches DCSS init is
@@ -933,13 +937,13 @@ public class RegionRouter implements TerminalRenderer
 	// (static messageHistoryMode), pre-applies the MESSAGES layout to
 	// fullView so its region is already 48 rows when the first refreshTerminal
 	// arrives. Without this, the new fullView is constructed at the default
-	// 28 rows; refreshTerminal's drawPoint calls for rows 28..47 are dropped
-	// by drawPoint's range check, only rows 0..27 land in the mirror, and the
+	// 28 rows; the refresh frame's cells for rows 28..47 are dropped by the
+	// view's range check, only rows 0..27 land in the mirror, and the
 	// subsequent detection-driven applyMode that widens the region then
 	// reallocates the mirror as an empty 48-row array — erasing the rows
 	// 0..27 we just drew and leaving the panel blank until the user taps to
 	// wake DCSS into a fresh storm. Setting currentMenuType to MESSAGES here
-	// matches the layout so the first postInvalidate after refreshTerminal
+	// matches the layout so the first frame after refreshTerminal
 	// sees no transition and doesn't re-run resetAllScroll — the
 	// pendingScrollToBottom armed by applyFullConfig persists through the
 	// empty-mirror onMeasure pass and is consumed by the post-refresh onDraw
@@ -1165,17 +1169,14 @@ public class RegionRouter implements TerminalRenderer
 			scrollStateListener.onMenuScrollableChanged(menuScrollable);
 		}
 
-		// Decide whether DCSS needs to repaint into the now-active surface.
-		//   - splitContainer (gameplay): postInvalidate just cleared
-		//     splitRegions on this menu->gameplay transition, so DCSS must
-		//     repaint into the cleared bitmaps before the user sees them.
-		//   - menu views: applyMenuConfig's setFontScaleMultiplier
-		//     triggers a re-measure that recreates the bitmap blank, and a
-		//     view-swap into skillsView always lands on a stale bitmap
-		//     (drawPoint only forwards to skillsView while currentMenuType
-		//     == SKILLS, so the previous storm skipped it).
-		// applyMode is only called on state transitions, so this scheduler
-		// runs at most once per transition.
+		// Decide whether the now-active surface needs a post-layout repaint.
+		// onFrame's transition replay already painted it once on the game
+		// thread, but applyMenuConfig's setFontScaleMultiplier can trigger
+		// a re-measure that recreates the bitmap blank AFTER that replay —
+		// the mirror repaint in onMeasure covers most of it, and this
+		// scheduled replay-from-shadow is the backstop that also re-runs
+		// fold remaps. applyMode is only called on state transitions, so
+		// this scheduler runs at most once per transition.
 		View redrawTarget = null;
 		if (splitVisible && splitContainer != null)
 			redrawTarget = splitContainer;
@@ -1198,7 +1199,7 @@ public class RegionRouter implements TerminalRenderer
 		// only once DCSS has actually painted its first post-boot screen — we
 		// are now laying that screen out. If a repaint was just scheduled, the
 		// destination surface is momentarily blank; removing the overlay now
-		// would flash it, so defer to the repaint's postInvalidate (see
+		// would flash it, so defer to the repaint's onFrame (see
 		// reloadAwaitingRepaint). If nothing was scheduled, the surface already
 		// holds the painted screen, so dismiss right away.
 		if (reloadCompleteListener != null
@@ -1251,7 +1252,10 @@ public class RegionRouter implements TerminalRenderer
 			for (int c = 0; c < colCount; c++)
 				drawPoint(r, c, line.charAt(c), Color.WHITE, Color.BLACK, false);
 		}
-		postInvalidate();
+		// Same finalize a native frame gets: classify (a no-op transition —
+		// the loading anchor keeps PREGAME/PREGAME) and surface the pixels.
+		classifyFrame();
+		invalidateAllViews();
 	}
 
 	private void scheduleRedrawAfterLayout(final View target)
@@ -1515,7 +1519,10 @@ public class RegionRouter implements TerminalRenderer
 		return allOk;
 	}
 
-	@Override
+	// Internal single-cell entry: writes the shadow, then routes. Used by
+	// drawLoadingMessage and replayAllFromShadow. Frames from DCSS arrive
+	// via onFrame (which diffs into the shadow itself and routes after
+	// classification) — not through here.
 	public void drawPoint(int r, int c, char ch, int fcolor, int bcolor, boolean extendedErase)
 	{
 		if (r >= 0 && r < TERMINAL_ROWS && c >= 0 && c < TERMINAL_COLS)
@@ -1525,12 +1532,21 @@ public class RegionRouter implements TerminalRenderer
 			terminalBg[r][c] = bcolor;
 		}
 
+		routeCell(r, c, ch, fcolor, bcolor, extendedErase);
+	}
+
+	// Forward one cell to every view interested in it under the CURRENT
+	// mode/menu-type/fold-anchor state. onFrame guarantees that state was
+	// recomputed from this frame's grid before any cell is routed.
+	private void routeCell(int r, int c, char ch, int fcolor, int bcolor,
+			boolean extendedErase)
+	{
 		if (fullView != null)
 			forwardToFullView(r, c, ch, fcolor, bcolor, extendedErase);
-		// Skip splitRegions during a gameplay->menu transition storm: the
-		// new frame's chars belong to a menu, and forwarding them at
-		// terminal coordinates into mapView/hudView/msgView would tear the
-		// next visible draw before applyMode hides splitContainer.
+		// Skip splitRegions during a gameplay->menu transition frame: the
+		// frame's chars belong to a menu, and forwarding them at terminal
+		// coordinates into mapView/hudView/msgView would tear the next
+		// visible draw before applyMode hides splitContainer.
 		if (!skipSplitRegionsThisStorm)
 		{
 			for (RegionTermView region : splitRegions)
@@ -1544,21 +1560,6 @@ public class RegionRouter implements TerminalRenderer
 				&& (currentMenuType == MenuType.ITEMS
 					|| currentMenuType == MenuType.HELP))
 			forwardToItemsView(r, c, ch, fcolor, bcolor, extendedErase);
-	}
-
-	// Set the skip flag when this storm transitions GAMEPLAY -> non-gameplay.
-	// That's the direction where the storm writes wrong-panel content into
-	// CURRENTLY-VISIBLE splitRegions, which mid-storm or post-storm-pre-
-	// applyMode draws expose. The reverse direction (menu -> gameplay) has
-	// stale content too, but splitContainer is still INVISIBLE during the
-	// storm, so we let it write and clear it in postInvalidate. Runs on
-	// the game thread under display_lock (NativeWrapper.preStormHint),
-	// strictly before the storm's drawPoint calls.
-	@Override
-	public void preStormHint(boolean isGameplay)
-	{
-		skipSplitRegionsThisStorm =
-				(currentMode == LayoutMode.GAMEPLAY) && !isGameplay;
 	}
 
 	@Override
@@ -2547,8 +2548,85 @@ public class RegionRouter implements TerminalRenderer
 		return MenuType.DEFAULT;
 	}
 
+	// Atomic frame entry point (TerminalRenderer). libandroid.cc delivers
+	// the whole 48x80 grid in one JNI call per storm, with display_lock held
+	// throughout. Ordering is the point: the frame is diffed into
+	// terminalShadow and CLASSIFIED (mode, menu type, fold anchors) before
+	// any cell is routed to a view — under the old per-cell protocol, cells
+	// were routed under the PREVIOUS frame's state and corrected at storm
+	// end, which flashed unfolded/mis-scaled content for a frame and could
+	// tear mid-storm on a vsync.
 	@Override
-	public void postInvalidate()
+	public void onFrame(char[] chars, int[] fg, int[] bg)
+	{
+		// 1. Diff into the shadow; frameChanged marks cells needing repaint.
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+		{
+			int base = r * TERMINAL_COLS;
+			for (int c = 0; c < TERMINAL_COLS; c++)
+			{
+				char ch = chars[base + c];
+				int f = fg[base + c];
+				int b = bg[base + c];
+				boolean changed = terminalShadow[r][c] != ch
+						|| terminalFg[r][c] != f
+						|| terminalBg[r][c] != b;
+				frameChanged[r][c] = changed;
+				if (changed)
+				{
+					terminalShadow[r][c] = ch;
+					terminalFg[r][c] = f;
+					terminalBg[r][c] = b;
+				}
+			}
+		}
+
+		// 2. Classify the new frame and handle any state transition (anchor
+		// recomputes, applyMode post) BEFORE routing.
+		boolean wasGameplay = currentMode == LayoutMode.GAMEPLAY;
+		boolean transition = classifyFrame();
+		// Tear guard (previously the C++ preStormHint mechanism): on
+		// gameplay -> non-gameplay, this frame's cells must not land in the
+		// still-VISIBLE split panels; applyMode hides them later on the UI
+		// thread. They keep stale gameplay pixels until the next transition
+		// INTO gameplay clears and repaints them.
+		skipSplitRegionsThisStorm = wasGameplay
+				&& currentMode != LayoutMode.GAMEPLAY;
+
+		// 3. Route under the NEW state. On a transition, replay the whole
+		// grid so views that just became active are fully painted before
+		// applyMode makes them visible (they were skipped or stale while
+		// inactive); steady-state frames route only changed cells.
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+			for (int c = 0; c < TERMINAL_COLS; c++)
+			{
+				if (!transition && !frameChanged[r][c])
+					continue;
+				char ch = terminalShadow[r][c];
+				routeCell(r, c, ch == 0 ? ' ' : ch, terminalFg[r][c],
+						terminalBg[r][c], false);
+			}
+		skipSplitRegionsThisStorm = false;
+
+		invalidateAllViews();
+
+		// This frame is the post-applyMode repaint of the reload destination:
+		// its cells refilled the bitmap above, so the overlay can now be
+		// removed without exposing the blank surface applyMode left.
+		if (reloadAwaitingRepaint)
+		{
+			reloadAwaitingRepaint = false;
+			fireReloadComplete();
+		}
+	}
+
+	// Detect mode/menu-type from terminalShadow and apply state transitions:
+	// fold-anchor recomputes run here on the game thread (the routing pass
+	// that follows needs them immediately), applyMode is posted to the UI
+	// thread (visibility/scale changes). Also runs the per-frame recomputes
+	// (newgame sub bounds, items/help anchors, fullView footer) so routing
+	// uses this frame's geometry. Returns true when a transition occurred.
+	private boolean classifyFrame()
 	{
 		LayoutMode detected = detectMode();
 		MenuType detectedType;
@@ -2559,18 +2637,17 @@ public class RegionRouter implements TerminalRenderer
 		else
 			detectedType = MenuType.DEFAULT;
 
-		if (detected != currentMode || detectedType != currentMenuType)
+		boolean transition = detected != currentMode
+				|| detectedType != currentMenuType;
+		if (transition)
 		{
-			// menu -> gameplay: splitRegions still hold whatever the menu
-			// storms wrote into them (drawPoint forwards unconditionally
-			// when the skip flag isn't set, and during menus splitContainer
-			// is INVISIBLE so we let those writes happen). Now that
-			// splitContainer is about to become visible, clear the stale
-			// menu content synchronously on the game thread; applyMode's
-			// scheduleRedrawAfterLayout will trigger DCSS to repaint
-			// gameplay into the cleared bitmaps. The reverse direction
-			// (gameplay -> menu) is handled by skipSplitRegionsThisStorm,
-			// set via preStormHint before this storm even started.
+			// menu -> gameplay: splitRegions still hold stale menu-era
+			// content. Clear now, on the game thread — onFrame's routing
+			// pass repaints the full gameplay frame into them right after
+			// this, and applyMode's scheduleRedrawAfterLayout covers any
+			// bitmap recreate from a scale change. The reverse direction
+			// (gameplay -> menu) is handled by skipSplitRegionsThisStorm
+			// in onFrame.
 			if (currentMode != LayoutMode.GAMEPLAY
 					&& detected == LayoutMode.GAMEPLAY)
 			{
@@ -2583,10 +2660,11 @@ public class RegionRouter implements TerminalRenderer
 			if (detected == LayoutMode.GAMEPLAY)
 				gameplayEverDetected = true;
 
-			// Recompute the fold anchor as we enter the skills menu so the
-			// next frame's drawPoints can remap. Done here (not inside the
+			// Recompute the fold anchor as we enter the skills menu so this
+			// frame's routing pass can remap. Done here (not inside the
 			// applyMode post) because applyMode runs on the UI thread later;
-			// drawPoints arriving in between need the anchor immediately.
+			// the cells routed right after classification need the anchor
+			// immediately.
 			if (detectedType == MenuType.SKILLS)
 				recomputeSkillsAnchor();
 			else
@@ -2662,6 +2740,11 @@ public class RegionRouter implements TerminalRenderer
 				&& fullView != null)
 			recomputeFullViewFooter();
 
+		return transition;
+	}
+
+	private void invalidateAllViews()
+	{
 		if (fullView != null)
 		{
 			fullView.postInvalidate();
@@ -2674,20 +2757,6 @@ public class RegionRouter implements TerminalRenderer
 			itemsView.postInvalidate();
 		for (RegionTermView region : splitRegions)
 			region.postInvalidate();
-
-		// This storm is the post-applyMode repaint of the reload destination:
-		// its drawPoints already refilled the bitmap above, so the overlay can
-		// now be removed without exposing the blank surface applyMode left.
-		if (reloadAwaitingRepaint)
-		{
-			reloadAwaitingRepaint = false;
-			fireReloadComplete();
-		}
-
-		// End of storm: clear the per-storm flag so the next storm starts
-		// from a known state. preStormHint will set it again at the start
-		// of the next storm if needed.
-		skipSplitRegionsThisStorm = false;
 	}
 
 	// Sub-classify LayoutMode.PREGAME. Before DCSS runs, SplashActivity

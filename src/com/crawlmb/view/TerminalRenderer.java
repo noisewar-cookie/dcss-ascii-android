@@ -5,21 +5,27 @@ import android.content.res.Resources;
 
 public interface TerminalRenderer
 {
+	// Terminal grid dimensions of the frame protocol. Must match
+	// MENU_LINES / COLS in libandroid.cc.
+	int FRAME_ROWS = 48;
+	int FRAME_COLS = 80;
+
 	boolean onGameStart();
-	void drawPoint(int r, int c, char ch, int fcolor, int bcolor, boolean extendedErase);
-	void postInvalidate();
+
+	// Atomic frame delivery from libandroid.cc via NativeWrapper.frameUpdate:
+	// the full FRAME_ROWS x FRAME_COLS grid (row-major, chars + ARGB fg/bg),
+	// one call per dirty storm, with display_lock held throughout. The
+	// renderer diffs against its shadow and classifies the frame BEFORE
+	// routing/painting any cell — that ordering (not per-cell delivery with
+	// classification at storm end) is what prevents one-frame flashes of
+	// content rendered under the previous screen's layout, and mid-storm
+	// tearing.
+	void onFrame(char[] chars, int[] fg, int[] bg);
+
 	void increaseFontSize();
 	void decreaseFontSize();
 	Context getContext();
 	Resources getResources();
-
-	// Called from libandroid.cc at the start of each dirty-cell storm with
-	// a flag indicating whether the new frame's terminal grid contains any
-	// gameplay HUD anchor. Lets the renderer adjust drawPoint routing
-	// before the storm begins (e.g. to skip forwarding to the gameplay
-	// split panels on a gameplay->menu transition). Default is no-op for
-	// renderers that don't care (e.g. landscape TermView).
-	default void preStormHint(boolean isGameplay) {}
 
 	default void updateStatusLights(String texts, int[] colours) {}
 

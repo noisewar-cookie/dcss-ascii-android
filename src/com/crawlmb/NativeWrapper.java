@@ -128,33 +128,17 @@ public class NativeWrapper
 		}
 	}
 
-	public void printTerminalChar(int y, int x, char c, int fgcolor, int bgcolor)
-	{
-		synchronized (display_lock)
-		{
-			renderer.drawPoint(y, x, c, fgcolor, bgcolor, false);
-		}
-	}
-
-	public void invalidateTerminal()
-	{
-		synchronized (display_lock)
-		{
-			renderer.postInvalidate();
-		}
-	}
-
-	// Called from libandroid.cc at the start of each dirty-cell storm.
-	// isGameplay reflects whether the new terminal grid (already populated
-	// on the C++ side) shows a gameplay HUD anchor. Forwarded to the
-	// renderer so it can preemptively adjust drawPoint routing before the
-	// storm flushes cells.
-	public void preStormHint(boolean isGameplay)
+	// Called from libandroid.cc (_send_frame): one call per dirty storm,
+	// carrying the whole 48x80 terminal grid (row-major chars + ARGB fg/bg).
+	// Runs on the game thread (sendTerminalToScreen) or the UI thread
+	// (refreshTerminal). display_lock is held for the entire frame — diff,
+	// classification, routing and painting all see one consistent grid.
+	public void frameUpdate(char[] chars, int[] fg, int[] bg)
 	{
 		synchronized (display_lock)
 		{
 			if (renderer != null)
-				renderer.preStormHint(isGameplay);
+				renderer.onFrame(chars, fg, bg);
 		}
 	}
 
@@ -194,10 +178,10 @@ public class NativeWrapper
 	}
 
 	// Ask DCSS to repaint the current screen state. Used after a font scale
-	// change recreates the underlying bitmap (which is then blank): DCSS
-	// re-issues drawPoint calls for every cell, refilling the new bitmap.
-	// Distinct from resize() which also re-runs onGameStart and resets
-	// detection state.
+	// change recreates the underlying bitmap (which is then blank): the
+	// native side re-sends the full frame via frameUpdate, refilling the
+	// new bitmap. Distinct from resize() which also re-runs onGameStart and
+	// resets detection state.
 	public void redrawScreen()
 	{
 		synchronized (display_lock)

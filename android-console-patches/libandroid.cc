@@ -107,9 +107,7 @@ static jobject NativeWrapperObj;
 /* Java Methods (cached in JNI_OnLoad) */
 static jmethodID NativeWrapper_fatal;
 static jmethodID NativeWrapper_getch;
-static jmethodID NativeWrapper_printTerminalChar;
-static jmethodID NativeWrapper_invalidateTerminal;
-static jmethodID NativeWrapper_preStormHint;
+static jmethodID NativeWrapper_frameUpdate;
 static jmethodID NativeWrapper_updateStatusLights;
 static jmethodID NativeWrapper_setMessageHistoryMode;
 static jmethodID NativeWrapper_setCharacterLogMode;
@@ -184,12 +182,8 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"fatal", "(Ljava/lang/String;)V");
 	NativeWrapper_getch = e->GetMethodID(NativeWrapperClass,
 		"getch", "(I)I");
-	NativeWrapper_printTerminalChar = e->GetMethodID(NativeWrapperClass,
-		"printTerminalChar", "(IICII)V");
-	NativeWrapper_invalidateTerminal = e->GetMethodID(NativeWrapperClass,
-		"invalidateTerminal", "()V");
-	NativeWrapper_preStormHint = e->GetMethodID(NativeWrapperClass,
-		"preStormHint", "(Z)V");
+	NativeWrapper_frameUpdate = e->GetMethodID(NativeWrapperClass,
+		"frameUpdate", "([C[I[I)V");
 	NativeWrapper_updateStatusLights = e->GetMethodID(NativeWrapperClass,
 		"updateStatusLights", "(Ljava/lang/String;[I)V");
 	NativeWrapper_setMessageHistoryMode = e->GetMethodID(NativeWrapperClass,
@@ -201,9 +195,7 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 
 	return NativeWrapper_fatal
 		&& NativeWrapper_getch
-		&& NativeWrapper_printTerminalChar
-		&& NativeWrapper_invalidateTerminal
-		&& NativeWrapper_preStormHint
+		&& NativeWrapper_frameUpdate
 		&& NativeWrapper_updateStatusLights
 		&& NativeWrapper_setMessageHistoryMode
 		&& NativeWrapper_setCharacterLogMode
@@ -304,18 +296,59 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
 	main(argc, argv);
 }
 
-void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object)
+// Deliver the whole terminal grid to Java in ONE JNI call (frameUpdate).
+// Java diffs the frame against its shadow, classifies the screen BEFORE
+// routing any cell, then paints — the atomic handoff is what prevents
+// mid-storm tearing and routing-under-stale-state flashes, and it replaces
+// ~3840 per-cell printTerminalChar round trips per full refresh.
+// Row staging buffers are stack-local so the game-thread caller
+// (sendTerminalToScreen) and the UI-thread caller (refreshTerminal) can't
+// race over shared storage.
+static void _send_frame(JNIEnv* e, jobject obj)
 {
-	// This needs to use the passed-in JNIEnv and jobject, since this is run from the UI thread
+	const int cells = MENU_LINES * COLS;
+	jcharArray jchars = e->NewCharArray(cells);
+	jintArray jfg = e->NewIntArray(cells);
+	jintArray jbg = e->NewIntArray(cells);
+	if (!jchars || !jfg || !jbg)
+	{
+		e->ExceptionClear();
+		if (jchars) e->DeleteLocalRef(jchars);
+		if (jfg) e->DeleteLocalRef(jfg);
+		if (jbg) e->DeleteLocalRef(jbg);
+		return;
+	}
+	jchar rowCh[COLS];
+	jint rowFg[COLS];
+	jint rowBg[COLS];
 	for (int i = 0; i < MENU_LINES; ++i)
 	{
 		for (int j = 0; j < COLS; ++j)
 		{
-			TerminalChar * terminalChar = &terminalWindow[i][j];
-			env->CallVoidMethod(object, NativeWrapper_printTerminalChar, terminalChar->y, terminalChar->x, terminalChar->character, terminalChar->foregroundColour, terminalChar->backgroundColour);
+			const TerminalChar &tc = terminalWindow[i][j];
+			rowCh[j] = tc.character;
+			rowFg[j] = tc.foregroundColour;
+			rowBg[j] = tc.backgroundColour;
 		}
+		e->SetCharArrayRegion(jchars, i * COLS, COLS, rowCh);
+		e->SetIntArrayRegion(jfg, i * COLS, COLS, rowFg);
+		e->SetIntArrayRegion(jbg, i * COLS, COLS, rowBg);
 	}
-	env->CallVoidMethod(object, NativeWrapper_invalidateTerminal);
+	e->CallVoidMethod(obj, NativeWrapper_frameUpdate, jchars, jfg, jbg);
+	if (e->ExceptionCheck())
+		e->ExceptionClear();
+	e->DeleteLocalRef(jchars);
+	e->DeleteLocalRef(jfg);
+	e->DeleteLocalRef(jbg);
+}
+
+void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object)
+{
+	// This needs to use the passed-in JNIEnv and jobject, since this is run
+	// from the UI thread. May run before initGame: terminalWindow is
+	// zero-initialized then, which Java renders as blanks — don't deref
+	// crawl globals here.
+	_send_frame(env, object);
 }
 
 void set_mouse_enabled(bool enabled)
@@ -323,62 +356,18 @@ void set_mouse_enabled(bool enabled)
 	return;
 }
 
-// Scan terminalWindow for any HUD label at col 37 in rows 2..8. Mirrors
-// RegionRouter.detectMode (Java side) but operates on the C-side grid
-// before the storm flushes it. This lets Java preemptively skip
-// forwarding cells to the gameplay split panels when the new frame is a
-// menu — without the hint, drawPoint would tear mapView/hudView/msgView
-// with menu chars at terminal coordinates while splitContainer is still
-// VISIBLE (applyMode's hide runs later on the UI thread). Keep the
-// label list and column in sync with HUD_LABELS / HUD_ANCHOR_COL in
-// RegionRouter.java.
-static bool _is_gameplay_frame()
-{
-	static const char *labels[] = {
-		"Health:", "HP:", "Magic:", "MP:", "AC:", "EV:", "SH:", "XL:"
-	};
-	static const int n_labels = sizeof(labels) / sizeof(labels[0]);
-	const int anchor_col = 37;
-	for (int r = 2; r <= 8; r++)
-	{
-		for (int li = 0; li < n_labels; li++)
-		{
-			const char *lbl = labels[li];
-			int llen = (int)strlen(lbl);
-			if (anchor_col + llen > COLS)
-				continue;
-			bool match = true;
-			for (int i = 0; i < llen; i++)
-			{
-				if (terminalWindow[r][anchor_col + i].character
-						!= (jchar)lbl[i])
-				{
-					match = false;
-					break;
-				}
-			}
-			if (match)
-				return true;
-		}
-	}
-	return false;
-}
-
 void sendTerminalToScreen()
 {
+	// dirtyTerminalChars is now only a "did anything change" gate; the
+	// frame call always carries the full grid and Java diffs it. Gameplay
+	// vs menu classification happens Java-side on the delivered frame, so
+	// the old C-side _is_gameplay_frame / preStormHint mirror is gone.
 	if (dirtyTerminalChars.empty())
 	{
 		return;
 	}
-	JAVA_CALL(NativeWrapper_preStormHint,
-		_is_gameplay_frame() ? JNI_TRUE : JNI_FALSE);
-	std::set<TerminalChar *>::iterator it;
-	for (it = dirtyTerminalChars.begin(); it != dirtyTerminalChars.end(); it++)
-	{
-		JAVA_CALL(NativeWrapper_printTerminalChar, (*it)->y, (*it)->x, (*it)->character, (*it)->foregroundColour, (*it)->backgroundColour);
-	}
-	JAVA_CALL(NativeWrapper_invalidateTerminal);
 	dirtyTerminalChars.clear();
+	_send_frame(env, NativeWrapperObj);
 }
 
 void android_send_status_lights(const char** texts, const int* colours,

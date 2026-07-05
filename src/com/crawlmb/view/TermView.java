@@ -499,6 +499,25 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 		return true;
 	}
 
+	// Frame-protocol shim (TerminalRenderer). Landscape TermView is dead
+	// code in the portrait-only app; replay the frame per-cell to keep the
+	// pre-frame-protocol behavior without a shadow/diff layer.
+	@Override
+	public void onFrame(char[] chars, int[] fg, int[] bg)
+	{
+		for (int r = 0; r < TerminalRenderer.FRAME_ROWS; r++)
+		{
+			int base = r * TerminalRenderer.FRAME_COLS;
+			for (int c = 0; c < TerminalRenderer.FRAME_COLS; c++)
+			{
+				char ch = chars[base + c];
+				drawPoint(r, c, ch == 0 ? ' ' : ch, fg[base + c],
+						bg[base + c], false);
+			}
+		}
+		postInvalidate();
+	}
+
 	public void drawPoint(int r, int c, char ch, int fcolor, int bcolor, boolean extendedErase)
 	{
 		float x = c * char_width;
