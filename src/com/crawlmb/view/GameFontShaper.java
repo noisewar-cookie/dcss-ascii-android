@@ -1,61 +1,78 @@
 package com.crawlmb.view;
 
+import android.content.Context;
 import android.graphics.Paint;
 import android.graphics.Typeface;
 
-import com.crawlmb.FontConfig;
-
-// Normalizes user-selectable game fonts toward a target cell w/h aspect
-// (VeraMoBd's ~0.5 by default) so panel layouts tuned against VeraMoBd
-// stay consistent. Behavior is driven by font_config.txt:
-//   font_target_aspect  (0 disables)
-//   font_scalex_min/max (clamp on auto-computed scaleX)
-//   font_scalex_<file>  (per-font override, bypasses auto+clamp)
-// If configure() hasn't been called, uses hardcoded defaults matching
-// the config file defaults.
+// VeraMoBd is the sizing reference for all user-selectable fonts. Panels are
+// tuned against it — VeraMoBd fills the full vertical height of the map panel
+// at the auto-fit width. For any other face:
+//   1. widthFitTextSize(cols, maxWidth) picks the textSize where VeraMoBd's
+//      advance width * cols == maxWidth (fills width).
+//   2. matchReferenceLineHeight(face, T) scales that textSize so the chosen
+//      face's fontSpacing equals VeraMoBd's at T (fills the same vertical
+//      height, since rowCount * fontSpacing == panel height).
+// Widths vary with each font's natural aspect: wider faces overflow past the
+// panel edges (centered symmetrically), narrower faces leave slack. No
+// horizontal scaleX is ever applied.
 public final class GameFontShaper
 {
-	private static final float DEFAULT_TARGET_ASPECT = 0.5f;
-	private static final float DEFAULT_MIN = 0.85f;
-	private static final float DEFAULT_MAX = 1.15f;
-	private static final float PROBE_TEXT_SIZE = 64f;
+	public static final String REFERENCE_ASSET = "VeraMoBd.ttf";
 
-	private static FontConfig cfg = null;
+	private static Typeface referenceTypeface = null;
 
 	private GameFontShaper() { }
 
-	public static void configure(FontConfig c)
+	public static Typeface referenceTypeface(Context ctx)
 	{
-		cfg = c;
+		if (referenceTypeface == null)
+		{
+			referenceTypeface = Typeface.createFromAsset(
+					ctx.getAssets(), REFERENCE_ASSET);
+		}
+		return referenceTypeface;
 	}
 
-	public static float scaleXFor(Typeface tf, String assetName)
+	// Grow textSize on a VeraMoBd probe until refCharWidth * cols would
+	// exceed maxWidth, then back off one step. Returns the last size that
+	// still fit. Bounded by [minSize, maxSize].
+	public static int widthFitTextSize(Context ctx, int cols, int maxWidth,
+			int minSize, int maxSize)
 	{
-		if (tf == null)
-			return 1f;
-
-		if (cfg != null && assetName != null)
+		Paint ref = new Paint();
+		ref.setTypeface(referenceTypeface(ctx));
+		int size = minSize;
+		do
 		{
-			Float override = cfg.fontScaleXOverrides.get(assetName);
-			if (override != null)
-				return override;
+			size += 1;
+			ref.setTextSize(size);
 		}
+		while (ref.measureText("X") * cols <= maxWidth && size < maxSize);
+		return Math.max(minSize, size - 1);
+	}
 
-		float target = (cfg != null) ? cfg.fontTargetAspect : DEFAULT_TARGET_ASPECT;
-		if (target <= 0f)
-			return 1f;
+	// Scale the reference textSize so `face` renders at VeraMoBd's line
+	// height (fontSpacing). Different faces have different vertical metrics
+	// per em; without this a face with a shorter metric would leave
+	// vertical slack in a panel tuned for VeraMoBd.
+	public static float matchReferenceLineHeight(Context ctx, Typeface face,
+			float referenceTextSize)
+	{
+		if (face == null || referenceTextSize <= 0f)
+			return referenceTextSize;
 
-		Paint p = new Paint();
-		p.setTypeface(tf);
-		p.setTextSize(PROBE_TEXT_SIZE);
-		float w = p.measureText("X");
-		float h = p.getFontSpacing();
-		if (w <= 0f || h <= 0f)
-			return 1f;
+		Paint ref = new Paint();
+		ref.setTypeface(referenceTypeface(ctx));
+		ref.setTextSize(referenceTextSize);
+		float target = ref.getFontSpacing();
 
-		float raw = target * h / w;
-		float min = (cfg != null) ? cfg.fontScaleXMin : DEFAULT_MIN;
-		float max = (cfg != null) ? cfg.fontScaleXMax : DEFAULT_MAX;
-		return Math.max(min, Math.min(max, raw));
+		Paint probe = new Paint();
+		probe.setTypeface(face);
+		probe.setTextSize(referenceTextSize);
+		float actual = probe.getFontSpacing();
+
+		if (actual <= 0f)
+			return referenceTextSize;
+		return referenceTextSize * (target / actual);
 	}
 }

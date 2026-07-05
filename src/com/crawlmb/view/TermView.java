@@ -223,14 +223,14 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 		}
 		else
 		{
-			font_text_size = MIN_FONT_SIZE;
-			do
-			{
-				font_text_size += 1;
-				setFontSize(font_text_size, false);
-			} while (char_width * Preferences.cols <= maxWidth && font_text_size < MAX_FONT_SIZE);
-
-			font_text_size -= 1;
+			// Width-fit VeraMoBd, then scale the chosen face so its line
+			// height matches VeraMoBd's — so every face fills the same
+			// vertical panel height. Width may over/undershoot naturally.
+			int refSize = GameFontShaper.widthFitTextSize(getContext(),
+					Preferences.cols, maxWidth, MIN_FONT_SIZE, MAX_FONT_SIZE);
+			float matched = GameFontShaper.matchReferenceLineHeight(
+					getContext(), fore.getTypeface(), refSize);
+			font_text_size = Math.round(matched);
 			int scaledSize = Math.round(font_text_size * fontScaleMultiplier);
 			scaledSize = Math.max(MIN_FONT_SIZE, Math.min(scaledSize, MAX_FONT_SIZE));
 			setFontSize(scaledSize, false);
@@ -264,7 +264,6 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 		{
 			tfTiny = getTypeface("6x12.ttf");
 			fore.setTypeface(tfTiny);
-			fore.setTextScaleX(GameFontShaper.scaleXFor(tfTiny, "6x12.ttf"));
 		}
 		else
 		{
@@ -272,7 +271,6 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 
 			tfStd = getTypeface(fontFace);
 			fore.setTypeface(tfStd);
-			fore.setTextScaleX(GameFontShaper.scaleXFor(tfStd, fontFace));
 		}
 	}
 

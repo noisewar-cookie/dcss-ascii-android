@@ -5,29 +5,19 @@ import android.util.Log;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Properties;
 
 public class FontConfig
 {
     private static final String TAG = "FontConfig";
     private static final String ASSET_PATH = "font_config.txt";
-    private static final String SCALEX_OVERRIDE_PREFIX = "font_scalex_";
-
-    public final float fontTargetAspect;
-    public final float fontScaleXMin;
-    public final float fontScaleXMax;
-    // filename (e.g. "Hack-Regular.ttf") -> explicit scaleX override
-    public final Map<String, Float> fontScaleXOverrides;
 
     public final float portraitDefaultFontScale;
     public final boolean portraitDefaultScrollable;
     public final boolean portraitDefaultVScrollable;
     public final float portraitMapFontScale;
     public final int portraitMapOffsetCols;
-    public final float portraitMapZoomStepOut;
+    public final float portraitMapZoomStepOutBase;
     public final float portraitMapZoomStep1;
     public final float portraitMapZoomStep2;
     public final float portraitHudFontScale;
@@ -105,17 +95,12 @@ public class FontConfig
 
     private FontConfig(Properties props)
     {
-        this.fontTargetAspect = getFloat(props, "font_target_aspect", 0.5f);
-        this.fontScaleXMin    = getFloat(props, "font_scalex_min", 0.85f);
-        this.fontScaleXMax    = getFloat(props, "font_scalex_max", 1.15f);
-        this.fontScaleXOverrides = parseScaleXOverrides(props);
-
         this.portraitDefaultFontScale  = getFloat(props, "portrait_default_font_scale", 1.25f);
         this.portraitDefaultScrollable = getBool (props, "portrait_default_scrollable", true);
         this.portraitDefaultVScrollable= getBool (props, "portrait_default_vscrollable", true);
         this.portraitMapFontScale      = getFloat(props, "portrait_map_font_scale", 1.0f);
         this.portraitMapOffsetCols     = getInt  (props, "portrait_map_offset_cols", 0);
-        this.portraitMapZoomStepOut    = getFloat(props, "portrait_map_zoom_step_out", 0.88f);
+        this.portraitMapZoomStepOutBase= getFloat(props, "portrait_map_zoom_step_out_base", 0.88f);
         this.portraitMapZoomStep1      = getFloat(props, "portrait_map_zoom_step1", 1.25f);
         this.portraitMapZoomStep2      = getFloat(props, "portrait_map_zoom_step2", 1.5f);
         this.portraitHudFontScale      = getFloat(props, "portrait_hud_font_scale", 1.0f);
@@ -208,30 +193,6 @@ public class FontConfig
         }
 
         return new FontConfig(props);
-    }
-
-    private static Map<String, Float> parseScaleXOverrides(Properties props)
-    {
-        Map<String, Float> out = new HashMap<>();
-        for (String key : props.stringPropertyNames())
-        {
-            if (!key.startsWith(SCALEX_OVERRIDE_PREFIX))
-                continue;
-            // The clamp knobs share the "font_scalex_" prefix — not overrides.
-            if (key.equals("font_scalex_min") || key.equals("font_scalex_max"))
-                continue;
-            String file = key.substring(SCALEX_OVERRIDE_PREFIX.length());
-            String val = props.getProperty(key);
-            try
-            {
-                out.put(file, Float.parseFloat(val.trim()));
-            }
-            catch (NumberFormatException e)
-            {
-                Log.w(TAG, "Invalid scaleX override for " + file + ": " + val);
-            }
-        }
-        return Collections.unmodifiableMap(out);
     }
 
     private static float getFloat(Properties props, String key, float def)

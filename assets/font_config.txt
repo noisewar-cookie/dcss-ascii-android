@@ -1,31 +1,15 @@
 # DCSS Android Font Configuration
 # ──────────────────────────────────────────────────────────────────────────────
-# Per-font cell-aspect normalization (setTextScaleX).
-# The layout of every panel (map, HUD, message, menus) was tuned against
-# VeraMoBd whose glyph cell has w/h ~ 0.5. Other user-selectable fonts have
-# different native aspect ratios — e.g. 8514oemreg is 1.18 (wide, gets
-# squeezed toward 0.5). Excessive stretch/squeeze both distorts glyphs and —
-# via the auto-sizer picking a smaller font size to fit a wider cell —
-# squashes rows vertically.
+# Sizing model: every user-selectable font is auto-sized using VeraMoBd as
+# a reference — the auto-sizer picks a textSize such that VeraMoBd would fit
+# the panel width, then applies that same textSize to the chosen font. Line
+# height stays consistent across faces; widths vary with each font's natural
+# aspect (wider fonts like Flexi_IBM_VGA_False overflow symmetrically past
+# the panel edges, narrower ones like Flexi_IBM_VGA_True leave slack).
 #
-# font_target_aspect  = desired cell w/h after normalization
-#                       set to 0 to disable normalization (native aspect)
-# font_scalex_min/max = clamp on the auto-computed scaleX. Fonts that would
-#                       need more correction render at the clamp boundary
-#                       instead. Tighter clamp = less distortion but layouts
-#                       drift more.
-# font_scalex_<file>  = optional per-font override. Bypasses auto+clamp for
-#                       that font only. Filename matches strings.xml fonts
-#                       array (e.g. Hack-Regular.ttf).
-font_target_aspect=0.5
-font_scalex_min=0.85
-font_scalex_max=1.15
-
-# Per-font scaleX overrides — uncomment and tune to taste. Values here
-# bypass the auto+clamp for that specific font. Filename must match the
-# strings.xml `fonts` array entry.
-# font_scalex_8514oemreg.ttf=0.70
-# font_scalex_Px437_HP_100LX_6x8.ttf=0.80
+# There is no horizontal scaleX distortion; there are no aspect-normalization
+# knobs.
+# ──────────────────────────────────────────────────────────────────────────────
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Per-panel scale values are multipliers applied after the font is auto-sized
@@ -88,10 +72,17 @@ portrait_map_font_scale=0.93
 # Use this only to bias the centering (e.g. +1 to shift one col right).
 portrait_map_offset_cols=0
 
-# Portrait: map pinch-zoom levels [step_out, 1.00, step1, step2].
+# Portrait: map pinch-zoom levels [zoom-out, 1.00, step1, step2].
 # Default starts at 1.00; one pinch gesture = one level step.
 # Session-only (resets on restart). Zoom-in crops at panel edges.
-portrait_map_zoom_step_out=0.88
+#
+# The zoom-out step (level -1) is computed automatically as
+#     min(portrait_map_zoom_step_out_base, panel_width / rendered_canvas_width)
+# so it's always at least the baseline shrink; very wide fonts that
+# overflow past the baseline (Flexi_IBM_VGA_False etc.) instead shrink to
+# exact horizontal fit with vertical slack top/bottom. Lower the baseline
+# to make zoom-out more aggressive for narrow fonts.
+portrait_map_zoom_step_out_base=0.88
 portrait_map_zoom_step1=1.14
 portrait_map_zoom_step2=1.54
 

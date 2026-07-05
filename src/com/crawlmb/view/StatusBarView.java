@@ -23,10 +23,9 @@ public class StatusBarView extends View
 		paint.setTextAlign(Paint.Align.LEFT);
 	}
 
-	public void setTypeface(Typeface tf, String assetName)
+	public void setTypeface(Typeface tf)
 	{
 		paint.setTypeface(tf);
-		paint.setTextScaleX(GameFontShaper.scaleXFor(tf, assetName));
 	}
 
 	public void setFontSizePx(float px)

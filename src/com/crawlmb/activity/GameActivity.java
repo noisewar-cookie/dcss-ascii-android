@@ -544,7 +544,6 @@ public class GameActivity extends Activity
 		term = null;
 		FontConfig fontConfig = FontConfig.load(getAssets());
 		portraitFontConfig = fontConfig;
-		com.crawlmb.view.GameFontShaper.configure(fontConfig);
 
 		FrameLayout gamePanel = new FrameLayout(this);
 		gamePanel.setId(View.generateViewId());
@@ -663,28 +662,24 @@ public class GameActivity extends Activity
 		portraitStatusBar = statusBar;
 		String gameFontFace = Preferences.getFontFace();
 		Typeface gameTf = StatusBarView.loadGameTypeface(this, gameFontFace);
-		statusBar.setTypeface(gameTf, gameFontFace);
+		statusBar.setTypeface(gameTf);
 		int screenWidth = getResources().getDisplayMetrics().widthPixels;
 		int hudCols = RegionRouter.HUD_END_COL - RegionRouter.HUD_START_COL;
-		Paint sizingPaint = new Paint();
-		sizingPaint.setTypeface(gameTf);
-		sizingPaint.setTextScaleX(
-				com.crawlmb.view.GameFontShaper.scaleXFor(gameTf, gameFontFace));
-		int baseFontSize = 1;
-		do
-		{
-			baseFontSize++;
-			sizingPaint.setTextSize(baseFontSize);
-		}
-		while (sizingPaint.measureText("X") * hudCols <= screenWidth
-				&& baseFontSize < 200);
-		baseFontSize--;
-		float statusFontPx = Math.round(baseFontSize
+		// Width-fit VeraMoBd, then scale the chosen face so its line height
+		// matches VeraMoBd's — keeps status-bar height consistent regardless
+		// of which face the user picked.
+		int refBase = com.crawlmb.view.GameFontShaper.widthFitTextSize(
+				this, hudCols, screenWidth, 2, 200);
+		float matchedBase = com.crawlmb.view.GameFontShaper.matchReferenceLineHeight(
+				this, gameTf, refBase);
+		float statusFontPx = Math.round(matchedBase
 				* fontConfig.portraitHudFontScale);
 		statusBar.setFontSizePx(statusFontPx);
-		sizingPaint.setTextSize(statusFontPx);
-		int statusBarHeight = (int) Math.ceil(sizingPaint.getFontSpacing());
-		int charWidthPx = (int) sizingPaint.measureText("X");
+		Paint gamePaint = new Paint();
+		gamePaint.setTypeface(gameTf);
+		gamePaint.setTextSize(statusFontPx);
+		int statusBarHeight = (int) Math.ceil(gamePaint.getFontSpacing());
+		int charWidthPx = (int) gamePaint.measureText("X");
 		statusBar.setPadding(
 				charWidthPx * fontConfig.portraitHudOffsetCols, 0, 0, 0);
 
@@ -1146,7 +1141,7 @@ public class GameActivity extends Activity
 			view.setExtraScrollTargets(portraitExtraScrollTargets);
 		if (portraitMapView != null && portraitFontConfig != null)
 			view.setMapZoom(portraitMapView,
-					portraitFontConfig.portraitMapZoomStepOut,
+					portraitFontConfig.portraitMapZoomStepOutBase,
 					portraitFontConfig.portraitMapZoomStep1,
 					portraitFontConfig.portraitMapZoomStep2);
 

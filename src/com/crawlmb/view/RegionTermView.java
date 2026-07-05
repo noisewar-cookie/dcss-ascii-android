@@ -657,14 +657,15 @@ public class RegionTermView extends View
 		else
 		{
 			int fitCols = fontReferenceCols > 0 ? fontReferenceCols : regionCols;
-			font_text_size = MIN_FONT_SIZE;
-			do
-			{
-				font_text_size += 1;
-				setFontSize(font_text_size, false);
-			} while (char_width * fitCols <= maxWidth && font_text_size < MAX_FONT_SIZE);
-
-			font_text_size -= 1;
+			// Width-fit VeraMoBd, then scale the chosen face so its line
+			// height matches VeraMoBd's — so every face fills the same
+			// vertical panel height. Width may over/undershoot naturally;
+			// centering below uses the actual measured char_width.
+			int refSize = GameFontShaper.widthFitTextSize(getContext(),
+					fitCols, maxWidth, MIN_FONT_SIZE, MAX_FONT_SIZE);
+			float matched = GameFontShaper.matchReferenceLineHeight(
+					getContext(), fore.getTypeface(), refSize);
+			font_text_size = Math.round(matched);
 
 			int scaledSize = Math.round(font_text_size * fontScaleMultiplier);
 			scaledSize = Math.max(MIN_FONT_SIZE, Math.min(scaledSize, MAX_FONT_SIZE));
@@ -712,14 +713,12 @@ public class RegionTermView extends View
 		{
 			tfTiny = getTypeface("6x12.ttf");
 			fore.setTypeface(tfTiny);
-			fore.setTextScaleX(GameFontShaper.scaleXFor(tfTiny, "6x12.ttf"));
 		}
 		else
 		{
 			String fontFace = Preferences.getFontFace();
 			tfStd = getTypeface(fontFace);
 			fore.setTypeface(tfStd);
-			fore.setTextScaleX(GameFontShaper.scaleXFor(tfStd, fontFace));
 		}
 	}
 
