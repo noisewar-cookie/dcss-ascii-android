@@ -1,0 +1,38 @@
+diff --git a/crawl-ref/source/ui.cc b/crawl-ref/source/ui.cc
+index 744b710626..42ad05901c 100644
+--- a/crawl-ref/source/ui.cc
++++ b/crawl-ref/source/ui.cc
+@@ -40,6 +40,13 @@
+ # include <unordered_map>
+ #endif
+ 
++#ifndef USE_TILE_LOCAL
++// Android word wrap (libandroid.cc): cap for prose Text wrap width.
++// Declared at global scope — inside namespace ui an extern declaration
++// would bind to ui::android_prose_wrap_cols and fail to link.
++extern int android_prose_wrap_cols;
++#endif
++
+ namespace ui {
+ 
+ #ifndef USE_TILE_LOCAL
+@@ -663,6 +670,19 @@ void Text::set_highlight_pattern(string pattern, bool line)
+ 
+ void Text::wrap_text_to_size(int width, int height)
+ {
++#ifndef USE_TILE_LOCAL
++    // Android word wrap: cap the wrap width of prose Texts so long text
++    // wraps at the visible panel width instead of the 80-col terminal.
++    // Gated on wrap_text, which only describe/god/hints-style prose sets —
++    // pre-wrapped (FS_PREWRAPPED_TEXT) and tabular content never does, so
++    // those screens keep their layout. Applied before the cache check so
++    // cached sizes are consistent with the capped width. 0 = off.
++    if (wrap_text && ::android_prose_wrap_cols > 0
++        && (width <= 0 || width > ::android_prose_wrap_cols))
++    {
++        width = ::android_prose_wrap_cols;
++    }
++#endif
+     // don't recalculate if the previous calculation imposed no constraints
+     // on the text, and the new calculation would be the same or greater in
+     // size. This can happen through a sequence of _get_preferred_size calls
