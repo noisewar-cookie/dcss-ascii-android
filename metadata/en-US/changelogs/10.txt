@@ -1,0 +1,11 @@
+Release 10 (0.34.1)
+
+New Features:
+• Better font scaling support for custom fonts.
+• Hi-scores expanded and scrollable.
+• NOTE: some old morgue files may not be viewable.
+
+Bug Fixes:
+• Custom folders properly sync save files.
+• Center longpress remapped from "5" to CMD_REST.
+• Fixed multiple corrupted renders.
