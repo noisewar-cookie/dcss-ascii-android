@@ -23,6 +23,11 @@ public class FontConfig
     public final float portraitHudFontScale;
     public final int portraitHudOffsetCols;
     public final float portraitMsgFontScale;
+    // Word-wrap mode only (crawl.wordwrap pref): terminal rows given to the
+    // DCSS message window (msg history retained for scrollback) and how many
+    // of them the msg panel shows on screen at once.
+    public final int msgHistoryRows;
+    public final int portraitMsgVisibleRows;
     public final float landscapeFontScale;
 
     public final float portraitPregameFontScale;
@@ -106,6 +111,10 @@ public class FontConfig
         this.portraitHudFontScale      = getFloat(props, "portrait_hud_font_scale", 1.0f);
         this.portraitHudOffsetCols     = getInt  (props, "portrait_hud_offset_cols", 0);
         this.portraitMsgFontScale      = getFloat(props, "portrait_msg_font_scale", 1.5f);
+        // Clamped: min 7 preserves the classic window, max 31 keeps the msg
+        // window inside the 48-row terminal (rows 17..47).
+        this.msgHistoryRows            = Math.max(7, Math.min(31, getInt(props, "msg_history_rows", 14)));
+        this.portraitMsgVisibleRows    = Math.max(1, getInt(props, "portrait_msg_visible_rows", 7));
         this.landscapeFontScale        = getFloat(props, "landscape_font_scale", 1.0f);
 
         this.portraitPregameFontScale  = getFloat(props, "portrait_pregame_font_scale", this.portraitDefaultFontScale);

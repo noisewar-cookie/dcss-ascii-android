@@ -671,6 +671,16 @@ public class PreferencesActivity extends PreferenceActivity implements
 
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
                                           String key) {
+        if (key.compareTo(Preferences.KEY_WORDWRAP) == 0) {
+            // Word wrap changes DCSS options and the terminal layout, both
+            // wired once at game boot — same reason custom-folder changes
+            // hard-restart. The reload flag shows the "Reloading..." overlay
+            // across the relaunch. The game was already saved by
+            // GameActivity.onPause when this screen opened.
+            Preferences.setReloadInProgressSync(true);
+            killAndRelaunch(this);
+            return;
+        }
         if (key.compareTo(Preferences.KEY_ACTIVEPROFILE) == 0
                 || key.compareTo(Preferences.KEY_PROFILES) == 0) {
             setSummaryAll(getPreferenceScreen());

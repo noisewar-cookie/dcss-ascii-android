@@ -101,6 +101,16 @@ public class RegionTermView extends View
 
 	private boolean horizontalScrollEnabled = false;
 	private boolean verticalScrollEnabled = false;
+	// When > 0 and vertical scroll is enabled, onMeasure caps the reported
+	// height to this many rows so the panel keeps a fixed visual slot while
+	// its bitmap holds more rows (word-wrap msg panel: 7 visible of 14).
+	private int maxVisibleRows = 0;
+	// Keep the viewport pinned to the bottom of content (newest msg lines)
+	// on every draw, unless the user has dragged away from the bottom.
+	// Dragging back to the bottom re-engages the pin; resetScroll() also
+	// re-engages it so transitions reopen at the latest content.
+	private boolean stickyScrollToBottom = false;
+	private boolean stickyUserAway = false;
 	private int scrollOffsetX = 0;
 	private int scrollOffsetY = 0;
 	private boolean anchorToContent = false;
@@ -243,10 +253,37 @@ public class RegionTermView extends View
 		return verticalScrollEnabled;
 	}
 
+	public void setMaxVisibleRows(int rows)
+	{
+		if (this.maxVisibleRows == rows)
+			return;
+		this.maxVisibleRows = rows;
+		if (canvas != null)
+			requestLayout();
+	}
+
+	public void setStickyScrollToBottom(boolean sticky)
+	{
+		this.stickyScrollToBottom = sticky;
+		this.stickyUserAway = false;
+	}
+
+	// Visible terminal columns at the current font size, or 0 before the
+	// first measure pass. Used to size the DCSS word-wrap width to what the
+	// panel can actually show.
+	public int computeVisibleCols()
+	{
+		int width = getMeasuredWidth();
+		if (width <= 0 || char_width <= 0)
+			return 0;
+		return width / char_width;
+	}
+
 	// Zero the drag-scroll offsets and repaint. Called by RegionRouter on
 	// every screen transition so a panel never re-opens at its prior offset.
 	public void resetScroll()
 	{
+		stickyUserAway = false;
 		if (scrollOffsetX == 0 && scrollOffsetY == 0)
 			return;
 		scrollOffsetX = 0;
@@ -366,6 +403,8 @@ public class RegionTermView extends View
 								scrollOffsetY = newY;
 								changed = true;
 							}
+							if (stickyScrollToBottom)
+								stickyUserAway = newY < maxY;
 						}
 						if (changed)
 							invalidate();
@@ -474,6 +513,18 @@ public class RegionTermView extends View
 				int maxY = Math.max(0, contentH - viewportH);
 				scrollOffsetY = maxY;
 				pendingScrollToBottom = false;
+			}
+		}
+		// Continuous variant of the snap above: keep the newest content row
+		// bottom-aligned as new lines arrive, unless the user dragged away.
+		if (stickyScrollToBottom && !stickyUserAway && verticalScrollEnabled
+				&& char_height > 0 && maxContentRow >= 0)
+		{
+			int viewportH = getHeight();
+			if (viewportH > 0)
+			{
+				int contentH = (maxContentRow + 1) * char_height;
+				scrollOffsetY = Math.max(0, contentH - viewportH);
 			}
 		}
 		if (contentZoom != 1.0f)
@@ -832,6 +883,15 @@ public class RegionTermView extends View
 					&& canvas_height > parentLimit)
 			{
 				reportedHeight = parentLimit;
+			}
+			// Fixed visual slot: applied after the parent-limit clamp so a
+			// large parent allocation can't raise the height back above the
+			// row cap.
+			if (maxVisibleRows > 0 && char_height > 0)
+			{
+				int cap = maxVisibleRows * char_height;
+				if (cap < reportedHeight)
+					reportedHeight = cap;
 			}
 			// Re-clamp existing offset against the new viewport size.
 			int contentH = maxContentRow >= 0

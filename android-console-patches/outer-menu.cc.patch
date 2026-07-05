@@ -1,8 +1,23 @@
 diff --git a/crawl-ref/source/outer-menu.cc b/crawl-ref/source/outer-menu.cc
-index 293a9204bf..bd1455b0e4 100644
+index 293a9204bf..68f23cbc57 100644
 --- a/crawl-ref/source/outer-menu.cc
 +++ b/crawl-ref/source/outer-menu.cc
-@@ -369,6 +369,28 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
+@@ -306,7 +306,13 @@ void OuterMenu::add_button(shared_ptr<MenuButton> btn, int x, int y)
+     if (descriptions)
+     {
+         auto desc_text = make_shared<Text>(formatted_string(btn->description, WHITE));
+-        desc_text->set_wrap_text(true);
++        // Android: keep the wrap flag off so the word-wrap width cap in
++        // Text::wrap_text_to_size never applies here. Console layout is
++        // unchanged (text still hard-wraps at the region width); wrapping
++        // newgame descriptions narrower would add rows and shift the
++        // sub-items grid, breaking the Java fixed-rect panels
++        // (RegionRouter NEWGAME_* row constants).
++        desc_text->set_wrap_text(false);
+         descriptions->add_child(std::move(desc_text));
+         m_description_indexes[y*m_width + x] = descriptions->num_children()-1;
+     }
+@@ -369,6 +375,28 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
          }
      }
  
@@ -31,7 +46,7 @@ index 293a9204bf..bd1455b0e4 100644
      if (btn)
          scroll_button_into_view(btn);
      else
-@@ -376,8 +398,59 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
+@@ -376,8 +404,59 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
          int idx = dx == 0 ? 1+dy : 2-dx; // dx,dy --> CSS direction index
          if (auto linked = linked_menus[idx].lock())
          {

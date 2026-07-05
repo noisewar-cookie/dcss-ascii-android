@@ -649,12 +649,30 @@ public class GameActivity extends Activity
 		mlistView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
 		mlistView.setOffsetCols(fontConfig.portraitHudOffsetCols);
 
+		// Word wrap: DCSS wraps messages at the visible column count
+		// (msg_max_width, passed at game start via NativeWrapper) and the
+		// msg window is extended to msgHistoryRows terminal rows. The panel
+		// keeps its classic visual slot (portraitMsgVisibleRows) and pins to
+		// the newest line; dragging up reveals the extra history rows.
+		boolean wordwrap = Preferences.getWordwrap();
+		int msgEndRow = wordwrap
+				? RegionRouter.MSG_START_ROW + fontConfig.msgHistoryRows
+				: RegionRouter.MSG_END_ROW;
 		RegionTermView msgView = new RegionTermView(this,
 				RegionRouter.MSG_START_ROW, RegionRouter.MSG_START_COL,
-				RegionRouter.MSG_END_ROW, RegionRouter.MSG_END_COL);
+				msgEndRow, RegionRouter.MSG_END_COL);
 		msgView.setId(View.generateViewId());
 		msgView.setFontScaleMultiplier(fontConfig.portraitMsgFontScale);
-		msgView.setHorizontalScrollEnabled(true);
+		if (wordwrap)
+		{
+			msgView.setVerticalScrollEnabled(true);
+			msgView.setMaxVisibleRows(fontConfig.portraitMsgVisibleRows);
+			msgView.setStickyScrollToBottom(true);
+		}
+		else
+		{
+			msgView.setHorizontalScrollEnabled(true);
+		}
 		portraitMsgView = msgView;
 
 		StatusBarView statusBar = new StatusBarView(this);
@@ -899,6 +917,8 @@ public class GameActivity extends Activity
 				ngbDesc, ngbSubLeft, ngbSubRight);
 		router.setNewgameWeaponContainer(ngwScroll);
 		router.setNewgameWeaponPanels(ngwContent, ngwSubLeft, ngwSubRight);
+		if (wordwrap)
+			router.setMsgWordwrap(msgView, fontConfig.msgHistoryRows);
 		router.setFontConfig(fontConfig);
 		router.setShowLoadingMessage(getIntent().getBooleanExtra(
 				SplashActivity.EXTRA_ASSETS_FRESHLY_INSTALLED, false));

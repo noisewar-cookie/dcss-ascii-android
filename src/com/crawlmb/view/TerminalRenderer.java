@@ -46,4 +46,15 @@ public interface TerminalRenderer
 	// the font scale to ping-pong. Default no-op for renderers that don't
 	// care (e.g. landscape TermView).
 	default void setCharacterLogMode(boolean active) {}
+
+	// Word-wrap parameters queried by NativeWrapper.gameStart just before
+	// initGame (views are measured by then — StartGame fires from the first
+	// layout pass). getMsgWrapCols returns the msg_max_width to pass to DCSS,
+	// or 0 when word wrap is off/unavailable; getMsgRows returns the terminal
+	// rows the message window should span; getProseWrapCols returns the wrap
+	// cap for prose popup Texts (describe/god/hints), 0 = off. Defaults keep
+	// TermView (landscape) on stock behavior.
+	default int getMsgWrapCols() { return 0; }
+	default int getMsgRows() { return 7; }
+	default int getProseWrapCols() { return 0; }
 }

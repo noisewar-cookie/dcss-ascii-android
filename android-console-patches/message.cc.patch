@@ -2,7 +2,7 @@ diff --git a/crawl-ref/source/message.cc b/crawl-ref/source/message.cc
 --- a/crawl-ref/source/message.cc
 +++ b/crawl-ref/source/message.cc
 @@ -538,7 +538,13 @@
-
+ 
      unsigned int out_width() const
      {
 -        return width() - (use_first_col() ? 1 : 0);
@@ -14,5 +14,19 @@ diff --git a/crawl-ref/source/message.cc b/crawl-ref/source/message.cc
 +        }
 +        return w;
      }
-
+ 
      unsigned int out_height() const
+@@ -700,7 +700,13 @@
+         if (user)
+             flush_input_buffer(FLUSH_FORCE_MORE);
+ 
+         int last_row = crawl_view.msgsz.y;
++        // Android word wrap: the msg window is taller than the visible
++        // panel; anchor the more-prompt right below the newest message so
++        // the bottom-pinned viewport shows messages + prompt with no gap.
++        extern int android_msg_wrap_cols;
++        if (android_msg_wrap_cols > 0)
++            last_row = min(next_line + 1, last_row);
+         if (first_col_more())
+         {
+             cgotoxy(1, last_row, GOTO_MSG);

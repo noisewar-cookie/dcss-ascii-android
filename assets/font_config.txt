@@ -100,6 +100,14 @@ portrait_hud_offset_cols=1
 # Terminal region: 80 cols x 7 rows  (terminal cols 0-79, rows 17-23)
 portrait_msg_font_scale=1.7
 
+# Word wrap mode only (Preferences > Display > Word wrap). When enabled, the
+# DCSS message window is extended to msg_history_rows terminal rows (7-31) so
+# wrapped lines scroll back instead of being lost; the panel shows
+# portrait_msg_visible_rows of them on screen (bottom-aligned, drag up to see
+# older lines).
+msg_history_rows=14
+portrait_msg_visible_rows=7
+
 # Landscape: full terminal
 # Shown during: all screens in landscape orientation
 # Terminal region: 80 cols x 24 rows

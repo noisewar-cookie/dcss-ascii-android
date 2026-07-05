@@ -28,10 +28,17 @@ public class NativeWrapper
 		String dataDir = Paths.getActiveDataDir(ctx).getPath();
 		String settingsDir = Paths.getActiveSettingsDir(ctx).getPath();
 		String morgueDir = Paths.getActiveMorgueDir(ctx).getPath();
+		// Word wrap: hand DCSS the wrap width / msg-window rows before boot.
+		// gameStart runs after the first layout pass (StartGame fires from
+		// onSizeChanged), so the msg panel's font metrics are final here.
+		// wrapCols 0 = off; libandroid then keeps stock options.
+		setWordwrap(renderer.getMsgWrapCols(), renderer.getMsgRows(),
+				renderer.getProseWrapCols());
 		initGame(dataDir, settingsDir, morgueDir);
 	}
 
 	public native void initGame(String dataDir, String settingsDir, String morgueDir);
+	private native void setWordwrap(int msgWrapCols, int msgRows, int proseWrapCols);
 	public static native void nativeSaveGame();
 
 	public NativeWrapper(GameKeyListener s)

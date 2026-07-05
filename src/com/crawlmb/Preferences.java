@@ -23,6 +23,7 @@ final public class Preferences
 	public static final String KEY_ORIENTATION = "crawl.orientation";
 	public static final String KEY_SKIPSPLASH = "crawl.skipsplash";
 	public static final String KEY_SKIPCONTROLSINFO = "crawl.skipcontrolsinfo";
+	public static final String KEY_WORDWRAP = "crawl.wordwrap";
 	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
 
 	public static final String KEY_FONTFACE = "crawl.fontface";
@@ -103,6 +104,14 @@ final public class Preferences
 	public static boolean getSkipControlsInfo()
 	{
 		return sharedPreferences.getBoolean(Preferences.KEY_SKIPCONTROLSINFO, false);
+	}
+
+	// Word wrap (messages wrapped by DCSS at the visible column count, msg
+	// window extended to extra history rows). Read once at layout/game start;
+	// changing it mid-session has no effect until the next app launch.
+	public static boolean getWordwrap()
+	{
+		return sharedPreferences.getBoolean(Preferences.KEY_WORDWRAP, false);
 	}
 
 	// One-shot flag marking that the next launch follows a save-restore

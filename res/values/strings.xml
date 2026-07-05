@@ -69,6 +69,8 @@
     <string name="preferences_skipsplash_summary">Automatically skip the splash screen on startup</string>
     <string name="preferences_skipcontrolsinfo_title">Skip startup help screens</string>
     <string name="preferences_skipcontrolsinfo_summary">Automatically skip the controls info screens on startup</string>
+    <string name="preferences_wordwrap_title">Word wrap</string>
+    <string name="preferences_wordwrap_summary">Wrap game text at the screen edge instead of scrolling horizontally. Changing this restarts the app</string>
     <string name="preferences_orientation_title">Orientation</string>
     <string name="preferences_orientation_summary">Select screen orientation</string>
     <string name="preferences_fontface_title">Font</string>

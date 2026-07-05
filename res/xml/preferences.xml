@@ -34,6 +34,11 @@
 	   android:defaultValue="false"
 	   android:title="@string/preferences_skipcontrolsinfo_title"
 	   android:summary="@string/preferences_skipcontrolsinfo_summary" />
+	<CheckBoxPreference
+	   android:key="crawl.wordwrap"
+	   android:defaultValue="false"
+	   android:title="@string/preferences_wordwrap_title"
+	   android:summary="@string/preferences_wordwrap_summary" />
 	  <ListPreference
 		  android:key="crawl.fontface"
 		  android:defaultValue="VeraMoBd.ttf"

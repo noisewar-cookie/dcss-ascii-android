@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/output.cc b/crawl-ref/source/output.cc
-index 3c3bfb8186..24302e8edf 100644
+index 3c3bfb8186..6bbcdcf31c 100644
 --- a/crawl-ref/source/output.cc
 +++ b/crawl-ref/source/output.cc
 @@ -648,6 +648,10 @@ void update_message_status()
@@ -129,13 +129,13 @@ index 3c3bfb8186..24302e8edf 100644
 -        CPRINTF("          ");
 -        return;
 -    }
-+        textcolour(HUD_CAPTION_COLOUR);
-+        NOWRAP_EOL_CPRINTF("Doom:");
- 
+-
 -    CGOTOXY(x, y, GOTO_STAT);
 -    textcolour(HUD_CAPTION_COLOUR);
 -    CPRINTF("Doom: ");
--
++        textcolour(HUD_CAPTION_COLOUR);
++        NOWRAP_EOL_CPRINTF("Doom:");
+ 
 -    if (you.attribute[ATTR_DOOM] >= 75)
 -        textcolour(LIGHTMAGENTA);
 -    else if (you.attribute[ATTR_DOOM] >= 50)
@@ -439,9 +439,8 @@ index 3c3bfb8186..24302e8edf 100644
 -        _print_stats_qv(11 - rows_hidden);
 +        _print_stats_qv(9 - rows_hidden);
  
--    if (you.redraw_status_lights)
+     if (you.redraw_status_lights)
 -        _print_status_lights(12 - rows_hidden);
-+    if (you.redraw_status_lights)
 +    {
 +        extern void android_send_status_lights(
 +            const char** texts, const int* colours, int count);
@@ -523,19 +522,14 @@ index 3c3bfb8186..24302e8edf 100644
 +        row5 = 4;
      else
 -        ac_pos = 5;
--
++        row5 = 5;
++    const int row6 = row5 + 1;
+ 
 -    int ev_pos = ac_pos + 1;
 -    int sh_pos = ac_pos + 2;
 -    int str_pos = ac_pos;
 -    int int_pos = ev_pos;
 -    int dex_pos = sh_pos;
-+        row5 = 5;
-+    const int row6 = row5 + 1;
- 
--    // "Health:" and "Magic:" printed elsewhere
--    CGOTOXY(1, ac_pos, GOTO_STAT); CPRINTF("AC:");
--    CGOTOXY(1, ev_pos, GOTO_STAT); CPRINTF("EV:");
--    CGOTOXY(1, sh_pos, GOTO_STAT); CPRINTF("SH:");
 +    // "Health:"/"Magic:"/"XL:"/"Noise:"/"Doom:"/"Contam:"/"T:" printed elsewhere
 +    // AC:/EV:/SH: are shifted 1 col right of Str:/Int:/Dex: so the colons of
 +    // the 2-letter and 3-letter labels line up vertically.
@@ -543,6 +537,11 @@ index 3c3bfb8186..24302e8edf 100644
 +    CGOTOXY(28, row5, GOTO_STAT); CPRINTF("EV:");
 +    CGOTOXY(37, row5, GOTO_STAT); CPRINTF("SH:");
  
+-    // "Health:" and "Magic:" printed elsewhere
+-    CGOTOXY(1, ac_pos, GOTO_STAT); CPRINTF("AC:");
+-    CGOTOXY(1, ev_pos, GOTO_STAT); CPRINTF("EV:");
+-    CGOTOXY(1, sh_pos, GOTO_STAT); CPRINTF("SH:");
+-
 -    CGOTOXY(19, str_pos, GOTO_STAT); CPRINTF("Str:");
 -    CGOTOXY(19, int_pos, GOTO_STAT); CPRINTF("Int:");
 -    CGOTOXY(19, dex_pos, GOTO_STAT); CPRINTF("Dex:");
@@ -682,7 +681,19 @@ index 3c3bfb8186..24302e8edf 100644
  }
  
  // generator of resistance strings:
-@@ -2658,6 +2752,10 @@ void print_overview_screen()
+@@ -2629,7 +2723,10 @@ static vector<formatted_string> _get_overview_resistances(
+ class overview_popup : public formatted_scroller
+ {
+ public:
+-    overview_popup() {};
++    // Android: FS_PREWRAPPED_TEXT so the word-wrap width cap never
++    // re-wraps the overview's column-composed lines. Console layout is
++    // otherwise unchanged.
++    overview_popup() : formatted_scroller(FS_PREWRAPPED_TEXT) {};
+     vector<char> equip_chars;
+ private:
+     maybe_bool process_key(int ch) override
+@@ -2658,6 +2755,10 @@ void print_overview_screen()
          overview.add_formatted_string(bline, true);
      overview.add_text("\n");
  
@@ -693,7 +704,7 @@ index 3c3bfb8186..24302e8edf 100644
      {
          vector<formatted_string> blines =
              _get_overview_resistances(overview.equip_chars, num_cols);
-@@ -2683,6 +2781,13 @@ string dump_overview_screen()
+@@ -2683,6 +2784,13 @@ string dump_overview_screen()
      }
      text += "\n";
  

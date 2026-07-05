@@ -54,6 +54,26 @@ extern int main(int argc, char *argv[]);
 #define MENU_LINES 48
 #define COLS 80
 
+// Rows of the gameplay dungeon view (terminal rows 0..16); the message
+// window starts right below. Must match the Java split layout
+// (RegionRouter.MSG_START_ROW).
+#define GAMEPLAY_VIEW_LINES 17
+
+// Word wrap (Android preference). Set by NativeWrapper.setWordwrap before
+// initGame. android_layout_lines is read by the patched
+// crawl_view_geometry::init_geometry (viewgeom.cc.patch) to clamp the
+// gameplay layout height: 24 stock, 17 + msg rows when word wrap extends
+// the message window. The wrap width / msg rows are handed to crawl as
+// -extra-opt-first options in initGame.
+// Non-static: message.cc.patch reads android_msg_wrap_cols to anchor the
+// more-prompt below the newest message instead of the window's last row;
+// ui.cc.patch reads android_prose_wrap_cols to cap the wrap width of prose
+// Text widgets (describe/god/hints screens).
+int android_layout_lines = LINES;
+int android_msg_wrap_cols = 0;
+int android_prose_wrap_cols = 0;
+static int android_msg_rows = 0;
+
 // Probably a redundant conversion, since it gets converted later on,
 // but it's a bit of leftover code from the curses stuff
 #define KEY_HOME	0406		/* home key */
@@ -266,9 +286,31 @@ void init_java_methods( JNIEnv* env1, jobject object )
 extern "C"
 {
 	void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir);
+	void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, jint msgWrapCols, jint msgRows, jint proseWrapCols);
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
 	void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz);
 };
+
+// Called on the game thread from NativeWrapper.gameStart, before initGame
+// runs main(). msgWrapCols <= 0 disables word wrap (stock 24-line layout).
+void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, jint msgWrapCols, jint msgRows, jint proseWrapCols)
+{
+	if (msgWrapCols > 0 && msgRows > 0)
+	{
+		android_msg_wrap_cols = msgWrapCols;
+		android_msg_rows = msgRows;
+		if (android_msg_rows > MENU_LINES - GAMEPLAY_VIEW_LINES)
+			android_msg_rows = MENU_LINES - GAMEPLAY_VIEW_LINES;
+		android_layout_lines = GAMEPLAY_VIEW_LINES + android_msg_rows;
+	}
+	else
+	{
+		android_msg_wrap_cols = 0;
+		android_msg_rows = 0;
+		android_layout_lines = LINES;
+	}
+	android_prose_wrap_cols = proseWrapCols > 0 ? proseWrapCols : 0;
+}
 
 void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz)
 {
@@ -287,13 +329,33 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
 	// so init.txt is read from external user-visible storage (where the
 	// in-app editor writes) instead of falling back to the bundled
 	// ANDROID_ASSETS/settings/init.txt.
-	int argc = 11;
-	char *argv[] = {(char*)"", (char*)"-dir", (char*)dataDir,
+	std::vector<char*> args = {(char*)"", (char*)"-dir", (char*)dataDir,
                       (char*)"-macro", (char*)settingsDir,
                       (char*)"-morgue", (char*)morgueDir,
                       (char*)"-rcdir", (char*)settingsDir,
                       (char*)"-extra-opt-first", (char*)"char_set=ascii"};
-	main(argc, argv);
+	// Word wrap: crawl wraps messages at msg_max_width natively; the msg
+	// window gets android_msg_rows rows (extra history for the bottom-
+	// pinned Java panel). view_max_height pins the dungeon view at 17 rows
+	// — init_geometry grows the view BEFORE the msg window, so without it
+	// the extra layout lines would shift the msg window below row 17 and
+	// break the Java split-panel rows. -extra-opt-first keeps init.txt
+	// able to override.
+	char opt_msg_width[32], opt_msg_height[32];
+	if (android_msg_wrap_cols > 0)
+	{
+		snprintf(opt_msg_width, sizeof(opt_msg_width),
+			"msg_max_width=%d", android_msg_wrap_cols);
+		snprintf(opt_msg_height, sizeof(opt_msg_height),
+			"msg_max_height=%d", android_msg_rows);
+		args.push_back((char*)"-extra-opt-first");
+		args.push_back(opt_msg_width);
+		args.push_back((char*)"-extra-opt-first");
+		args.push_back(opt_msg_height);
+		args.push_back((char*)"-extra-opt-first");
+		args.push_back((char*)"view_max_height=17");
+	}
+	main((int)args.size(), args.data());
 }
 
 // Deliver the whole terminal grid to Java in ONE JNI call (frameUpdate).

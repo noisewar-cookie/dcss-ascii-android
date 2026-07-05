@@ -11,12 +11,16 @@ index b03d1dab69..c461c97b35 100644
  #define MSG_MAX_HEIGHT Options.msg_max_height
  #define MLIST_MIN_HEIGHT Options.mlist_min_height
  #define MLIST_MIN_WIDTH 25  // non-inline layout only
-@@ -384,20 +384,22 @@ void crawl_view_geometry::set_player_at(const coord_def &c, bool centre)
+@@ -384,20 +384,26 @@ void crawl_view_geometry::set_player_at(const coord_def &c, bool centre)
  void crawl_view_geometry::init_geometry()
  {
      termsz = coord_def(get_number_of_cols(), get_number_of_lines());
++    // Android: gameplay layout height clamp. 24 stock; word wrap raises it
++    // to 17 + msg rows so the message window gains scrollback rows
++    // (libandroid.cc, Java_com_crawlmb_NativeWrapper_setWordwrap).
++    extern int android_layout_lines;
 +    coord_def layout_sz = termsz;
-+    layout_sz.y = min(layout_sz.y, 24);
++    layout_sz.y = min(layout_sz.y, android_layout_lines);
  
      // currently, webtiles has weird interactions with this logic (I think
      // because of extra resize calls). But this is basically safe because

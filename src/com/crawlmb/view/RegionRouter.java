@@ -3,11 +3,14 @@ package com.crawlmb.view;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 
 import com.crawlmb.FontConfig;
+import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.keyboard.CrawlKeyboardView;
 
@@ -350,6 +353,12 @@ public class RegionRouter implements TerminalRenderer
 	private RegionTermView ngwContentView;
 	private RegionTermView ngwSubLeftView;
 	private RegionTermView ngwSubRightView;
+	// Word-wrap mode (crawl.wordwrap pref): msgView reference and its
+	// terminal row count, set by GameActivity when the pref is on. Queried
+	// by NativeWrapper.gameStart to compute the msg_max_width option before
+	// DCSS boots. null msgWordwrapView = word wrap off.
+	private RegionTermView msgWordwrapView;
+	private int msgWordwrapRows = 7;
 	private final Context context;
 
 	private final char[][] terminalShadow = new char[TERMINAL_ROWS][TERMINAL_COLS];
@@ -403,6 +412,73 @@ public class RegionRouter implements TerminalRenderer
 	public void setCharacterLogMode(boolean active)
 	{
 		characterLogMode = active;
+	}
+
+	public void setMsgWordwrap(RegionTermView msgView, int msgRows)
+	{
+		this.msgWordwrapView = msgView;
+		this.msgWordwrapRows = msgRows;
+	}
+
+	// msg_max_width for DCSS: visible columns at the msg font size, minus
+	// the '_' turn-marker column (message text starts at terminal col 1).
+	// 0 disables word wrap — either the pref is off (no view registered) or
+	// the panel hasn't been measured, in which case wrapping silently stays
+	// off for the session rather than wrapping at a wrong width.
+	@Override
+	public int getMsgWrapCols()
+	{
+		if (msgWordwrapView == null)
+			return 0;
+		int visible = msgWordwrapView.computeVisibleCols();
+		if (visible <= 1)
+			return 0;
+		return Math.min(visible - 1, TERMINAL_COLS - 1);
+	}
+
+	@Override
+	public int getMsgRows()
+	{
+		return msgWordwrapView != null ? msgWordwrapRows : 7;
+	}
+
+	// Wrap cap for prose popup Texts (describe/god/hints — the wrap_text
+	// widgets capped by ui.cc.patch): visible columns at the largest prose-
+	// popup font scale, so wrapped lines fit every prose screen. Mirrors
+	// RegionTermView.autoSizeFontByWidth/setFontSize so the computed char
+	// width matches what the panel will render with. 0 when word wrap is
+	// off or fullView isn't measured yet (wrap then stays off for the
+	// session rather than wrapping at a wrong width).
+	@Override
+	public int getProseWrapCols()
+	{
+		if (msgWordwrapView == null || fullView == null || fontConfig == null)
+			return 0;
+		int width = fullView.getMeasuredWidth();
+		if (width <= 0)
+			return 0;
+		Typeface face = fullView.getTypeface(Preferences.getFontFace());
+		if (face == null)
+			return 0;
+		float scale = Math.max(fontConfig.portraitDescribeFontScale,
+				fontConfig.portraitReligionFontScale);
+		int refSize = GameFontShaper.widthFitTextSize(context,
+				TERMINAL_COLS, width,
+				RegionTermView.MIN_FONT_SIZE, RegionTermView.MAX_FONT_SIZE);
+		float matched = GameFontShaper.matchReferenceLineHeight(
+				context, face, refSize);
+		int scaledSize = Math.round(Math.round(matched) * scale);
+		scaledSize = Math.max(RegionTermView.MIN_FONT_SIZE,
+				Math.min(scaledSize, RegionTermView.MAX_FONT_SIZE));
+		Paint probe = new Paint();
+		probe.setTypeface(face);
+		probe.setTextSize(scaledSize);
+		int charWidth = (int) probe.measureText("X");
+		if (charWidth <= 0)
+			return 0;
+		// -1 safety margin against char-width rounding across font faces.
+		int cols = width / charWidth - 1;
+		return Math.max(0, Math.min(cols, TERMINAL_COLS - 1));
 	}
 
 	public LayoutMode getCurrentMode()
@@ -1334,7 +1410,9 @@ public class RegionRouter implements TerminalRenderer
 		case RELIGION:
 			scale = fontConfig.portraitReligionFontScale;
 			scrollable = fontConfig.portraitReligionScrollable;
-			vscrollable = false;
+			// Word wrap makes the god description taller; the region is
+			// widened to TERMINAL_ROWS below, so vscroll is needed to pan.
+			vscrollable = msgWordwrapView != null;
 			break;
 		case HISCORES:
 			// fullView is widened to TERMINAL_ROWS below so the full 48-row
@@ -1399,6 +1477,15 @@ public class RegionRouter implements TerminalRenderer
 				|| type == MenuType.MESSAGES || type == MenuType.MORGUE
 				|| type == MenuType.HISCORES)
 				? TERMINAL_ROWS : 28;
+		// Word wrap: prose popups grow taller (same text, fewer columns) and
+		// DCSS's scroller won't scroll internally until content exceeds its
+		// 48-row viewport — rows 28..47 would be silently clipped by the
+		// default region. Widen to the full terminal; vscroll (on for these
+		// types when wrap is on) pans to the extra rows.
+		if (msgWordwrapView != null
+				&& (type == MenuType.DESCRIBE || type == MenuType.RELIGION
+					|| type == MenuType.DEFAULT))
+			endRow = TERMINAL_ROWS;
 		// A regionRows change reallocates fullView's mirror in the next layout
 		// pass (ensureMirrorSizedLocked), dropping every drawPoint the ongoing
 		// storm has already delivered. Treat it as a bitmap-recreate event so
