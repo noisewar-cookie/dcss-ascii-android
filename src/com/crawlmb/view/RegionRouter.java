@@ -2642,19 +2642,10 @@ public class RegionRouter implements TerminalRenderer
 		if (rowContains(0, LEVELMAP_HELP_MARKER))
 			return MenuType.LEVELMAP;
 
-		// Custom-rendered screens — scan distinctive markers across rows.
-		// Hiscores: title widget renders "<game name>: High Scores" near
-		// top of the High Scores menu (rows 0-8). The death/quit screen
-		// (end.cc) renders "Best Crawlers - <game type>" as the header
-		// above its embedded leaderboard, but the goodbye_msg block
-		// (death summary, stats) above it can push that header past
-		// row 8 — scan the full visible window for it. Both phrases are
-		// unique strings, no false-positive risk elsewhere.
-		for (int r = 0; r <= 8; r++)
-		{
-			if (rowContains(r, "High Scores"))
-				return MenuType.HISCORES;
-		}
+		// Death/quit screen (end.cc): "Best Crawlers" header above its
+		// embedded leaderboard. The goodbye_msg block above can push it
+		// well down the screen — scan the full visible window. (The High
+		// Scores menu itself is anchored in detectPregameAnchor.)
 		for (int r = 0; r <= 23; r++)
 		{
 			if (rowContains(r, "Best Crawlers"))
@@ -2992,6 +2983,14 @@ public class RegionRouter implements TerminalRenderer
 				if (rowContains(r, NEWGAME_WEAPON_ANCHOR))
 					return MenuType.NEWGAME_WEAPON;
 			}
+		}
+		// High Scores menu title. Anchored here (not detectMenuType)
+		// because it's reachable pregame. Must stay after the MAINMENU
+		// check: the main menu itself has a "High Scores" button.
+		for (int r = 0; r <= 8; r++)
+		{
+			if (rowContains(r, "High Scores"))
+				return MenuType.HISCORES;
 		}
 		// Character naming popup (_choose_name). The popup is vertically
 		// centered, so the exact row varies; scan all rows.
