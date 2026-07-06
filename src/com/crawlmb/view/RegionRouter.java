@@ -750,23 +750,66 @@ public class RegionRouter implements TerminalRenderer
 		return -1;
 	}
 
+	// True iff every cell in [cStart, cEnd) on `row` is whitespace or unset.
+	private boolean sliceIsBlank(int row, int cStart, int cEnd)
+	{
+		if (row < 0 || row >= TERMINAL_ROWS)
+			return true;
+		int end = Math.min(cEnd, TERMINAL_COLS);
+		for (int c = Math.max(cStart, 0); c < end; c++)
+		{
+			char ch = terminalShadow[row][c];
+			if (ch != 0 && ch != ' ')
+				return false;
+		}
+		return true;
+	}
+
+	// Trim a newgame category panel to its content rows. Group slots are
+	// fixed in the upstream grid, but entries the current species/background
+	// combo rules out are omitted, leaving blank tail rows in the slot
+	// (Felid Warrior: 2 of 5 items) or a fully absent group (Demigod has no
+	// Zealot). present=false collapses the panel to zero rows. Returns true
+	// if the panel's row bounds changed.
+	private boolean trimNewgameCategoryRows(RegionTermView v, boolean present,
+			int titleRow, int slotEndRow, int cStart, int cEnd)
+	{
+		if (!present)
+			return v.setRegionRows(titleRow, titleRow);
+		int last = titleRow;
+		for (int r = titleRow + 1; r < slotEndRow; r++)
+			if (!sliceIsBlank(r, cStart, cEnd))
+				last = r;
+		return v.setRegionRows(titleRow, last + 1);
+	}
+
 	// Scan terminalShadow row 2 for the species group titles
 	// (Simple/Intermediate/Advanced) and re-aim each per-category panel at
-	// the slice spanning [thisTitleCol, nextTitleCol). No-op if any title
-	// is missing — the next frame will retry.
-	private void applyNewgameSpeciesBounds()
+	// the slice spanning [thisTitleCol, nextTitleCol), with rows trimmed to
+	// actual group content. No-op if any title is missing — the next frame
+	// will retry. Returns true if any panel's bounds changed.
+	private boolean applyNewgameSpeciesBounds()
 	{
 		if (ngsSimpleView == null || ngsIntermediateView == null
 				|| ngsAdvancedView == null)
-			return;
+			return false;
 		int cSimple = findColInRow(2, "Simple");
 		int cInter  = findColInRow(2, "Intermediate");
 		int cAdv    = findColInRow(2, "Advanced");
 		if (cSimple < 0 || cInter < 0 || cAdv < 0)
-			return;
-		ngsSimpleView.setRegionCols(cSimple, cInter);
-		ngsIntermediateView.setRegionCols(cInter, cAdv);
-		ngsAdvancedView.setRegionCols(cAdv, TERMINAL_COLS);
+			return false;
+		boolean changed = false;
+		changed |= ngsSimpleView.setRegionCols(cSimple, cInter);
+		changed |= ngsIntermediateView.setRegionCols(cInter, cAdv);
+		changed |= ngsAdvancedView.setRegionCols(cAdv, TERMINAL_COLS);
+		changed |= trimNewgameCategoryRows(ngsSimpleView, true,
+				NEWGAME_SPECIES_ROW0, NEWGAME_SPECIES_ROW1, cSimple, cInter);
+		changed |= trimNewgameCategoryRows(ngsIntermediateView, true,
+				NEWGAME_SPECIES_ROW0, NEWGAME_SPECIES_ROW1, cInter, cAdv);
+		changed |= trimNewgameCategoryRows(ngsAdvancedView, true,
+				NEWGAME_SPECIES_ROW0, NEWGAME_SPECIES_ROW1, cAdv,
+				TERMINAL_COLS);
+		return changed;
 	}
 
 	// Stack upstream's "description Switcher above 2-col sub-items grid"
@@ -964,23 +1007,45 @@ public class RegionRouter implements TerminalRenderer
 
 	// Background row 2 has only the col-0 group titles — Warrior, Adventurer,
 	// Mage. Zealot (col 0) and Warrior-mage (col 1) sit further down their
-	// columns and share the col-0/col-1 x ranges respectively.
-	private void applyNewgameBackgroundBounds()
+	// columns and share the col-0/col-1 x ranges respectively. Zealot and
+	// Warrior-mage can be absent outright (their titles are checked at their
+	// own slot rows); the gated titles always exist. Returns true if any
+	// panel's bounds changed.
+	private boolean applyNewgameBackgroundBounds()
 	{
 		if (ngbWarriorView == null || ngbZealotView == null
 				|| ngbAdventurerView == null || ngbWarMageView == null
 				|| ngbMageView == null)
-			return;
+			return false;
 		int cWarrior = findColInRow(NEWGAME_BG_WARRIOR_ROW0, "Warrior");
 		int cAdv     = findColInRow(NEWGAME_BG_WARRIOR_ROW0, "Adventurer");
 		int cMage    = findColInRow(NEWGAME_BG_WARRIOR_ROW0, "Mage");
 		if (cWarrior < 0 || cAdv < 0 || cMage < 0)
-			return;
-		ngbWarriorView.setRegionCols(cWarrior, cAdv);
-		ngbZealotView.setRegionCols(cWarrior, cAdv);
-		ngbAdventurerView.setRegionCols(cAdv, cMage);
-		ngbWarMageView.setRegionCols(cAdv, cMage);
-		ngbMageView.setRegionCols(cMage, TERMINAL_COLS);
+			return false;
+		boolean changed = false;
+		changed |= ngbWarriorView.setRegionCols(cWarrior, cAdv);
+		changed |= ngbZealotView.setRegionCols(cWarrior, cAdv);
+		changed |= ngbAdventurerView.setRegionCols(cAdv, cMage);
+		changed |= ngbWarMageView.setRegionCols(cAdv, cMage);
+		changed |= ngbMageView.setRegionCols(cMage, TERMINAL_COLS);
+		changed |= trimNewgameCategoryRows(ngbWarriorView, true,
+				NEWGAME_BG_WARRIOR_ROW0, NEWGAME_BG_WARRIOR_ROW1,
+				cWarrior, cAdv);
+		changed |= trimNewgameCategoryRows(ngbZealotView,
+				findColInRow(NEWGAME_BG_ZEALOT_ROW0, "Zealot") >= 0,
+				NEWGAME_BG_ZEALOT_ROW0, NEWGAME_BG_ZEALOT_ROW1,
+				cWarrior, cAdv);
+		changed |= trimNewgameCategoryRows(ngbAdventurerView, true,
+				NEWGAME_BG_ADVENTURER_ROW0, NEWGAME_BG_ADVENTURER_ROW1,
+				cAdv, cMage);
+		changed |= trimNewgameCategoryRows(ngbWarMageView,
+				findColInRow(NEWGAME_BG_WARMAGE_ROW0, "Warrior-mage") >= 0,
+				NEWGAME_BG_WARMAGE_ROW0, NEWGAME_BG_WARMAGE_ROW1,
+				cAdv, cMage);
+		changed |= trimNewgameCategoryRows(ngbMageView, true,
+				NEWGAME_BG_MAGE_ROW0, NEWGAME_BG_MAGE_ROW1,
+				cMage, TERMINAL_COLS);
+		return changed;
 	}
 
 	public void setFontConfig(FontConfig config)
@@ -2334,16 +2399,25 @@ public class RegionRouter implements TerminalRenderer
 					break;
 			}
 
-			fullViewFooterStart = footerStart;
-			fullViewLastOverflow = lastOverflow;
-			// +2 (not +1) leaves a 1-row spacer between content and the
-			// remapped footer, matching itemsView's footer compression
-			// (recomputeItemsAnchor uses lastContent+2). Without this the
-			// "more" prompt sits flush against the last list row.
-			if (lastOverflow >= 0)
-				fullViewFooterDest = lastOverflow + 2;
-			else
-				fullViewFooterDest = lastContent + 2;
+			// A real keyhelp footer sits >10 blank rows below content
+			// (>3 matches the blankRun tolerance). A flush block is list
+			// content spilling past row 23 (main menu saves, message
+			// history) — compressing it would insert a phantom blank row
+			// at 24.
+			int contentEnd = lastOverflow >= 0 ? lastOverflow : lastContent;
+			if (footerStart - contentEnd - 1 > 3)
+			{
+				fullViewFooterStart = footerStart;
+				fullViewLastOverflow = lastOverflow;
+				// +2 (not +1) leaves a 1-row spacer between content and the
+				// remapped footer, matching itemsView's footer compression
+				// (recomputeItemsAnchor uses lastContent+2). Without this the
+				// "more" prompt sits flush against the last list row.
+				if (lastOverflow >= 0)
+					fullViewFooterDest = lastOverflow + 2;
+				else
+					fullViewFooterDest = lastContent + 2;
+			}
 		}
 
 		if (fullViewFooterStart != prevStart
@@ -2787,18 +2861,32 @@ public class RegionRouter implements TerminalRenderer
 						targetMode == LayoutMode.GAMEPLAY);
 		}
 
-		// While in newgame, re-detect sub-items grid bounds every frame.
-		// The description Switcher's height changes when the user navigates
+		// While in newgame, re-detect panel bounds every frame. The
+		// description Switcher's height changes when the user navigates
 		// between species/background items (no description ↔ multi-line
-		// description), which shifts the sub-items grid down or up. applyMode
-		// only fires on state transitions, so without this re-check the new
-		// content would land outside the previously-set panel rows. The
-		// setRegionRows / setRegionCols / setRowColShift calls early-return
-		// when bounds are unchanged, so this is a no-op on most frames.
+		// description), which shifts the sub-items grid down or up; the
+		// category panels' rows depend on frame content too (groups shrink
+		// or vanish per species). applyMode only fires on state transitions,
+		// so without this re-check new content would land outside the
+		// previously-set panel bounds. All setters early-return when
+		// unchanged, so this is a no-op on most frames. When category bounds
+		// do change, cells already routed this frame under the old bounds
+		// were dropped by the panels' range checks — replay from the shadow
+		// once the resized panels have laid out.
 		if (currentMenuType == MenuType.NEWGAME_SPECIES && fullView != null)
-			fullView.post(() -> applyNewgameSubBounds(true));
+			fullView.post(() -> {
+				boolean changed = applyNewgameSpeciesBounds();
+				applyNewgameSubBounds(true);
+				if (changed && newgameSpeciesContainer != null)
+					scheduleRedrawAfterLayout(newgameSpeciesContainer);
+			});
 		else if (currentMenuType == MenuType.NEWGAME_BACKGROUND && fullView != null)
-			fullView.post(() -> applyNewgameSubBounds(false));
+			fullView.post(() -> {
+				boolean changed = applyNewgameBackgroundBounds();
+				applyNewgameSubBounds(false);
+				if (changed && newgameBackgroundContainer != null)
+					scheduleRedrawAfterLayout(newgameBackgroundContainer);
+			});
 		else if (currentMenuType == MenuType.NEWGAME_WEAPON && fullView != null)
 			fullView.post(() -> applyNewgameWeaponSubBounds());
 

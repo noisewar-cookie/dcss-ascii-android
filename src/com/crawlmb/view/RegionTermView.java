@@ -141,24 +141,26 @@ public class RegionTermView extends View
 	// Re-aim this panel at a new terminal column slice. No-op if the bounds
 	// are unchanged. Triggers a re-measure so the bitmap is recreated to
 	// the new width and the font auto-sizes for the new col count.
-	public void setRegionCols(int startCol, int endCol)
+	// Returns true if the bounds changed.
+	public boolean setRegionCols(int startCol, int endCol)
 	{
 		if (this.startCol == startCol && this.endCol == endCol)
-			return;
+			return false;
 		this.startCol = startCol;
 		this.endCol = endCol;
 		this.regionCols = endCol - startCol;
 		if (canvas != null)
 			requestLayout();
+		return true;
 	}
 
 	// Re-aim this panel at a new terminal row slice. Same semantics as
 	// setRegionCols — used by newgame sub panels whose start row depends on
 	// the description Switcher's runtime height.
-	public void setRegionRows(int startRow, int endRow)
+	public boolean setRegionRows(int startRow, int endRow)
 	{
 		if (this.startRow == startRow && this.endRow == endRow)
-			return;
+			return false;
 		this.startRow = startRow;
 		this.endRow = endRow;
 		this.regionRows = endRow - startRow;
@@ -167,6 +169,7 @@ public class RegionTermView extends View
 		this.rowColShift = null;
 		if (canvas != null)
 			requestLayout();
+		return true;
 	}
 
 	public int getStartCol() { return startCol; }

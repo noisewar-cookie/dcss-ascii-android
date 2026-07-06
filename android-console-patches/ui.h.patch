@@ -1,0 +1,16 @@
+diff --git a/crawl-ref/source/ui.h b/crawl-ref/source/ui.h
+index b4b890c43e..16cb02eab1 100644
+--- a/crawl-ref/source/ui.h
++++ b/crawl-ref/source/ui.h
+@@ -778,6 +778,11 @@ public:
+         _invalidate_sizereq();
+     }
+ 
++    // Android: opt out of the word-wrap width cap in wrap_text_to_size
++    // (android_prose_wrap_cols, libandroid.cc). Set on OuterMenu
++    // description texts so newgame/startup layouts match upstream.
++    bool android_wrap_cap_exempt = false;
++
+     void set_ellipsize(bool _ellipsize)
+     {
+         if (ellipsize == _ellipsize)

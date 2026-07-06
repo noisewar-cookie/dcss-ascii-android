@@ -1,23 +1,22 @@
 diff --git a/crawl-ref/source/outer-menu.cc b/crawl-ref/source/outer-menu.cc
-index 293a9204bf..68f23cbc57 100644
+index 293a9204bf..d3de054032 100644
 --- a/crawl-ref/source/outer-menu.cc
 +++ b/crawl-ref/source/outer-menu.cc
-@@ -306,7 +306,13 @@ void OuterMenu::add_button(shared_ptr<MenuButton> btn, int x, int y)
-     if (descriptions)
+@@ -307,6 +307,13 @@ void OuterMenu::add_button(shared_ptr<MenuButton> btn, int x, int y)
      {
          auto desc_text = make_shared<Text>(formatted_string(btn->description, WHITE));
--        desc_text->set_wrap_text(true);
-+        // Android: keep the wrap flag off so the word-wrap width cap in
-+        // Text::wrap_text_to_size never applies here. Console layout is
-+        // unchanged (text still hard-wraps at the region width); wrapping
-+        // newgame descriptions narrower would add rows and shift the
-+        // sub-items grid, breaking the Java fixed-rect panels
-+        // (RegionRouter NEWGAME_* row constants).
-+        desc_text->set_wrap_text(false);
+         desc_text->set_wrap_text(true);
++        // Android: exempt from the word-wrap width cap only. Turning
++        // wrap_text off entirely is NOT layout-neutral on console: a
++        // non-wrapping Text's min width is its full single-line length,
++        // which inflates the parent vbox past 80 cols and stretches the
++        // newgame Grid columns (RegionRouter NEWGAME_* panels sample
++        // fixed rects and get blank/chopped slices).
++        desc_text->android_wrap_cap_exempt = true;
          descriptions->add_child(std::move(desc_text));
          m_description_indexes[y*m_width + x] = descriptions->num_children()-1;
      }
-@@ -369,6 +375,28 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
+@@ -369,6 +376,28 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
          }
      }
  
@@ -46,7 +45,7 @@ index 293a9204bf..68f23cbc57 100644
      if (btn)
          scroll_button_into_view(btn);
      else
-@@ -376,8 +404,59 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
+@@ -376,8 +405,59 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
          int idx = dx == 0 ? 1+dy : 2-dx; // dx,dy --> CSS direction index
          if (auto linked = linked_menus[idx].lock())
          {
