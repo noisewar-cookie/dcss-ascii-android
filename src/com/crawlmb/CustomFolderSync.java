@@ -92,6 +92,15 @@ public final class CustomFolderSync
             "db", "des", "sprint", "zotdef", "bones"
     };
 
+    // Caches DCSS rebuilds locally from dat/ — excluded from sync both
+    // ways. VERSIONED_CACHE_DIR builds keep db/des content inside
+    // "cache.<version>" (~575 files); walking it dominated sync cost.
+    private static boolean isSavesCacheDir(String name)
+    {
+        return "db".equals(name) || "des".equals(name)
+                || name.startsWith("cache.");
+    }
+
     // Seeded from assets when missing so an empty custom folder still
     // boots into a runnable state. Never overwritten if present.
     private static final String[] REQUIRED_CONFIG_FILES = {
@@ -104,11 +113,13 @@ public final class CustomFolderSync
     public static boolean ensureStagingScaffold(Context ctx)
     {
         File savesDir = Paths.getCustomStagingSavesDir(ctx);
+        sweepStaleSnapshots(savesDir);
         for (String sub : SAVES_SUBDIRS)
         {
             File d = new File(savesDir, sub);
             if (!d.exists())
                 d.mkdirs();
+            sweepStaleSnapshots(d);
         }
 
         File settingsDir = Paths.getCustomStagingSettingsDir(ctx);
@@ -120,6 +131,18 @@ public final class CustomFolderSync
         }
 
         return ensureDatSymlink(ctx);
+    }
+
+    // Drop save snapshots (pushSaveFileAsync) orphaned by a process kill
+    // mid-push. Run at launch, before any new snapshot can exist.
+    private static void sweepStaleSnapshots(File dir)
+    {
+        File[] kids = dir.listFiles();
+        if (kids == null)
+            return;
+        for (File f : kids)
+            if (f.isFile() && f.getName().endsWith(TMP_SUFFIX))
+                f.delete();
     }
 
     private static void seedAssetFile(Context ctx, String assetPath, File dest)
@@ -154,7 +177,8 @@ public final class CustomFolderSync
             DocumentFile sub = root.findFile(name);
             if (sub == null || !sub.isDirectory())
                 continue;
-            ok &= pullTree(ctx, sub, stagingDirFor(ctx, name));
+            ok &= pullTree(ctx, sub, stagingDirFor(ctx, name),
+                    "saves".equals(name));
         }
         ok &= ensureStagingScaffold(ctx);
         return ok;
@@ -172,7 +196,8 @@ public final class CustomFolderSync
             File stagingDir = stagingDirFor(ctx, name);
             if (!stagingDir.isDirectory())
                 continue;
-            ok &= pushTree(ctx, stagingDir, getOrCreateDir(root, name));
+            ok &= pushTree(ctx, stagingDir, getOrCreateDir(root, name),
+                    "saves".equals(name));
         }
         return ok;
     }
@@ -186,6 +211,109 @@ public final class CustomFolderSync
             try { push(app); }
             catch (Throwable t) { Log.w(TAG, "background push failed: " + t); }
         });
+    }
+
+    // Push one just-saved .cs to the SAF saves/ dir, bypassing the
+    // mtime gate. The snapshot is copied synchronously on the saving
+    // thread (no writer active), so a save landing during the upload
+    // can't tear the pushed bytes.
+    public static void pushSaveFileAsync(Context ctx, File saveFile)
+    {
+        if (!Paths.isCustomMode(ctx))
+            return;
+        File src = canonical(saveFile);
+        File savesRoot = canonical(Paths.getCustomStagingSavesDir(ctx));
+        File parent = src.getParentFile();
+        // Accept saves/<name>.cs or saves/<gametype>/<name>.cs only.
+        String subDir = null;
+        if (parent == null || !src.getName().endsWith(".cs"))
+        {
+            Log.w(TAG, "pushSaveFile: ignoring " + saveFile);
+            return;
+        }
+        if (!parent.equals(savesRoot))
+        {
+            File grandparent = parent.getParentFile();
+            if (grandparent == null || !grandparent.equals(savesRoot))
+            {
+                Log.w(TAG, "pushSaveFile: outside staging saves/: " + src);
+                return;
+            }
+            subDir = parent.getName();
+        }
+        if (!src.isFile())
+            return;
+
+        final String finalName = src.getName();
+        final File snap = new File(parent,
+                finalName + "." + System.nanoTime() + TMP_SUFFIX);
+        if (!copyFile(src, snap))
+            return;
+        final long srcMtime = src.lastModified();
+        final String sub = subDir;
+        final File origin = src;
+        final Context app = ctx.getApplicationContext();
+        pushExecutor().submit(() -> {
+            try
+            {
+                DocumentFile root = openRoot(app);
+                if (root == null)
+                {
+                    Log.w(TAG, "pushSaveFile: custom folder unreachable");
+                    return;
+                }
+                DocumentFile dest = getOrCreateDir(root, "saves");
+                if (dest != null && sub != null)
+                    dest = getOrCreateDir(dest, sub);
+                boolean ok = dest != null
+                        && pushFile(app, snap, dest, finalName);
+                Log.i(TAG, "pushSaveFile " + finalName
+                        + (ok ? " ok" : " FAILED"));
+                // Don't stamp the origin if a newer save landed
+                // mid-upload.
+                if (ok && origin.lastModified() == srcMtime)
+                    alignMtimeToRemote(origin, dest, finalName);
+            }
+            catch (Throwable t)
+            {
+                Log.w(TAG, "pushSaveFile failed: " + t);
+            }
+            finally
+            {
+                snap.delete();
+            }
+        });
+    }
+
+    private static File canonical(File f)
+    {
+        try
+        {
+            return f.getCanonicalFile();
+        }
+        catch (IOException e)
+        {
+            return f.getAbsoluteFile();
+        }
+    }
+
+    private static boolean copyFile(File src, File dst)
+    {
+        try (InputStream in = new FileInputStream(src);
+                OutputStream out = new FileOutputStream(dst, false))
+        {
+            byte[] buf = new byte[16 * 1024];
+            int n;
+            while ((n = in.read(buf)) != -1)
+                out.write(buf, 0, n);
+            return true;
+        }
+        catch (IOException e)
+        {
+            Log.w(TAG, "snapshot copy failed " + src + ": " + e);
+            dst.delete();
+            return false;
+        }
     }
 
     // FIFO-serialized behind any pushAsync already queued, so this can't
@@ -286,7 +414,9 @@ public final class CustomFolderSync
 
     // For each SAF child: copy to staging only when SAF is newer.
     // Recurses into subdirectories. Never deletes from staging.
-    private static boolean pullTree(Context ctx, DocumentFile src, File dest)
+    // skipCacheDirs: exclude cache dirs (saves/ top level only).
+    private static boolean pullTree(Context ctx, DocumentFile src, File dest,
+            boolean skipCacheDirs)
     {
         if (!dest.exists())
             dest.mkdirs();
@@ -299,7 +429,9 @@ public final class CustomFolderSync
             File destChild = new File(dest, name);
             if (child.isDirectory())
             {
-                ok &= pullTree(ctx, child, destChild);
+                if (skipCacheDirs && isSavesCacheDir(name))
+                    continue;
+                ok &= pullTree(ctx, child, destChild, false);
             }
             else if (child.isFile())
             {
@@ -308,6 +440,9 @@ public final class CustomFolderSync
                         ? destChild.lastModified() : 0L;
                 if (safMtime > localMtime + MTIME_TOLERANCE_MS)
                 {
+                    if (name.endsWith(".cs"))
+                        Log.i(TAG, "pull " + name + " saf=" + safMtime
+                                + " local=" + localMtime);
                     if (copyFromSaf(ctx, child, destChild))
                     {
                         if (safMtime > 0)
@@ -348,7 +483,9 @@ public final class CustomFolderSync
     // For each staging child: copy to SAF only when staging is newer.
     // Atomic per file via tmp+rename. Stale .crawltmp from a previous
     // killed push is cleaned up before use. Never deletes from SAF.
-    private static boolean pushTree(Context ctx, File src, DocumentFile dest)
+    // skipCacheDirs: exclude cache dirs (saves/ top level only).
+    private static boolean pushTree(Context ctx, File src, DocumentFile dest,
+            boolean skipCacheDirs)
     {
         if (dest == null)
             return false;
@@ -380,10 +517,12 @@ public final class CustomFolderSync
             DocumentFile remoteMatch = remote.get(name);
             if (kid.isDirectory())
             {
+                if (skipCacheDirs && isSavesCacheDir(name))
+                    continue;
                 DocumentFile remoteDir = (remoteMatch != null
                         && remoteMatch.isDirectory())
                         ? remoteMatch : getOrCreateDir(dest, name);
-                ok &= pushTree(ctx, kid, remoteDir);
+                ok &= pushTree(ctx, kid, remoteDir, false);
             }
             else if (kid.isFile())
             {
@@ -392,16 +531,27 @@ public final class CustomFolderSync
                         && remoteMatch.isFile())
                         ? remoteMatch.lastModified() : 0L;
                 if (localMtime > remoteMtime + MTIME_TOLERANCE_MS)
-                    ok &= pushFile(ctx, kid, dest, remoteMatch);
+                {
+                    if (name.endsWith(".cs"))
+                        Log.i(TAG, "push " + name + " local=" + localMtime
+                                + " remote=" + remoteMtime);
+                    if (pushFile(ctx, kid, dest, name))
+                        alignMtimeToRemote(kid, dest, name);
+                    else
+                    {
+                        ok = false;
+                    }
+                }
             }
         }
         return ok;
     }
 
+    // finalName is explicit because snapshot pushes read from a
+    // differently-named temp copy. Mtime alignment is the caller's job.
     private static boolean pushFile(Context ctx, File src,
-            DocumentFile destDir, DocumentFile existingFinal)
+            DocumentFile destDir, String finalName)
     {
-        String finalName = src.getName();
         String tmpName = finalName + TMP_SUFFIX;
 
         DocumentFile staleTmp = destDir.findFile(tmpName);
@@ -473,18 +623,25 @@ public final class CustomFolderSync
         }
 
         // Provider may still suffix " (n)" despite the delete above.
-        DocumentFile finalDoc = destDir.findFile(finalName);
-        if (finalDoc == null)
+        if (destDir.findFile(finalName) == null)
         {
             Log.w(TAG, "push post-rename findFile null for " + finalName);
             return false;
         }
+        return true;
+    }
 
-        // Align local mtime to remote so the next pull doesn't copy back.
+    // Stamp localFile with the remote's post-rename mtime so the next
+    // pull doesn't see the just-pushed file as newer and copy it back.
+    private static void alignMtimeToRemote(File localFile,
+            DocumentFile destDir, String finalName)
+    {
+        DocumentFile finalDoc = destDir.findFile(finalName);
+        if (finalDoc == null)
+            return;
         long m = finalDoc.lastModified();
         if (m > 0)
-            src.setLastModified(m);
-        return true;
+            localFile.setLastModified(m);
     }
 
     private static String guessMime(String name)

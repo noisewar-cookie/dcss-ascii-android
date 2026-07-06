@@ -210,8 +210,8 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"setMessageHistoryMode", "(Z)V");
 	NativeWrapper_setCharacterLogMode = e->GetMethodID(NativeWrapperClass,
 		"setCharacterLogMode", "(Z)V");
-	NativeWrapper_notifyGameSaved = e->GetMethodID(NativeWrapperClass,
-		"notifyGameSaved", "()V");
+	NativeWrapper_notifyGameSaved = e->GetStaticMethodID(NativeWrapperClass,
+		"notifyGameSaved", "(Ljava/lang/String;)V");
 
 	return NativeWrapper_fatal
 		&& NativeWrapper_getch
@@ -248,12 +248,33 @@ extern "C" void android_character_log_mode(bool active)
 	JAVA_CALL(NativeWrapper_setCharacterLogMode, (jboolean)(active ? JNI_TRUE : JNI_FALSE));
 }
 
-// Called from patched save_game (files.cc) on Save & Quit.
-extern "C" void android_notify_game_saved()
+// Called from patched save_game (files.cc) after each save commit with
+// the .cs path. Autosaves can run on the UI thread, where the cached
+// game-thread env/NativeWrapperObj are invalid — resolve this thread's
+// env and call a static method through the global class ref.
+extern "C" void android_notify_game_saved(const char *path)
 {
-	if (env == NULL || NativeWrapperObj == NULL)
+	if (g_jvm == NULL || NativeWrapperClass == NULL
+		|| NativeWrapper_notifyGameSaved == NULL || path == NULL || !*path)
+	{
 		return;
-	JAVA_CALL(NativeWrapper_notifyGameSaved);
+	}
+	JNIEnv *e = NULL;
+	// save_game only runs on Java-attached threads (game or UI), so no
+	// AttachCurrentThread fallback is needed.
+	if (g_jvm->GetEnv((void**)&e, JNI_VERSION_1_6) != JNI_OK || e == NULL)
+		return;
+	jstring jpath = e->NewStringUTF(path);
+	if (jpath == NULL)
+	{
+		e->ExceptionClear();
+		return;
+	}
+	e->CallStaticVoidMethod(NativeWrapperClass,
+		NativeWrapper_notifyGameSaved, jpath);
+	if (e->ExceptionCheck())
+		e->ExceptionClear();
+	e->DeleteLocalRef(jpath);
 }
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/)

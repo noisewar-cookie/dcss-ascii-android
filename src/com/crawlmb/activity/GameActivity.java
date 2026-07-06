@@ -1205,15 +1205,20 @@ public class GameActivity extends Activity
 	@Override
 	protected void onPause() {
 		super.onPause();
-		// nativeSaveGame is synchronous: by the time it returns the
-		// staging tree has the latest save data. Kick the SAF push
-		// immediately on a non-daemon background thread (see
-		// CustomFolderSync.pushExecutor) so it gets as much time as
-		// possible before the OS can kill us. Push is incremental and
-		// idempotent — re-running it on a later launch costs nothing
-		// when nothing changed.
+		// nativeSaveGame is synchronous: staging is current and the .cs
+		// push queued before it returns. The blocking drain is in onStop
+		// — blocking onPause stalls the incoming activity.
 		NativeWrapper.nativeSaveGame();
-		CustomFolderSync.pushAsync(this);
+	}
+
+	@Override
+	protected void onStop() {
+		super.onStop();
+		// Drain pushes before the process can be cached and frozen
+		// (MIUI freezes within seconds; queued work would be lost).
+		// onStop runs after the next screen is visible, so the wait is
+		// invisible in-app. 5s cap so a wedged provider can't ANR us.
+		CustomFolderSync.pushBlocking(this, 5000);
 	}
 
 	@Override

@@ -62,16 +62,14 @@ public class NativeWrapper
 		// Log.d(TAG, "onGameExit()");
 	}
 
-	// Called from native save_game() on Save & Quit paths where onPause
-	// won't fire (activity stays foreground at char-select).
-	public void notifyGameSaved()
+	// Native save hook (autosave and Save & Quit). Static: arrives on
+	// whichever thread ran the save, with no renderer in hand.
+	public static void notifyGameSaved(String savePath)
 	{
-		if (renderer == null)
+		android.content.Context ctx = CrawlApplication.getAppContext();
+		if (ctx == null || savePath == null)
 			return;
-		android.content.Context ctx = renderer.getContext();
-		if (ctx == null)
-			return;
-		CustomFolderSync.pushAsync(ctx);
+		CustomFolderSync.pushSaveFileAsync(ctx, new java.io.File(savePath));
 	}
 
 	private native void refreshTerminal();
