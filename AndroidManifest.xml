@@ -59,9 +59,11 @@
             android:windowSoftInputMode="stateHidden"
             android:label="Config Editor">
         </activity>
+        <!-- Theme.Crawl.Editor follows the system day/night setting (see
+             res/values-night/styles.xml) — dark mode gets light-on-dark. -->
         <activity
             android:name=".CharFileViewer"
-            android:theme="@android:style/Theme.Light"
+            android:theme="@style/Theme.Crawl.Editor"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="stateHidden"
             android:label="Character File Viewer">

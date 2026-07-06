@@ -57,6 +57,10 @@ public class FontConfig
     public final float portraitMorgueFontScale;
     public final boolean portraitMorgueScrollable;
     public final boolean portraitMorgueVScrollable;
+    // Native character-file viewer (morgue files): absolute text size in
+    // sp, not a scale multiplier — the viewer is not a terminal panel, so
+    // there is no auto-sized base font to multiply.
+    public final float charFileViewerFontSize;
     public final float portraitTravelFontScale;
     public final boolean portraitTravelScrollable;
     public final boolean portraitTravelVScrollable;
@@ -147,6 +151,7 @@ public class FontConfig
         this.portraitMorgueFontScale   = getFloat(props, "portrait_morgue_font_scale", this.portraitHiscoresFontScale);
         this.portraitMorgueScrollable  = getBool (props, "portrait_morgue_scrollable", this.portraitHiscoresScrollable);
         this.portraitMorgueVScrollable = getBool (props, "portrait_morgue_vscrollable", true);
+        this.charFileViewerFontSize    = getFloat(props, "char_file_viewer_font_size", 10f);
         this.portraitTravelFontScale   = getFloat(props, "portrait_travel_font_scale", this.portraitDefaultFontScale);
         this.portraitTravelScrollable  = getBool (props, "portrait_travel_scrollable", this.portraitDefaultScrollable);
         this.portraitTravelVScrollable = getBool (props, "portrait_travel_vscrollable", this.portraitDefaultVScrollable);

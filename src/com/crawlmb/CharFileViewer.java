@@ -47,13 +47,17 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.Window;
 import android.widget.TextView;
 import android.widget.Toast;
 
 public class CharFileViewer extends Activity
 {
 	private static final String TAG = CharFileViewer.class.getName();
+
+	// File path handed over as a String extra. A file:// data Uri would
+	// trigger FileUriExposedException on targetSdk >= 24 — startActivity
+	// checks intent data Uris even for same-app components.
+	public static final String EXTRA_FILE_PATH = "file_path";
 
 	// This is our state data that is stored when freezing.
 	private static final String BUNDLE_ORIGINAL_CONTENT = "original_content";
@@ -115,13 +119,20 @@ public class CharFileViewer extends Activity
 		}
 		final Intent intent = getIntent();
 
-		mUri = intent.getData();
+		String filePath = intent.getStringExtra(EXTRA_FILE_PATH);
+		if (filePath != null)
+			mUri = Uri.fromFile(new File(filePath));
+		else
+			mUri = intent.getData();
 
 		mFileContent = readFile(getFile(mUri));
-		requestWindowFeature(Window.FEATURE_RIGHT_ICON);
 		setContentView(R.layout.char_file_viewer);
 
 		mText = (TextView) findViewById(R.id.note);
+		// Absolute sp size from font_config.txt; the layout never wraps
+		// lines (see char_file_viewer.xml), overflow scrolls horizontally.
+		mText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP,
+				FontConfig.load(getAssets()).charFileViewerFontSize);
 		registerForContextMenu(mText);
 
 	}

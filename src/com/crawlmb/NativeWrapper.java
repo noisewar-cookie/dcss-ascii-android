@@ -182,6 +182,28 @@ public class NativeWrapper
 		}
 	}
 
+	// Called from libandroid.cc (patched _show_morgue) when a High Scores
+	// entry is activated: opens the morgue file in the native scrolling
+	// viewer (CharFileViewer) instead of the in-terminal scroller, so the
+	// whole file is rendered with real vscroll and nothing hides behind
+	// the keyboard. Arrives on the game thread — hop to the UI thread to
+	// start the activity.
+	public void showCharacterFile(String path)
+	{
+		final android.content.Context ctx;
+		synchronized (display_lock)
+		{
+			ctx = renderer != null ? renderer.getContext() : null;
+		}
+		if (ctx == null || path == null)
+			return;
+		final android.content.Intent intent =
+				new android.content.Intent(ctx, CharFileViewer.class);
+		intent.putExtra(CharFileViewer.EXTRA_FILE_PATH, path);
+		new android.os.Handler(android.os.Looper.getMainLooper())
+				.post(() -> ctx.startActivity(intent));
+	}
+
 	// Ask DCSS to repaint the current screen state. Used after a font scale
 	// change recreates the underlying bitmap (which is then blank): the
 	// native side re-sends the full frame via frameUpdate, refilling the

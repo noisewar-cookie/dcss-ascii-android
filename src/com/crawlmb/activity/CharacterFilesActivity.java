@@ -4,7 +4,6 @@ import java.io.File;
 
 import android.app.ListActivity;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -40,10 +39,10 @@ public class CharacterFilesActivity extends ListActivity
 	{
 		String charFileName = charFiles[position];
 		File file = new File(com.crawlmb.Paths.getMorgueDir(this), charFileName);
-		Uri uri = Uri.fromFile(file);
-		Intent intent = new Intent();
-		intent.setDataAndType(uri, "text/plain"); 
-		intent.setClass(this, CharFileViewer.class);
+		Intent intent = new Intent(this, CharFileViewer.class);
+		// String extra, not a file:// data Uri — the latter throws
+		// FileUriExposedException on targetSdk >= 24.
+		intent.putExtra(CharFileViewer.EXTRA_FILE_PATH, file.getAbsolutePath());
 		startActivity(intent);
 	}
 

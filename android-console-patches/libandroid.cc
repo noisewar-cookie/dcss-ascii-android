@@ -131,6 +131,7 @@ static jmethodID NativeWrapper_frameUpdate;
 static jmethodID NativeWrapper_updateStatusLights;
 static jmethodID NativeWrapper_setMessageHistoryMode;
 static jmethodID NativeWrapper_setCharacterLogMode;
+static jmethodID NativeWrapper_showCharacterFile;
 static jmethodID NativeWrapper_notifyGameSaved;
 
 // Terminal stuff
@@ -210,6 +211,8 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"setMessageHistoryMode", "(Z)V");
 	NativeWrapper_setCharacterLogMode = e->GetMethodID(NativeWrapperClass,
 		"setCharacterLogMode", "(Z)V");
+	NativeWrapper_showCharacterFile = e->GetMethodID(NativeWrapperClass,
+		"showCharacterFile", "(Ljava/lang/String;)V");
 	NativeWrapper_notifyGameSaved = e->GetStaticMethodID(NativeWrapperClass,
 		"notifyGameSaved", "(Ljava/lang/String;)V");
 
@@ -219,6 +222,7 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		&& NativeWrapper_updateStatusLights
 		&& NativeWrapper_setMessageHistoryMode
 		&& NativeWrapper_setCharacterLogMode
+		&& NativeWrapper_showCharacterFile
 		&& NativeWrapper_notifyGameSaved;
 }
 
@@ -246,6 +250,26 @@ extern "C" void android_character_log_mode(bool active)
 	if (env == NULL || NativeWrapperObj == NULL)
 		return;
 	JAVA_CALL(NativeWrapper_setCharacterLogMode, (jboolean)(active ? JNI_TRUE : JNI_FALSE));
+}
+
+// Called from patched _show_morgue (hiscores.cc) instead of the in-terminal
+// formatted_scroller: hands the morgue file path to Java, which opens it in
+// the native scrolling viewer (CharFileViewer). The 48-row terminal can't
+// hold a whole morgue file, and its bitmap doesn't fit the screen above the
+// keyboard; the native viewer renders the full file with real vscroll.
+// Game-thread only (crawl menu callback), so the cached env is valid.
+extern "C" void android_show_character_file(const char *path)
+{
+	if (env == NULL || NativeWrapperObj == NULL || path == NULL || !*path)
+		return;
+	jstring jpath = env->NewStringUTF(path);
+	if (jpath == NULL)
+	{
+		env->ExceptionClear();
+		return;
+	}
+	JAVA_CALL(NativeWrapper_showCharacterFile, jpath);
+	env->DeleteLocalRef(jpath);
 }
 
 // Called from patched save_game (files.cc) after each save commit with
