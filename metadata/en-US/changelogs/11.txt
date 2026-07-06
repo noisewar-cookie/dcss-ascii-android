@@ -1,0 +1,10 @@
+Release 11 (0.34.1)
+
+New Features:
+• Added experimental wordwrapping option.
+• General improvements in rendering speed.
+• New morgue viewer.
+
+Bug Fixes:
+• Character save files sync more reliably.
+• Fixed unexpected blank rows in lists.
