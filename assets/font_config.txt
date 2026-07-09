@@ -184,6 +184,19 @@ portrait_travel_vscrollable=true
 portrait_levelmap_font_scale=2.25
 portrait_levelmap_scrollable=true
 portrait_levelmap_vscrollable=true
+# Pinch-zoom max is an absolute multiplier of the base LEVELMAP scale
+# (e.g. 1.5 = 1.5x zoom in). Session-only: contentZoom resets to 1.0
+# whenever the map screen closes. The min zoom-out is computed
+# dynamically from viewport / bitmap size so the full 80×48-cell map
+# always fits at max zoom-out — no manual knob to keep in sync.
+portrait_levelmap_pinch_zoom_max=1.5
+# Sensitivity = exponent applied per gesture event to the raw pinch factor.
+# 1.0 = raw system response; <1.0 = less sensitive (more finger motion for
+# the same zoom step); >1.0 = more sensitive. Zoom-in and zoom-out are
+# separate because pinch-out (fingers spreading) and pinch-in (fingers
+# closing) can feel asymmetric on real hands.
+portrait_levelmap_pinch_zoom_in_sensitivity=1.0
+portrait_levelmap_pinch_zoom_out_sensitivity=0.75
 
 # Description popups (item/spell/monster/feature/ability examine)
 # Shown during: any examine/describe popup regardless of entry point

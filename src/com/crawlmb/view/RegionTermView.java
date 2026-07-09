@@ -12,6 +12,7 @@ import android.view.Display;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.WindowManager;
 
@@ -125,6 +126,16 @@ public class RegionTermView extends View
 	private float axisAccumX = 0;
 	private float axisAccumY = 0;
 	private static final float AXIS_LOCK_THRESHOLD = 10f;
+
+	// LEVELMAP free-pan + pinch-zoom. Session-only: contentZoom resets to
+	// 1.0 on mode-off. Min is dynamic (fit-all); max/sensitivity from
+	// portrait_levelmap_pinch_* in font_config.txt.
+	private boolean mapPanMode = false;
+	private ScaleGestureDetector mapPanScaleDetector;
+	private boolean mapPanScaling = false;
+	private float mapZoomMax = 1.5f;
+	private float mapZoomInSensitivity = 1.0f;
+	private float mapZoomOutSensitivity = 0.75f;
 
 	public RegionTermView(Context context, int startRow, int startCol, int endRow, int endCol)
 	{
@@ -308,6 +319,18 @@ public class RegionTermView extends View
 		pendingScrollToBottom = true;
 	}
 
+	// Single-shot: next onDraw with metrics + laid-out viewport centers
+	// the given 0-indexed cell. LEVELMAP player-center on open.
+	private volatile int pendingCenterCol = -1;
+	private volatile int pendingCenterRow = -1;
+
+	public void requestCenterOnCell(int col, int row)
+	{
+		pendingCenterCol = col;
+		pendingCenterRow = row;
+		postInvalidate();
+	}
+
 	public boolean isScrollEnabled()
 	{
 		return horizontalScrollEnabled || verticalScrollEnabled;
@@ -359,9 +382,12 @@ public class RegionTermView extends View
 					public boolean onScroll(MotionEvent e1, MotionEvent e2,
 							float distanceX, float distanceY)
 					{
+						if (mapPanScaling)
+							return true;
 						boolean bothAxes = horizontalScrollEnabled
 								&& verticalScrollEnabled;
-						if (bothAxes && lockedAxis == AXIS_NONE)
+						// mapPanMode: free-pan (skip axis lock).
+						if (bothAxes && !mapPanMode && lockedAxis == AXIS_NONE)
 						{
 							axisAccumX += Math.abs(distanceX);
 							axisAccumY += Math.abs(distanceY);
@@ -377,14 +403,16 @@ public class RegionTermView extends View
 							}
 						}
 						boolean scrollH = horizontalScrollEnabled
-								&& (!bothAxes || lockedAxis == AXIS_HORIZONTAL);
+								&& (!bothAxes || mapPanMode
+									|| lockedAxis == AXIS_HORIZONTAL);
 						boolean scrollV = verticalScrollEnabled
-								&& (!bothAxes || lockedAxis == AXIS_VERTICAL);
+								&& (!bothAxes || mapPanMode
+									|| lockedAxis == AXIS_VERTICAL);
 						boolean changed = false;
 						if (scrollH)
 						{
-							int contentW = computeContentWidth();
-							int maxX = Math.max(0, contentW - getWidth());
+							int maxX = Math.max(0,
+									getContentWidthForScroll() - getWidth());
 							int newX = Math.max(0,
 									Math.min(maxX, scrollOffsetX + (int) distanceX));
 							if (newX != scrollOffsetX)
@@ -395,10 +423,8 @@ public class RegionTermView extends View
 						}
 						if (scrollV)
 						{
-							int contentH = maxContentRow >= 0
-									? (int)((maxContentRow + 1) * char_height)
-									: canvas_height;
-							int maxY = Math.max(0, contentH - getHeight());
+							int maxY = Math.max(0,
+									getContentHeightForScroll() - getHeight());
 							int newY = Math.max(0,
 									Math.min(maxY, scrollOffsetY + (int) distanceY));
 							if (newY != scrollOffsetY)
@@ -425,6 +451,12 @@ public class RegionTermView extends View
 	@Override
 	public boolean onTouchEvent(MotionEvent event)
 	{
+		boolean handled = false;
+		if (mapPanMode && mapPanScaleDetector != null)
+		{
+			mapPanScaleDetector.onTouchEvent(event);
+			handled = true;
+		}
 		if (isScrollEnabled() && scrollDetector != null)
 		{
 			int action = event.getActionMasked();
@@ -438,7 +470,148 @@ public class RegionTermView extends View
 			scrollDetector.onTouchEvent(event);
 			return true;
 		}
-		return super.onTouchEvent(event);
+		return handled || super.onTouchEvent(event);
+	}
+
+	public void setMapPanMode(boolean enabled)
+	{
+		if (this.mapPanMode == enabled)
+			return;
+		this.mapPanMode = enabled;
+		if (enabled)
+			ensureMapPanScaleDetector();
+		else if (contentZoom != 1.0f)
+		{
+			contentZoom = 1.0f;
+			clampMapPanScroll();
+			invalidate();
+		}
+	}
+
+	// Non-positive values fall back to safe defaults so a bad config
+	// entry can't disable pinch entirely.
+	public void setMapPanConfig(float maxZoom,
+			float zoomInSensitivity, float zoomOutSensitivity)
+	{
+		if (maxZoom > 0)
+			this.mapZoomMax = maxZoom;
+		this.mapZoomInSensitivity = zoomInSensitivity > 0
+				? zoomInSensitivity : 1.0f;
+		this.mapZoomOutSensitivity = zoomOutSensitivity > 0
+				? zoomOutSensitivity : 1.0f;
+	}
+
+	// Fit-all: the zoom where the whole 80×48-cell bitmap fits in the
+	// viewport. Sparse levels don't shrink the bitmap, so the bound is
+	// fixed per viewport/scale. Capped at 1.0 so we never force zoom-in.
+	private float computeDynamicMapZoomMin()
+	{
+		int vw = getWidth();
+		int vh = getHeight();
+		if (vw <= 0 || vh <= 0 || canvas_width <= 0 || canvas_height <= 0)
+			return 0.5f;
+		float fitW = (float) vw / canvas_width;
+		float fitH = (float) vh / canvas_height;
+		return Math.min(1.0f, Math.min(fitW, fitH));
+	}
+
+	private void ensureMapPanScaleDetector()
+	{
+		if (mapPanScaleDetector != null)
+			return;
+		mapPanScaleDetector = new ScaleGestureDetector(getContext(),
+				new ScaleGestureDetector.SimpleOnScaleGestureListener()
+				{
+					@Override
+					public boolean onScaleBegin(ScaleGestureDetector d)
+					{
+						mapPanScaling = true;
+						return true;
+					}
+
+					@Override
+					public boolean onScale(ScaleGestureDetector d)
+					{
+						if (!mapPanMode)
+							return false;
+						float rawFactor = d.getScaleFactor();
+						// Sensitivity exponent: <1 pulls factor toward
+						// 1.0 (less zoom per gesture), >1 pushes away.
+						float sens = rawFactor < 1.0f
+								? mapZoomOutSensitivity
+								: mapZoomInSensitivity;
+						float effFactor = sens == 1.0f
+								? rawFactor
+								: (float)Math.pow(rawFactor, sens);
+						float newZoom = contentZoom * effFactor;
+						float dynMin = computeDynamicMapZoomMin();
+						newZoom = Math.max(dynMin,
+								Math.min(mapZoomMax, newZoom));
+						if (newZoom != contentZoom)
+						{
+							// Keep pixel under fingers pinned during zoom.
+							float fx = d.getFocusX();
+							float fy = d.getFocusY();
+							float ratio = newZoom / contentZoom;
+							scrollOffsetX = Math.round(
+									(scrollOffsetX + fx) * ratio - fx);
+							scrollOffsetY = Math.round(
+									(scrollOffsetY + fy) * ratio - fy);
+							contentZoom = newZoom;
+							clampMapPanScroll();
+							invalidate();
+						}
+						return true;
+					}
+
+					@Override
+					public void onScaleEnd(ScaleGestureDetector d)
+					{
+						mapPanScaling = false;
+					}
+				});
+	}
+
+	// Scale by contentZoom in mapPanMode: bitmap scales from origin in
+	// onDraw, so scroll bounds see the post-zoom extent.
+	private int getContentWidthForScroll()
+	{
+		int contentW = computeContentWidth();
+		if (mapPanMode)
+			contentW = Math.round(contentW * contentZoom);
+		return contentW;
+	}
+
+	private int getContentHeightForScroll()
+	{
+		int contentH = maxContentRow >= 0
+				? (int)((maxContentRow + 1) * char_height)
+				: canvas_height;
+		if (mapPanMode)
+			contentH = Math.round(contentH * contentZoom);
+		return contentH;
+	}
+
+	private void clampMapPanScroll()
+	{
+		if (horizontalScrollEnabled)
+		{
+			int maxX = Math.max(0,
+					getContentWidthForScroll() - getWidth());
+			if (scrollOffsetX < 0)
+				scrollOffsetX = 0;
+			else if (scrollOffsetX > maxX)
+				scrollOffsetX = maxX;
+		}
+		if (verticalScrollEnabled)
+		{
+			int maxY = Math.max(0,
+					getContentHeightForScroll() - getHeight());
+			if (scrollOffsetY < 0)
+				scrollOffsetY = 0;
+			else if (scrollOffsetY > maxY)
+				scrollOffsetY = maxY;
+		}
 	}
 
 	private int computeContentWidth()
@@ -518,6 +691,45 @@ public class RegionTermView extends View
 				pendingScrollToBottom = false;
 			}
 		}
+		// Consume pending center. Retries next paint if char metrics or
+		// content bounds aren't ready. Bounds mirror onScroll so the
+		// target is a reachable scroll position; contentZoom factor keeps
+		// goto_level re-centers correct at the user's current zoom.
+		if (pendingCenterCol >= 0 && pendingCenterRow >= 0
+				&& char_width > 0 && char_height > 0
+				&& maxContentCol >= 0 && maxContentRow >= 0)
+		{
+			int viewportW = getWidth();
+			int viewportH = getHeight();
+			if (viewportW > 0 && viewportH > 0)
+			{
+				float zoom = mapPanMode ? contentZoom : 1.0f;
+				int pxX = Math.round(
+						(pendingCenterCol * char_width + char_width / 2f)
+								* zoom);
+				int pxY = Math.round(
+						(pendingCenterRow * char_height + char_height / 2f)
+								* zoom);
+				if (horizontalScrollEnabled)
+				{
+					int targetX = drawOffsetX + pxX - viewportW / 2;
+					int contentW = Math.round(
+							(maxContentCol + 1) * char_width * zoom);
+					int maxX = Math.max(0, contentW - viewportW);
+					scrollOffsetX = Math.max(0, Math.min(maxX, targetX));
+				}
+				if (verticalScrollEnabled)
+				{
+					int targetY = drawOffsetY + pxY - viewportH / 2;
+					int contentH = Math.round(
+							(maxContentRow + 1) * char_height * zoom);
+					int maxY = Math.max(0, contentH - viewportH);
+					scrollOffsetY = Math.max(0, Math.min(maxY, targetY));
+				}
+				pendingCenterCol = -1;
+				pendingCenterRow = -1;
+			}
+		}
 		// Continuous variant of the snap above: keep the newest content row
 		// bottom-aligned as new lines arrive, unless the user dragged away.
 		if (stickyScrollToBottom && !stickyUserAway && verticalScrollEnabled
@@ -530,12 +742,22 @@ public class RegionTermView extends View
 				scrollOffsetY = Math.max(0, contentH - viewportH);
 			}
 		}
-		if (contentZoom != 1.0f)
+		if (mapPanMode && contentZoom != 1.0f)
 		{
-			// Scale around the panel's geometric center so the dungeon view
-			// roughly stays put around the player's typical position. View
-			// clipping handles overflow when zoom > 1 — that's the intended
-			// "crop to panel" behavior.
+			// Scale around origin so post-zoom draw lands at
+			// (drawOffsetX - scrollOffsetX, ...) in screen pixels — pan
+			// bounds stay linear and drag feels 1:1 regardless of zoom.
+			canvas.save();
+			canvas.scale(contentZoom, contentZoom);
+			canvas.drawBitmap(bitmap,
+					(drawOffsetX - scrollOffsetX) / contentZoom,
+					(drawOffsetY - scrollOffsetY) / contentZoom, null);
+			canvas.restore();
+		}
+		else if (contentZoom != 1.0f)
+		{
+			// Dungeon-view stepped zoom: scale around panel center so
+			// content stays put near player. Overflow clips to panel.
 			canvas.save();
 			canvas.scale(contentZoom, contentZoom,
 					getWidth() / 2f, getHeight() / 2f);

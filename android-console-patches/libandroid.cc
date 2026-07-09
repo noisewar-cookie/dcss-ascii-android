@@ -133,6 +133,7 @@ static jmethodID NativeWrapper_setMessageHistoryMode;
 static jmethodID NativeWrapper_setCharacterLogMode;
 static jmethodID NativeWrapper_showCharacterFile;
 static jmethodID NativeWrapper_notifyGameSaved;
+static jmethodID NativeWrapper_setMapAnchor;
 
 // Terminal stuff
 class TerminalChar //I guess this could be a struct.
@@ -215,6 +216,8 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"showCharacterFile", "(Ljava/lang/String;)V");
 	NativeWrapper_notifyGameSaved = e->GetStaticMethodID(NativeWrapperClass,
 		"notifyGameSaved", "(Ljava/lang/String;)V");
+	NativeWrapper_setMapAnchor = e->GetMethodID(NativeWrapperClass,
+		"setMapAnchor", "(II)V");
 
 	return NativeWrapper_fatal
 		&& NativeWrapper_getch
@@ -223,7 +226,8 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		&& NativeWrapper_setMessageHistoryMode
 		&& NativeWrapper_setCharacterLogMode
 		&& NativeWrapper_showCharacterFile
-		&& NativeWrapper_notifyGameSaved;
+		&& NativeWrapper_notifyGameSaved
+		&& NativeWrapper_setMapAnchor;
 }
 
 // Called from the patched _replay_messages_core (message.cc) at entry and
@@ -270,6 +274,22 @@ extern "C" void android_show_character_file(const char *path)
 	}
 	JAVA_CALL(NativeWrapper_showCharacterFile, jpath);
 	env->DeleteLocalRef(jpath);
+}
+
+// Called from viewmap.cc goto_level() with the 1-indexed virtual-terminal
+// (col, row) where the player glyph is drawn in the level-map view. Java
+// consumes this to scroll the physical LEVELMAP viewport so the player
+// appears centered — required because the C++ side only controls placement
+// within the 80x48 virtual grid, while the visible portion depends on the
+// LEVELMAP font scale (currently 2.25x) which C++ has no view into.
+extern "C" void android_map_anchor(int col, int row)
+{
+	if (env == NULL || NativeWrapperObj == NULL
+		|| NativeWrapper_setMapAnchor == NULL)
+	{
+		return;
+	}
+	JAVA_CALL(NativeWrapper_setMapAnchor, (jint)col, (jint)row);
 }
 
 // Called from patched save_game (files.cc) after each save commit with

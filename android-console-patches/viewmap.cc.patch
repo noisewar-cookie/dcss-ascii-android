@@ -1,0 +1,85 @@
+--- a/crawl-ref/source/viewmap.cc
++++ b/crawl-ref/source/viewmap.cc
+@@ -42,6 +42,13 @@
+ #ifdef USE_TILE
+ #endif
+ 
++// Android-only: JNI hook that Java uses to re-center the physical LEVELMAP
++// viewport on the player each time the map is opened or the tracked level
++// changes. C++ decides where the player glyph lands in the 80x48 virtual
++// terminal; Java translates that into a pixel scroll based on the current
++// LEVELMAP font scale (which C++ has no view into).
++extern "C" void android_map_anchor(int col, int row);
++
+ #ifndef USE_TILE_LOCAL
+ /**
+  * Get a console colour for representing the travel possibility at the given
+@@ -258,7 +265,8 @@
+ #ifndef USE_TILE_LOCAL
+ static int _get_number_of_lines_levelmap()
+ {
+-    return get_number_of_lines() - 1;
++    // Two header rows: level/stairs on row 0, "(Press ? for help)" on row 1.
++    return get_number_of_lines() - 2;
+ }
+ 
+ static void _draw_level_map(int start_x, int start_y, bool travel_mode,
+@@ -465,13 +473,15 @@
+ 
+     cprintf("%s", chop_string(
+                     uppercase_first(level_id::current().describe(true, true))
+-                      + pstr, columns - helplen).c_str());
++                      + pstr, columns).c_str());
+ 
+     cgotoxy(max(1, (columns - titlelen) / 2), 1);
+     title.display();
+ 
++    // Help hint moved to its own row so the level name isn't truncated by
++    // the right-aligned hint on narrow screens.
+     textcolour(LIGHTGREY);
+-    cgotoxy(max(1, columns - helplen + 1), 1);
++    cgotoxy(1, 2);
+     help.display();
+ }
+ #endif
+@@ -619,7 +629,14 @@
+ 
+     const auto map_lines = max_y - min_y + 1;
+ 
+-    coord_def ul((min_x + max_x + 1) / 2 - 40, 0);
++    // Horizontally: center on the target (usually the player), then clamp
++    // to known-map bounds so we never scroll past what the player could
++    // reach by hand.
++    const int num_cols = get_number_of_cols();
++    int ul_x = state.lpos.pos.x - num_cols / 2;
++    ul_x = min(ul_x, max_x - num_cols + 1);
++    ul_x = max(ul_x, min_x);
++    coord_def ul(ul_x, 0);
+ 
+     auto screen_y = state.lpos.pos.y;
+ 
+@@ -686,11 +703,11 @@
+         const auto view = _get_view_state(view_ul, m_state);
+         view_ul = view.start;
+         _draw_title(m_state.lpos.pos, *m_state.feats, m_region.width);
+-        const ui::Region map_region = {0, 1, m_region.width, m_region.height - 1};
++        // Header occupies rows 0-1 (level/stairs and the help hint).
++        const ui::Region map_region = {0, 2, m_region.width, m_region.height - 2};
+         _draw_level_map(view_ul.x, view_ul.y, m_state.travel_mode,
+                         m_state.on_level, map_region);
+-        // the `+ 1` here is for the map overview line
+-        ui::show_cursor_at(view.cursor.x, view.cursor.y + 1);
++        ui::show_cursor_at(view.cursor.x, view.cursor.y + 2);
+ #endif
+     }
+ 
+@@ -826,6 +843,9 @@
+ #ifndef USE_TILE_LOCAL
+         auto s = _init_view_state(m_state);
+         view_ul = s.start;
++        // Header rows push the map viewport down by 2, so the player's
++        // virtual-terminal row is view.cursor.y + 2.
++        android_map_anchor(s.cursor.x, s.cursor.y + 2);
+ #endif
+ 
+         _expose();

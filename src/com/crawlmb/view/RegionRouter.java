@@ -414,6 +414,22 @@ public class RegionRouter implements TerminalRenderer
 		characterLogMode = active;
 	}
 
+	// 0-indexed player cell from viewmap.cc goto_level. Consumed in
+	// classifyFrame so the center runs after fullView's LEVELMAP config.
+	private volatile int pendingMapAnchorCol = -1;
+	private volatile int pendingMapAnchorRow = -1;
+
+	@Override
+	public void setMapAnchor(int col1, int row1)
+	{
+		int col = col1 - 1;
+		int row = row1 - 1;
+		if (col < 0 || row < 0)
+			return;
+		pendingMapAnchorCol = col;
+		pendingMapAnchorRow = row;
+	}
+
 	public void setMsgWordwrap(RegionTermView msgView, int msgRows)
 	{
 		this.msgWordwrapView = msgView;
@@ -1238,6 +1254,12 @@ public class RegionRouter implements TerminalRenderer
 			}
 		}
 
+		// Reset LEVELMAP zoom on any exit path: LEVELMAP → GAMEPLAY skips
+		// applyFullConfig entirely, so applyFullConfig's toggle isn't enough.
+		if (fullView != null
+				&& !(fullVisible && menuType == MenuType.LEVELMAP))
+			fullView.setMapPanMode(false);
+
 		// INVISIBLE (never GONE) keeps layout dimensions stable across
 		// transitions, which prevents the bleedthrough seen previously.
 		if (fullView != null)
@@ -1565,6 +1587,14 @@ public class RegionRouter implements TerminalRenderer
 		fullView.setFontScaleMultiplier(scale);
 		fullView.setHorizontalScrollEnabled(scrollable);
 		fullView.setVerticalScrollEnabled(vscrollable);
+		// LEVELMAP-only free-pan + pinch-zoom. Push config first so the
+		// detector sees fresh tunables each open.
+		if (type == MenuType.LEVELMAP)
+			fullView.setMapPanConfig(
+					fontConfig.portraitLevelmapPinchZoomMax,
+					fontConfig.portraitLevelmapPinchZoomInSensitivity,
+					fontConfig.portraitLevelmapPinchZoomOutSensitivity);
+		fullView.setMapPanMode(type == MenuType.LEVELMAP);
 		// Ctrl+P opens at the latest messages (bottom of content). The
 		// scroller fills the 48-row bitmap with FS_START_AT_END, but
 		// resetAllScroll has just zeroed scrollOffsetY to the top, so without
@@ -2637,9 +2667,10 @@ public class RegionRouter implements TerminalRenderer
 				return MenuType.HELP;
 		}
 
-		// Level map (Shift+X). _draw_title in viewmap.cc renders
-		// "(Press ? for help)" at the right of row 0.
-		if (rowContains(0, LEVELMAP_HELP_MARKER))
+		// Level map (Shift+X). _draw_title in viewmap.cc renders the
+		// level/stairs on row 0 and "(Press ? for help)" left-aligned on
+		// row 1 (viewmap.cc.patch moved the hint onto its own row).
+		if (rowContains(1, LEVELMAP_HELP_MARKER))
 			return MenuType.LEVELMAP;
 
 		// Death/quit screen (end.cc): "Best Crawlers" header above its
@@ -2850,6 +2881,19 @@ public class RegionRouter implements TerminalRenderer
 			if (keyboardView != null)
 				keyboardView.setArrowsVisible(
 						targetMode == LayoutMode.GAMEPLAY);
+		}
+
+		// Post to fullView so centering runs after any queued layout pass;
+		// covers both transition INTO LEVELMAP and same-menu level nav.
+		if (detectedType == MenuType.LEVELMAP
+				&& pendingMapAnchorCol >= 0 && pendingMapAnchorRow >= 0
+				&& fullView != null)
+		{
+			final int c = pendingMapAnchorCol;
+			final int r = pendingMapAnchorRow;
+			pendingMapAnchorCol = -1;
+			pendingMapAnchorRow = -1;
+			fullView.post(() -> fullView.requestCenterOnCell(c, r));
 		}
 
 		// While in newgame, re-detect panel bounds every frame. The

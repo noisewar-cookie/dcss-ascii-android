@@ -67,6 +67,13 @@ public class FontConfig
     public final float portraitLevelmapFontScale;
     public final boolean portraitLevelmapScrollable;
     public final boolean portraitLevelmapVScrollable;
+    // Min is dynamic (fit-all), not configured — see
+    // RegionTermView.computeDynamicMapZoomMin. Sensitivity is an exponent
+    // on the raw gesture factor per event; separate in/out because pinch
+    // directions feel asymmetric.
+    public final float portraitLevelmapPinchZoomMax;
+    public final float portraitLevelmapPinchZoomInSensitivity;
+    public final float portraitLevelmapPinchZoomOutSensitivity;
     public final float portraitDescribeFontScale;
     public final boolean portraitDescribeScrollable;
     public final boolean portraitDescribeVScrollable;
@@ -158,6 +165,12 @@ public class FontConfig
         this.portraitLevelmapFontScale = getFloat(props, "portrait_levelmap_font_scale", this.portraitDefaultFontScale);
         this.portraitLevelmapScrollable= getBool (props, "portrait_levelmap_scrollable", this.portraitDefaultScrollable);
         this.portraitLevelmapVScrollable=getBool (props, "portrait_levelmap_vscrollable", this.portraitDefaultVScrollable);
+        this.portraitLevelmapPinchZoomMax
+                = getFloat(props, "portrait_levelmap_pinch_zoom_max", 1.5f);
+        this.portraitLevelmapPinchZoomInSensitivity
+                = getFloat(props, "portrait_levelmap_pinch_zoom_in_sensitivity", 1.0f);
+        this.portraitLevelmapPinchZoomOutSensitivity
+                = getFloat(props, "portrait_levelmap_pinch_zoom_out_sensitivity", 0.75f);
         this.portraitDescribeFontScale = getFloat(props, "portrait_describe_font_scale", this.portraitDefaultFontScale);
         this.portraitDescribeScrollable= getBool (props, "portrait_describe_scrollable", this.portraitDefaultScrollable);
         this.portraitDescribeVScrollable=getBool (props, "portrait_describe_vscrollable", true);

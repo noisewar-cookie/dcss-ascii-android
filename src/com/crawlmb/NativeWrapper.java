@@ -182,6 +182,17 @@ public class NativeWrapper
 		}
 	}
 
+	// libandroid.cc (viewmap.cc goto_level) on map open / level nav.
+	// 1-indexed player cell.
+	public void setMapAnchor(int col, int row)
+	{
+		synchronized (display_lock)
+		{
+			if (renderer != null)
+				renderer.setMapAnchor(col, row);
+		}
+	}
+
 	// Called from libandroid.cc (patched _show_morgue) when a High Scores
 	// entry is activated: opens the morgue file in the native scrolling
 	// viewer (CharFileViewer) instead of the in-terminal scroller, so the

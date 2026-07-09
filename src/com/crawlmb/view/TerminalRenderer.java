@@ -47,6 +47,11 @@ public interface TerminalRenderer
 	// care (e.g. landscape TermView).
 	default void setCharacterLogMode(boolean active) {}
 
+	// libandroid.cc → NativeWrapper on LEVELMAP open/level-switch. 1-
+	// indexed player cell; RegionRouter uses it to scroll fullView so
+	// the player lands centered under the LEVELMAP font scale.
+	default void setMapAnchor(int col, int row) {}
+
 	// Word-wrap parameters queried by NativeWrapper.gameStart just before
 	// initGame (views are measured by then — StartGame fires from the first
 	// layout pass). getMsgWrapCols returns the msg_max_width to pass to DCSS,
