@@ -75,6 +75,15 @@
     <string name="preferences_orientation_summary">Select screen orientation</string>
     <string name="preferences_fontface_title">Font</string>
     <string name="preferences_fontface_summary">Hi-res devices only</string>
+    <string name="preferences_reposition_ui_title">Reposition In-Game UI</string>
+    <string name="preferences_reposition_ui_summary">Reorder the game panels by dragging them</string>
+    <string name="reposition_save">Save</string>
+    <string name="reposition_reset">Reset</string>
+    <string name="reposition_cancel">Exit</string>
+    <string name="reposition_panel_map">Map</string>
+    <string name="reposition_panel_hud">HUD</string>
+    <string name="reposition_panel_mlist">Enemies</string>
+    <string name="reposition_panel_msg">Messages</string>
     <string name="preferences_gameplugin_title">Selected variant</string>
     <string name="preferences_gameplugin_summary">Note that these Game settings stick to the active profile</string>
     <string name="preferences_enablevkey_title">Enable virtual keyboard</string>

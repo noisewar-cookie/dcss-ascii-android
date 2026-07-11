@@ -47,6 +47,11 @@ final public class Preferences
 	// holds another folder's data and must be wiped before pulling.
 	public static final String KEY_STAGINGORIGINURI = "crawl.stagingoriginuri";
 
+	// Vertical stack order of the gameplay panels, comma-separated permutation
+	// of PANEL_KEYS (hud implies the status-lights bar directly below it).
+	public static final String KEY_PANELORDER = "crawl.panelorder";
+	public static final String[] PANEL_KEYS = { "map", "hud", "mlist", "msg" };
+
     private static final String KEYBOARD_LAYOUT_COUNT = "layout_count";
     public static final String KEYBOARD_LAYOUT_CURRENT = "layout_current";
     public static final String KEYBOARD_LABEL_PREFIX = "label_";
@@ -168,6 +173,41 @@ final public class Preferences
 			sharedPreferences.edit()
 					.putBoolean(Preferences.KEY_RELOADINPROGRESS, false).apply();
 		return v;
+	}
+
+	// Validated panel stack order: exactly the four PANEL_KEYS in some
+	// permutation, else the default order (map, hud, mlist, msg).
+	public static String[] getPanelOrder()
+	{
+		String stored = sharedPreferences.getString(KEY_PANELORDER, "");
+		if (!stored.isEmpty())
+		{
+			String[] order = stored.split(",");
+			if (order.length == PANEL_KEYS.length && isPanelPermutation(order))
+				return order;
+		}
+		return PANEL_KEYS.clone();
+	}
+
+	public static void setPanelOrder(String[] order)
+	{
+		sharedPreferences.edit()
+				.putString(KEY_PANELORDER,
+						android.text.TextUtils.join(",", order)).apply();
+	}
+
+	private static boolean isPanelPermutation(String[] order)
+	{
+		for (String key : PANEL_KEYS)
+		{
+			boolean found = false;
+			for (String o : order)
+				if (key.equals(o))
+					found = true;
+			if (!found)
+				return false;
+		}
+		return true;
 	}
 
 	public static boolean isScreenPortraitOrientation()

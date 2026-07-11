@@ -62,6 +62,10 @@ portrait_quickcontrols_scrollable=false
 portrait_quickcontrols_vscrollable=true
 portrait_quickcontrols_font_color=8f5630
 
+# Reposition In-Game UI mode: panel border/highlight color.
+# Formats: RRGGBB, #RRGGBB, 0xRRGGBB, or 8-digit AARRGGBB.
+reposition_highlight_color=FFFF00
+
 # Portrait: map panel
 # Shown during: gameplay — top portion, dungeon viewport
 # Terminal region: 37 cols x 17 rows  (terminal cols 0-36, rows 0-16)

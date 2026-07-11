@@ -87,6 +87,8 @@ public class PreferencesActivity extends PreferenceActivity implements
 
         setCustomizeKeyboardIntent();
 
+        setRepositionUiClickListener();
+
         addBackupRestorePreferences();
 
         addCustomFolderPreferences();
@@ -604,6 +606,23 @@ public class PreferencesActivity extends PreferenceActivity implements
         Intent characterFilesIntent = new Intent(this,
                 CustomKeyboardActivity.class);
         characterFilesPreference.setIntent(characterFilesIntent);
+    }
+
+    // Returns to GameActivity, which enters the panel-repositioning mode on
+    // seeing the extra (see GameActivity.onActivityResult).
+    private void setRepositionUiClickListener() {
+        Preference repositionPreference = findPreference("reposition_ui");
+        repositionPreference.setOnPreferenceClickListener(
+                new Preference.OnPreferenceClickListener() {
+                    @Override
+                    public boolean onPreferenceClick(Preference pref) {
+                        Intent result = new Intent();
+                        result.putExtra("repositionUi", true);
+                        setResult(RESULT_OK, result);
+                        finish();
+                        return true;
+                    }
+                });
     }
 
     private void setConfigFilePreferences() {

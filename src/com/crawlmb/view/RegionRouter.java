@@ -371,6 +371,19 @@ public class RegionRouter implements TerminalRenderer
 	private volatile LayoutMode currentMode = LayoutMode.PREGAME;
 	private volatile MenuType currentMenuType = MenuType.DEFAULT;
 
+	// Reposition In-Game UI mode: while frozen, applyMode requests are
+	// recorded instead of applied, so the forced split-panel visibility
+	// (forceSplitVisibleForReposition) can't be stomped by detection-driven
+	// transitions — e.g. the fresh-router applyMode fired by onResume's
+	// redrawScreen storm. The pending request is replayed on unfreeze.
+	private boolean repositionFrozen = false;
+	private LayoutMode pendingFrozenMode = null;
+	private MenuType pendingFrozenMenuType = null;
+	// Invoked (UI thread) when a frozen applyMode request carries GAMEPLAY —
+	// lets the reposition controller drop its persistent panel labels once
+	// fresh gameplay pixels have been painted into the split panels.
+	private Runnable frozenGameplayCallback;
+
 	// Set true by libandroid.cc → NativeWrapper.setMessageHistoryMode() while
 	// the Ctrl+P / startup message history popup is open. Read on the game
 	// thread by detectMenuType() to short-circuit content scanning and
@@ -1175,8 +1188,71 @@ public class RegionRouter implements TerminalRenderer
 				v.resetScroll();
 	}
 
+	public void setFrozenGameplayCallback(Runnable callback)
+	{
+		frozenGameplayCallback = callback;
+	}
+
+	// True when a frozen applyMode request already recorded GAMEPLAY — lets
+	// a controller entering after the redraw storm know fresh gameplay
+	// pixels are on screen.
+	public boolean pendingFrozenGameplay()
+	{
+		return pendingFrozenMode == LayoutMode.GAMEPLAY;
+	}
+
+	public void setRepositionFrozen(boolean frozen)
+	{
+		if (repositionFrozen == frozen)
+			return;
+		repositionFrozen = frozen;
+		if (!frozen)
+		{
+			// Reapply the latest requested (or current) state — this is the
+			// visibility restore after forceSplitVisibleForReposition.
+			LayoutMode mode = pendingFrozenMode != null
+					? pendingFrozenMode : currentMode;
+			MenuType type = pendingFrozenMenuType != null
+					? pendingFrozenMenuType : currentMenuType;
+			pendingFrozenMode = null;
+			pendingFrozenMenuType = null;
+			applyMode(mode, type);
+		}
+	}
+
+	// While frozen: show the gameplay split stack regardless of the current
+	// mode so the reposition overlay always has panels to decorate. The
+	// unfreeze reapply restores the real visibility state.
+	public void forceSplitVisibleForReposition()
+	{
+		if (splitContainer != null)
+			splitContainer.setVisibility(View.VISIBLE);
+		if (fullView != null)
+			fullView.setVisibility(View.INVISIBLE);
+		if (quickControlsView != null)
+			quickControlsView.setVisibility(View.INVISIBLE);
+		if (skillsView != null)
+			skillsView.setVisibility(View.INVISIBLE);
+		if (itemsView != null)
+			itemsView.setVisibility(View.INVISIBLE);
+		if (newgameSpeciesContainer != null)
+			newgameSpeciesContainer.setVisibility(View.INVISIBLE);
+		if (newgameBackgroundContainer != null)
+			newgameBackgroundContainer.setVisibility(View.INVISIBLE);
+		if (newgameWeaponContainer != null)
+			newgameWeaponContainer.setVisibility(View.INVISIBLE);
+	}
+
 	private void applyMode(LayoutMode mode, MenuType menuType)
 	{
+		if (repositionFrozen)
+		{
+			pendingFrozenMode = mode;
+			pendingFrozenMenuType = menuType;
+			if (mode == LayoutMode.GAMEPLAY && frozenGameplayCallback != null)
+				frozenGameplayCallback.run();
+			return;
+		}
 		resetAllScroll();
 		boolean splitVisible = (mode == LayoutMode.GAMEPLAY);
 		boolean skillsVisible = !splitVisible

@@ -46,6 +46,10 @@
 		  android:summary="@string/preferences_fontface_summary"
 		  android:entries="@array/fontsDescriptions"
 		  android:entryValues="@array/fonts" />
+	<Preference
+	   android:key="reposition_ui"
+	   android:title="@string/preferences_reposition_ui_title"
+	   android:summary="@string/preferences_reposition_ui_summary" />
   </PreferenceCategory>
   <PreferenceCategory android:title="@string/control_category">
 	<PreferenceScreen

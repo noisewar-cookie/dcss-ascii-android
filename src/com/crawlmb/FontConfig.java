@@ -38,6 +38,8 @@ public class FontConfig
     public final boolean portraitQuickControlsScrollable;
     public final boolean portraitQuickControlsVScrollable;
     public final int portraitQuickControlsFontColor;
+    // Border/highlight color of the "Reposition In-Game UI" mode.
+    public final int repositionHighlightColor;
     public final float portraitItemsFontScale;
     public final boolean portraitItemsScrollable;
     public final boolean portraitItemsVScrollable;
@@ -139,6 +141,7 @@ public class FontConfig
         // android-console-patches/libandroid.cc), the color of most main-
         // menu prompts including "Enter your name:".
         this.portraitQuickControlsFontColor  = getColor(props, "portrait_quickcontrols_font_color", 0xFFC0C0C0);
+        this.repositionHighlightColor  = getColor(props, "reposition_highlight_color", 0xFFFFFF00);
         this.portraitItemsFontScale    = getFloat(props, "portrait_items_font_scale", this.portraitDefaultFontScale);
         this.portraitItemsScrollable   = getBool (props, "portrait_items_scrollable", this.portraitDefaultScrollable);
         this.portraitItemsVScrollable  = getBool (props, "portrait_items_vscrollable", false);

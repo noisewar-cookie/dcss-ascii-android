@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Button bar of the Reposition In-Game UI mode. Covers the virtual
+     keyboard area (or a bottom strip when no keyboard is shown); height and
+     bottom inset padding are set at runtime by RepositionController. -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:background="#FF202020"
+    android:gravity="center_vertical"
+    android:paddingLeft="8dp"
+    android:paddingRight="8dp">
+    <Button
+        android:id="@+id/reposition_save"
+        android:text="@string/reposition_save"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="4dp"/>
+    <Button
+        android:id="@+id/reposition_reset"
+        android:text="@string/reposition_reset"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="4dp"/>
+    <Button
+        android:id="@+id/reposition_cancel"
+        android:text="@string/reposition_cancel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="4dp"/>
+</LinearLayout>

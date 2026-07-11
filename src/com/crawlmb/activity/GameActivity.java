@@ -72,6 +72,7 @@ import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
+import com.crawlmb.view.RepositionController;
 import com.crawlmb.view.StatusBarView;
 import com.crawlmb.view.TerminalRenderer;
 import com.crawlmb.view.TermView;
@@ -100,6 +101,9 @@ public class GameActivity extends Activity
 	private RegionTermView portraitSkillsView = null;
 	private RegionTermView portraitItemsView = null;
 	private RegionTermView portraitMapView = null;
+	private RegionTermView portraitHudView = null;
+	private RegionTermView portraitMlistView = null;
+	private RelativeLayout portraitSplitContainer = null;
 	private StatusBarView portraitStatusBar = null;
 	private FontConfig portraitFontConfig = null;
 	private RegionRouter portraitRouter = null;
@@ -122,6 +126,15 @@ public class GameActivity extends Activity
 	private boolean reloadOverlayActive = false;
 	private View reloadOverlay = null;
 	private Runnable reloadTimeoutRunnable = null;
+
+	// Reposition In-Game UI mode (see RepositionController). Requested from
+	// PreferencesActivity via the "repositionUi" result extra; entered after
+	// the post-return rebuildViews' first layout pass has sized the panels.
+	private boolean pendingRepositionEntry = false;
+	private RepositionController repositionController = null;
+	// Last bottom safe-area inset, captured by the inset listener for the
+	// reposition button bar in the no-keyboard case.
+	private int lastBottomInset = 0;
 
 	protected Handler handler = null;
 
@@ -235,6 +248,8 @@ public class GameActivity extends Activity
             		finish();
             		startActivity(getIntent());
             	}
+            	if (data.getBooleanExtra("repositionUi", false))
+            		pendingRepositionEntry = true;
             }
         }
     }
@@ -318,6 +333,8 @@ public class GameActivity extends Activity
 
 				Log.d("Crawl", "insets: l=" + left + " t=" + top
 						+ " r=" + right + " b=" + bottom);
+
+				lastBottomInset = bottom;
 
 				// Distribute the safe-area insets per-child instead of padding
 				// screenLayout as a whole. The crawl keyboard is a fixed-size
@@ -420,6 +437,9 @@ public class GameActivity extends Activity
 
 			if (reloadOverlayActive)
 				enterReloadState();
+
+			if (pendingRepositionEntry)
+				schedulePendingRepositionEntry();
 		}
 	}
 
@@ -701,31 +721,71 @@ public class GameActivity extends Activity
 		statusBar.setPadding(
 				charWidthPx * fontConfig.portraitHudOffsetCols, 0, 0, 0);
 
-		RelativeLayout.LayoutParams msgParams = new RelativeLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-		msgParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-		splitContainer.addView(msgView, msgParams);
+		// Stack the panel units (hud unit = hud + statusBar) in the persisted
+		// vertical order (crawl.panelorder). Fixed-height units above the map
+		// chain top-down, units below it chain bottom-up, and the map spans
+		// the remaining band between its neighbors (RelativeLayout sizes it
+		// between the anchors). The default order (map, hud, mlist, msg)
+		// reproduces the classic layout.
+		String[] panelOrder = Preferences.getPanelOrder();
+		int mapIdx = 0;
+		for (int i = 0; i < panelOrder.length; i++)
+			if (panelOrder[i].equals("map"))
+				mapIdx = i;
 
-		RelativeLayout.LayoutParams mlistParams = new RelativeLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-		mlistParams.addRule(RelativeLayout.ABOVE, msgView.getId());
-		splitContainer.addView(mlistView, mlistParams);
+		int prevBottomId = View.NO_ID;
+		for (int i = 0; i < mapIdx; i++)
+		{
+			for (View v : panelUnitViews(panelOrder[i], hudView, statusBar,
+					mlistView, msgView))
+			{
+				RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
+						LayoutParams.MATCH_PARENT, v == statusBar
+								? statusBarHeight : LayoutParams.WRAP_CONTENT);
+				if (prevBottomId == View.NO_ID)
+					lp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+				else
+					lp.addRule(RelativeLayout.BELOW, prevBottomId);
+				splitContainer.addView(v, lp);
+				prevBottomId = v.getId();
+			}
+		}
 
-		RelativeLayout.LayoutParams statusParams = new RelativeLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, statusBarHeight);
-		statusParams.addRule(RelativeLayout.ABOVE, mlistView.getId());
-		splitContainer.addView(statusBar, statusParams);
-
-		RelativeLayout.LayoutParams hudParams = new RelativeLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-		hudParams.addRule(RelativeLayout.ABOVE, statusBar.getId());
-		splitContainer.addView(hudView, hudParams);
+		int nextTopId = View.NO_ID;
+		for (int i = panelOrder.length - 1; i > mapIdx; i--)
+		{
+			View[] unit = panelUnitViews(panelOrder[i], hudView, statusBar,
+					mlistView, msgView);
+			for (int j = unit.length - 1; j >= 0; j--)
+			{
+				View v = unit[j];
+				RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
+						LayoutParams.MATCH_PARENT, v == statusBar
+								? statusBarHeight : LayoutParams.WRAP_CONTENT);
+				if (nextTopId == View.NO_ID)
+					lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+				else
+					lp.addRule(RelativeLayout.ABOVE, nextTopId);
+				splitContainer.addView(v, lp);
+				nextTopId = v.getId();
+			}
+		}
 
 		RelativeLayout.LayoutParams mapParams = new RelativeLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-		mapParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-		mapParams.addRule(RelativeLayout.ABOVE, hudView.getId());
+		if (mapIdx == 0)
+			mapParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+		else
+			mapParams.addRule(RelativeLayout.BELOW, prevBottomId);
+		if (mapIdx == panelOrder.length - 1)
+			mapParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+		else
+			mapParams.addRule(RelativeLayout.ABOVE, nextTopId);
 		splitContainer.addView(mapView, mapParams);
+
+		portraitHudView = hudView;
+		portraitMlistView = mlistView;
+		portraitSplitContainer = splitContainer;
 
 		gamePanel.addView(splitContainer, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
@@ -1005,6 +1065,89 @@ public class GameActivity extends Activity
 		return router;
 	}
 
+	// Views of one draggable panel unit, top to bottom. The status-lights bar
+	// always sits directly below the HUD. "map" is never passed here — the
+	// map is placed separately as the flexible unit.
+	private View[] panelUnitViews(String key, View hudView, View statusBar,
+			View mlistView, View msgView)
+	{
+		switch (key)
+		{
+		case "hud":
+			return new View[] { hudView, statusBar };
+		case "mlist":
+			return new View[] { mlistView };
+		default:
+			return new View[] { msgView };
+		}
+	}
+
+	// Deferred entry into the reposition mode requested from Preferences:
+	// freeze the fresh router now — before onResume's posted redrawScreen
+	// storm can drive a detection applyMode that would stomp the forced
+	// split visibility — and enter once the first layout pass has sized the
+	// panels.
+	private void schedulePendingRepositionEntry() {
+		pendingRepositionEntry = false;
+		if (portraitRouter == null || portraitSplitContainer == null)
+			return;
+		portraitRouter.setRepositionFrozen(true);
+		final View gamePanel = screenLayout.findViewById(gamePanelId);
+		screenLayout.getViewTreeObserver().addOnGlobalLayoutListener(
+				new ViewTreeObserver.OnGlobalLayoutListener()
+				{
+					@Override
+					public void onGlobalLayout()
+					{
+						if (gamePanel == null || gamePanel.getHeight() <= 0
+								|| portraitMsgView == null
+								|| portraitMsgView.getHeight() <= 0)
+							return;
+						screenLayout.getViewTreeObserver()
+								.removeOnGlobalLayoutListener(this);
+						enterRepositionMode();
+					}
+				});
+	}
+
+	private void enterRepositionMode() {
+		if (repositionController != null && repositionController.isActive())
+			return;
+		repositionController = new RepositionController(this, screenLayout,
+				portraitRouter, portraitSplitContainer, portraitMapView,
+				portraitHudView, portraitStatusBar, portraitMlistView,
+				portraitMsgView, portraitKeyboardView, lastBottomInset,
+				portraitFontConfig.repositionHighlightColor,
+				new RepositionController.Callbacks()
+				{
+					@Override
+					public void onSave(String[] order)
+					{
+						repositionController = null;
+						Preferences.setPanelOrder(order);
+						rebuildViews();
+						// Repaint the rebuilt panels (mirrors onResume).
+						if (gameKeyListener != null
+								&& gameKeyListener.nativew != null)
+						{
+							final NativeWrapper nw = gameKeyListener.nativew;
+							View root = findViewById(android.R.id.content);
+							if (root != null)
+								root.post(nw::redrawScreen);
+						}
+					}
+
+					@Override
+					public void onCancel(boolean restoreIme)
+					{
+						repositionController = null;
+						if (restoreIme)
+							restoreKeyboardAfterReload();
+					}
+				});
+		repositionController.enter();
+	}
+
 	private RegionTermView makeNewgameCategoryView(int row0, int col0, int row1, int col1)
 	{
 		FontConfig fc = FontConfig.load(getAssets());
@@ -1214,6 +1357,11 @@ public class GameActivity extends Activity
 	@Override
 	protected void onStop() {
 		super.onStop();
+		// Discard an in-progress reposition session — its overlay would not
+		// survive the rebuildViews of the next onStart anyway. No IME restore
+		// here (the activity is going background); the next rebuild resets it.
+		if (repositionController != null && repositionController.isActive())
+			repositionController.cancel(false);
 		// Drain pushes before the process can be cached and frozen
 		// (MIUI freezes within seconds; queued work would be lost).
 		// onStop runs after the next screen is visible, so the wait is
@@ -1227,6 +1375,13 @@ public class GameActivity extends Activity
 		super.onResume();
 
 		setScreen();
+
+		// Activity results are delivered between onStart and onResume, so a
+		// reposition request from Preferences lands after onStart's
+		// rebuildViews has already run — consume it here, freezing the
+		// router before the redraw posted below can drive applyMode.
+		if (pendingRepositionEntry)
+			schedulePendingRepositionEntry();
 
 		// When Android resumes the activity from the recents/task switcher,
 		// our view-tree state survives but DCSS only repaints on its own
@@ -1243,8 +1398,29 @@ public class GameActivity extends Activity
 		}
 	}
 
+	// System keys that keep their normal behavior while the reposition mode
+	// swallows all game input.
+	private static boolean isSystemKey(int keyCode) {
+		switch (keyCode) {
+		case KeyEvent.KEYCODE_VOLUME_UP:
+		case KeyEvent.KEYCODE_VOLUME_DOWN:
+		case KeyEvent.KEYCODE_VOLUME_MUTE:
+		case KeyEvent.KEYCODE_POWER:
+		case KeyEvent.KEYCODE_CAMERA:
+			return true;
+		}
+		return false;
+	}
+
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
+		if (repositionController != null && repositionController.isActive()) {
+			if (isSystemKey(keyCode))
+				return super.onKeyDown(keyCode, event);
+			if (keyCode == KeyEvent.KEYCODE_BACK)
+				repositionController.cancel(true);
+			return true;
+		}
 		if (keyCode == KeyEvent.KEYCODE_BACK){
 			View transparencySliderView = findViewById(R.id.transparencySliderView);
 			if (transparencySliderView != null && transparencySliderView.getVisibility() == View.VISIBLE){
@@ -1260,6 +1436,8 @@ public class GameActivity extends Activity
 
 	@Override
 	public boolean onKeyUp(int keyCode, KeyEvent event) {
+		if (repositionController != null && repositionController.isActive())
+			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
 		return gameKeyListener.onKeyUp(keyCode, event) || super.onKeyUp(keyCode, event);
 	}
 
