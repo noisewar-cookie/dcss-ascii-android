@@ -58,9 +58,49 @@
  
      auto screen_y = state.lpos.pos.y;
  
-@@ -686,11 +703,11 @@
+@@ -643,7 +653,30 @@
+     // Finally, adjust the upper left corner for the view state so that it is
+     // appropriately scrolled relative to the cursor.
+     return _get_view_state(ul, state);
+ }
++
++// Cursor jumps that should drag the physical viewport along: the landmark
++// keys listed in the map header (< > tab _ ^ E W I) and the jump-back-to-
++// player key. Plain cursor movement is excluded so it can pan freely.
++static bool _is_map_jump_command(command_type cmd)
++{
++    switch (cmd)
++    {
++    case CMD_MAP_FIND_YOU:
++    case CMD_MAP_FIND_UPSTAIR:
++    case CMD_MAP_FIND_DOWNSTAIR:
++    case CMD_MAP_FIND_PORTAL:
++    case CMD_MAP_FIND_TRAP:
++    case CMD_MAP_FIND_ALTAR:
++    case CMD_MAP_FIND_EXCLUDED:
++    case CMD_MAP_FIND_WAYPOINT:
++    case CMD_MAP_FIND_STASH:
++    case CMD_MAP_FIND_STASH_REVERSE:
++        return true;
++    default:
++        return false;
++    }
++}
+ #endif
+ 
+ class UIMapView : public ui::Widget
+@@ -684,13 +717,20 @@
+ 
+ #ifndef USE_TILE_LOCAL
          const auto view = _get_view_state(view_ul, m_state);
          view_ul = view.start;
++        if (m_recenter)
++        {
++            // Emitted from the render so the anchor matches the frame that
++            // is actually drawn, not the pre-scroll cursor.
++            android_map_anchor(view.cursor.x, view.cursor.y + 2);
++            m_recenter = false;
++        }
          _draw_title(m_state.lpos.pos, *m_state.feats, m_region.width);
 -        const ui::Region map_region = {0, 1, m_region.width, m_region.height - 1};
 +        // Header occupies rows 0-1 (level/stairs and the help hint).
@@ -73,7 +113,40 @@
  #endif
      }
  
-@@ -826,6 +843,9 @@
+@@ -761,20 +801,32 @@
+     void process_command(command_type cmd)
+     {
++#ifndef USE_TILE_LOCAL
++        const coord_def old_pos = m_state.lpos.pos;
++#endif
+         auto ret = process_map_command(cmd, m_state);
+         // reentry happens if during the process, something else called in to
+         // set_lpos. E.g. this can happen via a describe popup. If this
+         // happened, then it set m_state and we don't want to overwrite it.
+         // TODO some refactoring to make this cleaner
+         if (!check_and_reset_reentry())
+             m_state = std::move(ret);
+ 
+         if (!m_state.map_alive)
+             return;
+ 
+         if (m_state.lpos.id != level_id::current())
+             goto_level();
+ 
+         m_state.lpos.pos = m_state.lpos.pos.clamped(known_map_bounds());
++
++#ifndef USE_TILE_LOCAL
++        // A landmark jump can put the cursor outside the part of the map the
++        // physical viewport shows; re-anchor on it. Skipped when the search
++        // found nothing (position unchanged), so a fruitless keypress doesn't
++        // yank a hand-panned view back to the cursor.
++        if (_is_map_jump_command(cmd) && m_state.lpos.pos != old_pos)
++            m_recenter = true;
++#endif
+     }
+ 
+     void set_lpos(level_pos dest)
+@@ -826,6 +878,9 @@
  #ifndef USE_TILE_LOCAL
          auto s = _init_view_state(m_state);
          view_ul = s.start;
@@ -83,3 +156,12 @@
  #endif
  
          _expose();
+@@ -888,5 +943,8 @@
+     bool m_reentry;
+ 
+ #ifndef USE_TILE_LOCAL
+     coord_def view_ul;
++    // Set by a landmark jump, consumed by the next _render, which turns it
++    // into a fresh android_map_anchor for the new cursor cell.
++    bool m_recenter = false;
+ #endif
