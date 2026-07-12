@@ -189,14 +189,6 @@ public class GameActivity extends Activity
 	@Override
 	public boolean onPrepareOptionsMenu(Menu menu) {
 		super.onPrepareOptionsMenu(menu);
-		MenuItem lockTerminalPositionItem = menu.findItem(R.id.menu_lock_terminal_position);
-		if (term != null && term.getLockPositioning()) {
-			lockTerminalPositionItem.setTitle(R.string.menu_unlock_terminal_position);
-		} else {
-			lockTerminalPositionItem.setTitle(R.string.menu_lock_terminal_position);
-		}
-		lockTerminalPositionItem.setVisible(term != null);
-
 		MenuItem changeTransparencyItem = menu.findItem(R.id.menu_change_transparency);
 
 		View transparencySliderView = findViewById(R.id.transparencySliderView);
@@ -220,14 +212,6 @@ public class GameActivity extends Activity
 			intent = new Intent(this, PreferencesActivity.class);
 			intent.putExtra("gameInProgress", NativeWrapper.gameInProgress());
 			startActivityForResult(intent, PREFERENCES_FINISHED);
-			break;
-		case '3':// Reset terminal position
-			if (term != null)
-				term.resetTerminalPosition();
-			break;
-		case '4':// Lock terminal position
-			if (term != null)
-				term.toggleLockPosition();
 			break;
 		case '5':// Quit
 			finish();
