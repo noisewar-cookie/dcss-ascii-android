@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Category header: 80% white bar, black bold all-caps label. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#CCFFFFFF"
+    android:textColor="#FF000000"
+    android:textStyle="bold"
+    android:textAllCaps="true"
+    android:textSize="14sp"
+    android:gravity="center_vertical"
+    android:paddingStart="15dip"
+    android:paddingEnd="15dip"
+    android:paddingTop="5dip"
+    android:paddingBottom="5dip" />

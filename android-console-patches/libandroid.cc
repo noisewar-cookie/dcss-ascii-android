@@ -354,6 +354,7 @@ extern "C"
 	void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, jint msgWrapCols, jint msgRows, jint proseWrapCols);
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
 	void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz);
+	jboolean Java_com_crawlmb_NativeWrapper_gameInProgress( JNIEnv* env, jclass clz);
 };
 
 // Called on the game thread from NativeWrapper.gameStart, before initGame
@@ -381,6 +382,15 @@ void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz)
 {
 	if (you.save)
 		save_game(false);
+}
+
+// UI-thread query: is a game loaded (vs. main menu / char creation)?
+// need_save flips true in _post_init and false on save/death/game end.
+// Plain bool read — safe cross-thread, and safe before initGame (the
+// crawl_state global constructor zeroes it).
+jboolean Java_com_crawlmb_NativeWrapper_gameInProgress( JNIEnv* env, jclass clz)
+{
+	return crawl_state.need_save ? JNI_TRUE : JNI_FALSE;
 }
 
 void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir)

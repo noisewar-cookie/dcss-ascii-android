@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Compact clone of the platform preference row layout: text 25% smaller
+     (title 22->16sp, summary 14->11sp), halved vertical padding (6->3dip)
+     and halved minHeight (64->32dip; minHeight is what actually gates row
+     height, so halving padding alone would change nothing). Category
+     headers are NOT affected (preferenceCategoryStyle is untouched). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="32dip"
+    android:gravity="center_vertical"
+    android:paddingEnd="?android:attr/scrollbarSize">
+
+    <!-- Framework sets this GONE when no icon, so paddingStart adds no gap
+         to icon-less rows. -->
+    <ImageView
+        android:id="@android:id/icon"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:adjustViewBounds="true"
+        android:maxWidth="28dip"
+        android:maxHeight="28dip"
+        android:scaleType="fitCenter"
+        android:paddingStart="10dip"
+        android:layout_gravity="center" />
+
+    <RelativeLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:paddingStart="15dip"
+        android:paddingEnd="6dip"
+        android:paddingTop="3dip"
+        android:paddingBottom="3dip">
+
+        <TextView
+            android:id="@android:id/title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:singleLine="true"
+            android:textAppearance="?android:attr/textAppearanceLarge"
+            android:textSize="16sp"
+            android:textColor="@color/preference_title"
+            android:ellipsize="marquee"
+            android:fadingEdge="horizontal" />
+
+        <TextView
+            android:id="@android:id/summary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@android:id/title"
+            android:layout_alignStart="@android:id/title"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:textSize="11sp"
+            android:textColor="@color/preference_summary"
+            android:maxLines="4" />
+
+    </RelativeLayout>
+
+    <LinearLayout
+        android:id="@android:id/widget_frame"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="vertical" />
+
+</LinearLayout>

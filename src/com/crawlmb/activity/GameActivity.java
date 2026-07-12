@@ -218,6 +218,7 @@ public class GameActivity extends Activity
 			break;
 		case '2':// Preferences
 			intent = new Intent(this, PreferencesActivity.class);
+			intent.putExtra("gameInProgress", NativeWrapper.gameInProgress());
 			startActivityForResult(intent, PREFERENCES_FINISHED);
 			break;
 		case '3':// Reset terminal position

@@ -27,9 +27,11 @@ import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.preference.CheckBoxPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceCategory;
+import android.preference.PreferenceGroup;
 import android.preference.PreferenceScreen;
 import android.util.Log;
 import android.widget.Toast;
@@ -98,6 +100,32 @@ public class PreferencesActivity extends PreferenceActivity implements
         // setConfigFilePreferences / setCharacterFilesIntent so all the
         // targets exist by the time we walk them.
         applyCustomModeGuards();
+
+        // Must run after every add* call above so the walk sees all rows,
+        // and before views are bound (still in onCreate).
+        applyCompactLayout(getPreferenceScreen());
+    }
+
+    // Swap every row (including nested PreferenceScreen rows, but NOT
+    // category headers) to the half-size layout. Done in code rather than
+    // android:layout in preferences.xml so programmatically added rows are
+    // covered too; the platform Preference styles are private, so a theme
+    // override can't do it.
+    private void applyCompactLayout(PreferenceGroup group) {
+        for (int i = 0; i < group.getPreferenceCount(); i++) {
+            Preference p = group.getPreference(i);
+            if (p instanceof PreferenceCategory)
+                p.setLayoutResource(R.layout.preference_category_compact);
+            else
+                p.setLayoutResource(R.layout.preference_compact);
+            // PlainCheckBox widget: keeps the green check, drops the orange
+            // pressed/selected highlight.
+            if (p instanceof CheckBoxPreference)
+                p.setWidgetLayoutResource(
+                        R.layout.preference_widget_checkbox);
+            if (p instanceof PreferenceGroup)
+                applyCompactLayout((PreferenceGroup) p);
+        }
     }
 
     // Tap a backup/restore preference -> launch a single-file SAF picker
@@ -127,11 +155,26 @@ public class PreferencesActivity extends PreferenceActivity implements
                 REQ_RESTORE_SAVES, 0, false);
     }
 
+    // Tints the black source glyph to the title colour. mutate() stops the
+    // tint leaking to other users of the shared drawable.
+    private android.graphics.drawable.Drawable tintedIcon(int iconRes) {
+        android.graphics.drawable.Drawable d =
+                androidx.core.content.ContextCompat.getDrawable(this, iconRes);
+        if (d == null)
+            return null;
+        d = d.mutate();
+        d.setTintList(androidx.core.content.ContextCompat.getColorStateList(
+                this, R.color.preference_title));
+        return d;
+    }
+
     private void addZipPreference(String categoryKey, int titleRes,
             final int requestCode, final int suggestedNameRes,
             final boolean isBackup) {
         Preference p = new Preference(this);
         p.setTitle(titleRes);
+        p.setIcon(tintedIcon(isBackup
+                ? R.drawable.ic_pref_backup : R.drawable.ic_pref_restore));
         p.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference pref) {
@@ -609,9 +652,17 @@ public class PreferencesActivity extends PreferenceActivity implements
     }
 
     // Returns to GameActivity, which enters the panel-repositioning mode on
-    // seeing the extra (see GameActivity.onActivityResult).
+    // seeing the extra (see GameActivity.onActivityResult). Disabled outside
+    // a loaded game (extra set from crawl_state.need_save) — the forced
+    // split layout would section the DCSS main menu.
     private void setRepositionUiClickListener() {
         Preference repositionPreference = findPreference("reposition_ui");
+        if (!getIntent().getBooleanExtra("gameInProgress", false)) {
+            repositionPreference.setEnabled(false);
+            repositionPreference.setSummary(
+                    R.string.preferences_reposition_ui_disabled_summary);
+            return;
+        }
         repositionPreference.setOnPreferenceClickListener(
                 new Preference.OnPreferenceClickListener() {
                     @Override

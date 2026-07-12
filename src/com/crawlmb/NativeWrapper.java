@@ -40,6 +40,9 @@ public class NativeWrapper
 	public native void initGame(String dataDir, String settingsDir, String morgueDir);
 	private native void setWordwrap(int msgWrapCols, int msgRows, int proseWrapCols);
 	public static native void nativeSaveGame();
+	// True while a game is loaded (crawl_state.need_save) — false on the
+	// DCSS main menu / character creation. Safe from the UI thread.
+	public static native boolean gameInProgress();
 
 	public NativeWrapper(GameKeyListener s)
 	{

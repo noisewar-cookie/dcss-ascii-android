@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Right-aligned grey value in the widget column (e.g. "1000ms"). -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/pref_value"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical|end"
+    android:textColor="#FFBEBEBE"
+    android:textSize="14sp"
+    android:paddingStart="8dip"
+    android:paddingEnd="8dip" />

@@ -77,6 +77,7 @@
     <string name="preferences_fontface_summary">Hi-res devices only</string>
     <string name="preferences_reposition_ui_title">Reposition In-Game UI</string>
     <string name="preferences_reposition_ui_summary">Reorder the game panels by dragging them</string>
+    <string name="preferences_reposition_ui_disabled_summary">Only available while a game is in progress</string>
     <string name="reposition_save">Save</string>
     <string name="reposition_reset">Reset</string>
     <string name="reposition_cancel">Exit</string>
@@ -104,7 +105,7 @@
     <string name="preferences_keyboard_arrows_summary">Show red directional arrows on keyboard</string>
 
     <string name="display_category">Display</string>
-    <string name="control_category">Control</string>
+    <string name="control_category">Controls</string>
     <string name="game_category">Game</string>
     <string-array name="virtKeyActionDescriptions">
         <item>None</item>

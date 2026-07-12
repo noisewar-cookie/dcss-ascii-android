@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fixed title colour: no selected/pressed state, so the classic theme
+     can't invert it to black on the tapped row. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false" android:color="#80FFFFFF" />
+    <item android:color="#FFFFFFFF" />
+</selector>
