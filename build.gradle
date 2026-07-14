@@ -85,6 +85,16 @@ android {
     }
 }
 
+// The release variant only exists when -PreleaseBuild is passed (prepare-release.ps1
+// does). Android Studio never passes it, so release can't be selected in Build
+// Variants or installed by Run -- a local release APK is signed with the upload key,
+// not Play's, so installing it forces an uninstall of the Play build and its saves.
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        variant.enable = providers.gradleProperty("releaseBuild").present
+    }
+}
+
 dependencies {
     implementation fileTree(dir: 'libs', include: '*.jar')
     implementation 'androidx.core:core:1.15.0'

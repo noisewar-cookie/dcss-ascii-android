@@ -123,6 +123,12 @@ public class PreferencesActivity extends PreferenceActivity implements
             if (p instanceof CheckBoxPreference)
                 p.setWidgetLayoutResource(
                         R.layout.preference_widget_checkbox);
+            // The setters above disable row recycling, so the ListView
+            // re-inflates every row on every scroll. Safe to re-enable:
+            // layouts are final before the adapter binds (API 26+).
+            if (android.os.Build.VERSION.SDK_INT
+                    >= android.os.Build.VERSION_CODES.O)
+                p.setRecycleEnabled(true);
             if (p instanceof PreferenceGroup)
                 applyCompactLayout((PreferenceGroup) p);
         }
