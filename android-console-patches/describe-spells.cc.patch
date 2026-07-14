@@ -1,0 +1,86 @@
+diff --git a/crawl-ref/source/describe-spells.cc b/crawl-ref/source/describe-spells.cc
+index a4a1a95d31..fa9302da88 100644
+--- a/crawl-ref/source/describe-spells.cc
++++ b/crawl-ref/source/describe-spells.cc
+@@ -623,13 +623,34 @@ static void _describe_book(const spellbook_contents &book,
+ 
+     description.cprintf("%s", book.label.c_str());
+ 
++    // Word wrap (Android): the 80-col book table wraps badly at the prose
++    // wrap width, so restack it as two lines per spell (name/level/known,
++    // then schools) sized to fit android_prose_wrap_cols.
++    extern int android_prose_wrap_cols;
++    extern bool android_reflow_spellbook_table;
++    const bool stacked = source_item
++                         && android_prose_wrap_cols > 0
++                         && android_reflow_spellbook_table;
++    const int name_w = stacked
++        ? max(12, min(32, android_prose_wrap_cols - 15))
++        : 32;
++
+     // only display header for book spells
+     if (source_item)
+     {
+-        description.cprintf(
+-            "\n Spells                              Type                    Level");
+-        if (crawl_state.need_save)
+-            description.cprintf("       Known");
++        if (stacked)
++        {
++            // "Lvl"/"Known" right-align with the L%d and yes/no fields.
++            description.cprintf("\n Spells%*s%s", name_w + 1, "Lvl",
++                                crawl_state.need_save ? "  Known" : "");
++        }
++        else
++        {
++            description.cprintf(
++                "\n Spells                              Type                    Level");
++            if (crawl_state.need_save)
++                description.cprintf("       Known");
++        }
+     }
+     description.cprintf("\n");
+ 
+@@ -669,7 +690,8 @@ static void _describe_book(const spellbook_contents &book,
+         const int effect_len = effect_str.length();
+         const int range_len = range_str.empty() ? 0 : 3;
+         const int effect_range_space = effect_len && range_len ? 1 : 0;
+-        const int chop_len = 32 - effect_len - range_len - effect_range_space
++        const int chop_len = name_w - effect_len - range_len
++                                - effect_range_space
+                                 - (dith_marker.length() > 0 ? 1 : 0);
+ 
+         if (effect_len && !testbits(get_spell_flags(spell), spflag::WL_check))
+@@ -711,12 +733,27 @@ static void _describe_book(const spellbook_contents &book,
+ 
+         string known = "";
+         if (!mon_owner && crawl_state.need_save)
+-            known = you.spell_library[spell] ? "         yes" : "          no";
++        {
++            if (stacked)
++                known = you.spell_library[spell] ? "    yes" : "     no";
++            else
++                known = you.spell_library[spell] ? "         yes" : "          no";
++        }
+ 
+-        description.cprintf("%s%d%s\n",
+-                            chop_string(schools, 28).c_str(),
+-                            spell_difficulty(spell),
+-                            known.c_str());
++        if (stacked)
++        {
++            description.cprintf(" L%d%s\n     %s\n",
++                                spell_difficulty(spell),
++                                known.c_str(),
++                                schools.c_str());
++        }
++        else
++        {
++            description.cprintf("%s%d%s\n",
++                                chop_string(schools, 28).c_str(),
++                                spell_difficulty(spell),
++                                known.c_str());
++        }
+     }
+ 
+     // are we halfway through a column?

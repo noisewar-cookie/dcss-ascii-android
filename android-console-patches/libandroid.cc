@@ -74,6 +74,18 @@ int android_msg_wrap_cols = 0;
 int android_prose_wrap_cols = 0;
 static int android_msg_rows = 0;
 
+// Table-reflow toggles: padded 80-col table sections that get restacked to
+// fit the wrap width when word wrap is active (each only takes effect while
+// android_prose_wrap_cols / android_msg_wrap_cols > 0). One flag per
+// section so a reflow can be disabled without touching its patch. Extern'd
+// by the corresponding patch.
+bool android_reflow_spell_stats = true;     // Level/School/Fail stack (describe.cc.patch)
+bool android_reflow_spellbook_table = true; // two-line spell list (describe-spells.cc.patch)
+bool android_reflow_orders_prompt = true;   // 't' orders layout (shout.cc.patch)
+bool android_reflow_weapon_stats = true;    // base stats stack + skill de-indent (describe.cc.patch)
+bool android_reflow_armour_stats = true;    // armour/shield stats stack (describe.cc.patch)
+bool android_reflow_missile_stats = true;   // thrown-weapon stats stack (describe.cc.patch)
+
 // Probably a redundant conversion, since it gets converted later on,
 // but it's a bit of leftover code from the curses stuff
 #define KEY_HOME	0406		/* home key */

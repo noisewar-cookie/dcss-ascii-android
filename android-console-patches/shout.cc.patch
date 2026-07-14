@@ -1,0 +1,45 @@
+diff --git a/crawl-ref/source/shout.cc b/crawl-ref/source/shout.cc
+index d7e790e2b5..5061b7b472 100644
+--- a/crawl-ref/source/shout.cc
++++ b/crawl-ref/source/shout.cc
+@@ -470,6 +470,32 @@ static void _set_allies_withdraw(const coord_def &target)
+ /// Prompt the player to issue orders. Returns the key pressed.
+ static int _issue_orders_prompt()
+ {
++    // Word wrap (Android): the padded columns above break at the message
++    // wrap width, so restack the prompt to fit narrow lines.
++    extern int android_msg_wrap_cols;
++    extern bool android_reflow_orders_prompt;
++    if (android_msg_wrap_cols > 0 && android_reflow_orders_prompt)
++    {
++        string prompt = "What are your orders?";
++        if (!you.cannot_speak())
++        {
++            string cap_shout = you.shout_verb(false);
++            cap_shout[0] = toupper_safe(cap_shout[0]);
++            prompt += make_stringf("  t - %s!", cap_shout.c_str());
++        }
++        mprf(MSGCH_PROMPT, "%s", prompt.c_str());
++
++        if (!you.berserk() && !you.confused())
++        {
++            mpr("Orders for allies:");
++            mpr(" a - Attack new target. r - Retreat!");
++            mpr(" s - Stop attacking.    g - Guard the area.");
++            mpr(" f - Follow me.");
++        }
++        mpr(" Anything else - Cancel.");
++    }
++    else
++    {
+     mprf(MSGCH_PROMPT, "What are your orders?");
+     if (!you.cannot_speak())
+     {
+@@ -485,6 +511,7 @@ static int _issue_orders_prompt()
+         mpr("                   g - Guard the area.      f - Follow me.");
+     }
+     mpr(" Anything else - Cancel.");
++    }
+ 
+     flush_prev_message(); // buffer doesn't get flushed otherwise
+ 

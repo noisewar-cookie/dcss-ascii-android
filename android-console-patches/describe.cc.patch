@@ -1,0 +1,188 @@
+diff --git a/crawl-ref/source/describe.cc b/crawl-ref/source/describe.cc
+index 0a381e125d..49984ec693 100644
+--- a/crawl-ref/source/describe.cc
++++ b/crawl-ref/source/describe.cc
+@@ -1384,11 +1384,17 @@ static string _skill_target_desc(skill_type skill, int scaled_target,
+ static void _append_skill_target_desc(string &description, skill_type skill,
+                                         int scaled_target)
+ {
++    // Word wrap (Android): the 4-space indent hanging-indents every wrapped
++    // continuation line, so drop it when wrap is active.
++    extern int android_prose_wrap_cols;
++    extern bool android_reflow_weapon_stats;
++    const string pad = android_prose_wrap_cols > 0
++                       && android_reflow_weapon_stats ? "\n" : "\n    ";
+     if (!you.has_mutation(MUT_DISTRIBUTED_TRAINING))
+-        description += "\n    " + _skill_target_desc(skill, scaled_target, 100);
++        description += pad + _skill_target_desc(skill, scaled_target, 100);
+     if (you.training[skill] > 0 && you.training[skill] < 100)
+     {
+-        description += "\n    " + _skill_target_desc(skill, scaled_target,
++        description += pad + _skill_target_desc(skill, scaled_target,
+                                                     you.training[skill]);
+     }
+ }
+@@ -1406,7 +1412,13 @@ static string _desc_attack_delay(const item_def &item)
+ 
+     const int cur_delay = you.attack_delay_with(&dummy).expected();
+ 
+-    return make_stringf("\n    Current attack delay: %.1f.", (float)cur_delay / 10);
++    // Word wrap (Android): drop the hanging indent (part of the skill block).
++    extern int android_prose_wrap_cols;
++    extern bool android_reflow_weapon_stats;
++    const char *pad = android_prose_wrap_cols > 0
++                      && android_reflow_weapon_stats ? "\n" : "\n    ";
++    return make_stringf("%sCurrent attack delay: %.1f.", pad,
++                        (float)cur_delay / 10);
+ }
+ 
+ static string _describe_missile_dmg_brand(const item_def &item)
+@@ -1536,9 +1548,14 @@ static void _append_skill_needed(string &description, const item_def &item,
+     const bool useful = !is_useless_item(item) && crawl_state.need_save;
+     if (useful)
+     {
++        extern int android_prose_wrap_cols;
++        extern bool android_reflow_weapon_stats;
+         description += "\n";
+-        if (indent)
++        if (indent && !(android_prose_wrap_cols > 0
++                        && android_reflow_weapon_stats))
++        {
+             description += "    ";
++        }
+         description += _your_skill_desc(skill, can_set_target, target_skill,
+                                         std::move(skill_padding));
+     }
+@@ -1552,6 +1569,13 @@ static void _append_weapon_stats(string &description, const item_def &item)
+     const int base_dam = property(item, PWPN_DAMAGE);
+     const int mindelay_skill = _item_training_target(item);
+ 
++    // Word wrap (Android): stack the base stats vertically so the padded
++    // one-liner doesn't break at the wrap width.
++    extern int android_prose_wrap_cols;
++    extern bool android_reflow_weapon_stats;
++    const char *stat_sep = android_prose_wrap_cols > 0
++                           && android_reflow_weapon_stats ? "\n" : "  ";
++
+     if (item.base_type == OBJ_STAVES
+         && item.is_identified()
+         && staff_skill(static_cast<stave_type>(item.sub_type)) != SK_NONE
+@@ -1567,16 +1591,20 @@ static void _append_weapon_stats(string &description, const item_def &item)
+     {
+         const char *inf = Options.char_set == CSET_ASCII ? "inf" : "\u221e"; //"∞"
+         description += make_stringf(
+-            "Base accuracy: %s  Base damage: %s  ",
++            "Base accuracy: %s%sBase damage: %s%s",
+             inf,
+-            inf);
++            stat_sep,
++            inf,
++            stat_sep);
+     }
+     else
+     {
+         description += make_stringf(
+-            "Base accuracy: %+d  Base damage: %d  ",
++            "Base accuracy: %+d%sBase damage: %d%s",
+             property(item, PWPN_HIT),
+-            base_dam);
++            stat_sep,
++            base_dam,
++            stat_sep);
+     }
+ 
+     description += make_stringf(
+@@ -2162,11 +2190,18 @@ static string _describe_ammo(const item_def &item)
+         const int throw_delay = (10 + dam / 2);
+         const int target_skill = _item_training_target(item);
+ 
++        // Word wrap (Android): stack the padded stat line vertically.
++        extern int android_prose_wrap_cols;
++        extern bool android_reflow_missile_stats;
++        const char *stat_sep = android_prose_wrap_cols > 0
++                               && android_reflow_missile_stats ? "\n" : "  ";
++
+         description += make_stringf(
+-            "\n\nBase damage: %d  Base attack delay: %.1f"
++            "\n\nBase damage: %d%sBase attack delay: %.1f"
+             "\nThis projectile's minimum attack delay (%.1f) "
+                 "is reached at skill level %d.",
+             dam,
++            stat_sep,
+             (float) throw_delay / 10,
+             (float) FASTEST_PLAYER_THROWING_SPEED / 10,
+             target_skill / 10
+@@ -2281,13 +2316,20 @@ static string _describe_armour(const item_def &item, bool verbose, bool monster)
+         }
+         if (!monster)
+             description += "\n\n";
++        // Word wrap (Android): stack the padded stat line vertically.
++        extern int android_prose_wrap_cols;
++        extern bool android_reflow_armour_stats;
++        const bool stacked = android_prose_wrap_cols > 0
++                             && android_reflow_armour_stats;
+         if (is_shield(item))
+         {
+             description += "Base shield rating: "
+                         + to_string(property(item, PARM_AC));
+-            description += "     Encumbrance rating: "
++            description += (stacked ? "\nEncumbrance rating: "
++                                    : "     Encumbrance rating: ")
+                         + to_string(-property(item, PARM_EVASION) / 10);
+-            description += "     Max blocks/turn: "
++            description += (stacked ? "\nMax blocks/turn: "
++                                    : "     Max blocks/turn: ")
+                         + to_string(shield_block_limit(item));
+             if (is_unrandom_artefact(item, UNRAND_WARLOCK_MIRROR))
+                 description += _warlock_mirror_reflect_desc();
+@@ -2299,14 +2341,16 @@ static string _describe_armour(const item_def &item, bool verbose, bool monster)
+                         + to_string(property(item, PARM_AC));
+             if (get_armour_slot(item) == SLOT_BODY_ARMOUR)
+             {
+-                description += "       Encumbrance rating: "
++                description += (stacked ? "\nEncumbrance rating: "
++                                        : "       Encumbrance rating: ")
+                             + to_string(-evp / 10);
+             }
+             // Bardings reduce evasion by a fixed amount, and don't have any of
+             // the other effects of encumbrance.
+             else if (evp)
+             {
+-                description += "       Evasion: "
++                description += (stacked ? "\nEvasion: "
++                                        : "       Evasion: ")
+                             + to_string(evp / 30);
+             }
+         }
+@@ -4210,12 +4254,20 @@ void inscribe_item(item_def &item)
+  */
+ static string _player_spell_stats(const spell_type spell)
+ {
++    // Word wrap (Android): stack Level/School/Fail vertically instead of
++    // padding them into one 80-col line that breaks at the wrap width.
++    extern int android_prose_wrap_cols;
++    extern bool android_reflow_spell_stats;
++    const bool stacked = android_prose_wrap_cols > 0
++                         && android_reflow_spell_stats;
++
+     string description;
+     description += make_stringf("\nLevel: %d", spell_difficulty(spell));
+ 
+     const string schools = spell_schools_string(spell);
+     description +=
+-        make_stringf("        School%s: %s",
++        make_stringf("%sSchool%s: %s",
++                     stacked ? "\n" : "        ",
+                      schools.find("/") != string::npos ? "s" : "",
+                      schools.c_str());
+ 
+@@ -4239,7 +4291,8 @@ static string _player_spell_stats(const spell_type spell)
+     }
+     else
+         failure = failure_rate_to_string(raw_spell_fail(spell));
+-    description += make_stringf("        Fail: %s", failure.c_str());
++    description += make_stringf("%sFail: %s", stacked ? "\n" : "        ",
++                                failure.c_str());
+ 
+     const string damage_string = spell_damage_string(spell);
+     const string max_dam_string = spell_max_damage_string(spell);
