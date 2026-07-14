@@ -646,6 +646,13 @@ public class RegionRouter implements TerminalRenderer
 		splitRegions.add(region);
 	}
 
+	// Marks a panel as owned by one menu type; see routeCell for why.
+	public void addRegion(RegionTermView region, MenuType owner)
+	{
+		region.ownerMenuType = owner;
+		splitRegions.add(region);
+	}
+
 	public void setFullView(RegionTermView view)
 	{
 		this.fullView = view;
@@ -1793,13 +1800,32 @@ public class RegionRouter implements TerminalRenderer
 		routeCell(r, c, ch, fcolor, bcolor, extendedErase);
 	}
 
+	// Menu types that applyMode renders on a dedicated surface with fullView
+	// hidden. Mirrors applyMode's fullVisible logic.
+	private boolean menuTypeHidesFullView(MenuType t)
+	{
+		return (t == MenuType.SKILLS && skillsView != null)
+				|| ((t == MenuType.ITEMS || t == MenuType.HELP)
+					&& itemsView != null)
+				|| (t == MenuType.NEWGAME_SPECIES
+					&& newgameSpeciesContainer != null)
+				|| (t == MenuType.NEWGAME_BACKGROUND
+					&& newgameBackgroundContainer != null)
+				|| (t == MenuType.NEWGAME_WEAPON
+					&& newgameWeaponContainer != null);
+	}
+
 	// Forward one cell to every view interested in it under the CURRENT
 	// mode/menu-type/fold-anchor state. onFrame guarantees that state was
 	// recomputed from this frame's grid before any cell is routed.
 	private void routeCell(int r, int c, char ch, int fcolor, int bcolor,
 			boolean extendedErase)
 	{
-		if (fullView != null)
+		// On the transition frame fullView is still visible (applyMode hides
+		// it a vsync later); without this gate a pending draw traversal
+		// flashes the raw frame in release builds. Shadow replay repaints
+		// fullView when it next becomes visible, so nothing is missed.
+		if (fullView != null && !menuTypeHidesFullView(currentMenuType))
 			forwardToFullView(r, c, ch, fcolor, bcolor, extendedErase);
 		// Skip splitRegions during a gameplay->menu transition frame: the
 		// frame's chars belong to a menu, and forwarding them at terminal
@@ -1808,7 +1834,15 @@ public class RegionRouter implements TerminalRenderer
 		if (!skipSplitRegionsThisStorm)
 		{
 			for (RegionTermView region : splitRegions)
+			{
+				// Same transition hazard between newgame screens (overlapping
+				// terminal rects); owned panels only take cells from their
+				// own screen.
+				if (region.ownerMenuType != null
+						&& region.ownerMenuType != currentMenuType)
+					continue;
 				region.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
+			}
 		}
 
 		if (skillsView != null && currentMenuType == MenuType.SKILLS)
@@ -3016,6 +3050,9 @@ public class RegionRouter implements TerminalRenderer
 		// compression would create a phantom spacer at row 24.
 		// LEVELMAP (Shift+X) renders dungeon map content continuously
 		// across all terminal rows — no keyhelp footer to compress.
+		// NEWGAME_* run on their own panel containers; a footer change here
+		// would replay the raw frame into fullView while it's still visible
+		// on the transition frame — same flash as routeCell's gate.
 		if (detected == LayoutMode.MENU
 				&& detectedType != MenuType.ITEMS
 				&& detectedType != MenuType.HELP
@@ -3023,6 +3060,7 @@ public class RegionRouter implements TerminalRenderer
 				&& detectedType != MenuType.HISCORES
 				&& detectedType != MenuType.MORGUE
 				&& detectedType != MenuType.LEVELMAP
+				&& !menuTypeHidesFullView(detectedType)
 				&& fullView != null)
 			recomputeFullViewFooter();
 

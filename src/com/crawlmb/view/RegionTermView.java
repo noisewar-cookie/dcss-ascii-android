@@ -49,6 +49,9 @@ public class RegionTermView extends View
 	// row of the newgame sub-items col-1 cells (rows are padded with 0/2/4
 	// spaces in upstream) so all rows render flush at panel col 0.
 	private int[] rowColShift = null;
+	// Non-null on panels owned by one menu type (newgame species/background/
+	// weapon); routeCell skips them while another type is active.
+	RegionRouter.MenuType ownerMenuType = null;
 
 	Typeface tfStd;
 	Typeface tfTiny;
