@@ -206,7 +206,7 @@ portrait_levelmap_pinch_zoom_out_sensitivity=0.75
 # Shown during: any examine/describe popup regardless of entry point
 # (inventory examine, shop examine, Ctrl+X target examine, spell info, etc.)
 # Detected by the blank-row-1 CRT margin signature of show_description().
-portrait_describe_font_scale=1.55
+portrait_describe_font_scale=1.60
 portrait_describe_scrollable=true
 portrait_describe_vscrollable=true
 
