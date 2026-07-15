@@ -1,0 +1,7 @@
+Release 13 (0.34.1)
+
+New Features:
+• Additional wordwrap adjustments throughout.
+
+Bug Fixes:
+• Fixed app menu framerates.

@@ -253,15 +253,12 @@ portrait_newgame_desc_vscrollable=false
 
 # Sub-options block at the bottom (random/aptitudes/help/space/tab). The
 # upstream 2-col grid is split into two stacked panels (left col then right
-# col) so the 8 prompts read as a single vertical list. Shared with the
-# weapon-selection screen's bottom row.
+# col) so the 8 prompts read as a single vertical list.
 portrait_newgame_sub_font_scale=1.5
 portrait_newgame_sub_scrollable=true
 portrait_newgame_sub_vscrollable=false
 
-# Weapon-selection screen (portrait): main weapon list only. The bottom
-# sub-options row is governed by portrait_newgame_sub_font_scale above.
-# Detected by "choice of weapons" title-scan.
+# Weapon-selection screen (portrait): main weapon list only.
 portrait_newgame_weapon_font_scale=1.6
 portrait_newgame_weapon_scrollable=true
 portrait_newgame_weapon_vscrollable=false
