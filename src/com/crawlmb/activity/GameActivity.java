@@ -894,7 +894,7 @@ public class GameActivity extends Activity
 		LinearLayout newgameWeapon = new LinearLayout(this);
 		newgameWeapon.setOrientation(LinearLayout.VERTICAL);
 
-		RegionTermView ngwContent = makeNewgameSubView();
+		RegionTermView ngwContent = makeNewgameWeaponView();
 		RegionTermView ngwSubLeft = makeNewgameSubView();
 		RegionTermView ngwSubRight = makeNewgameSubView();
 
@@ -1158,6 +1158,21 @@ public class GameActivity extends Activity
 		v.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
 		v.setHorizontalScrollEnabled(fc.portraitNewgameSubScrollable);
 		v.setVerticalScrollEnabled(fc.portraitNewgameSubVScrollable);
+		return v;
+	}
+
+	// Main weapon-list panel on the weapon-selection screen. Router re-aims
+	// to rows 0..subItemRow x full 80 cols once the sub-items grid resolves.
+	private RegionTermView makeNewgameWeaponView()
+	{
+		FontConfig fc = FontConfig.load(getAssets());
+		RegionTermView v = new RegionTermView(this,
+				0, 0,
+				RegionRouter.NEWGAME_SUB_ROW0, RegionRouter.TERMINAL_COLS);
+		v.setFontScaleMultiplier(fc.portraitNewgameWeaponFontScale);
+		v.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
+		v.setHorizontalScrollEnabled(fc.portraitNewgameWeaponScrollable);
+		v.setVerticalScrollEnabled(fc.portraitNewgameWeaponVScrollable);
 		return v;
 	}
 

@@ -107,6 +107,11 @@ public class FontConfig
     public final float portraitNewgameSubFontScale;
     public final boolean portraitNewgameSubScrollable;
     public final boolean portraitNewgameSubVScrollable;
+    // Weapon-selection screen: main weapon list only. The bottom sub-options
+    // row on that screen shares portraitNewgameSub* above.
+    public final float portraitNewgameWeaponFontScale;
+    public final boolean portraitNewgameWeaponScrollable;
+    public final boolean portraitNewgameWeaponVScrollable;
     public final float portraitNewgameNameFontScale;
     public final boolean portraitNewgameNameScrollable;
     public final boolean portraitNewgameNameVScrollable;
@@ -203,6 +208,9 @@ public class FontConfig
         this.portraitNewgameSubFontScale         = getFloat(props, "portrait_newgame_sub_font_scale", ngDefault);
         this.portraitNewgameSubScrollable        = getBool (props, "portrait_newgame_sub_scrollable", ngHDefault);
         this.portraitNewgameSubVScrollable       = getBool (props, "portrait_newgame_sub_vscrollable", ngVDefault);
+        this.portraitNewgameWeaponFontScale      = getFloat(props, "portrait_newgame_weapon_font_scale", ngDefault);
+        this.portraitNewgameWeaponScrollable     = getBool (props, "portrait_newgame_weapon_scrollable", ngHDefault);
+        this.portraitNewgameWeaponVScrollable    = getBool (props, "portrait_newgame_weapon_vscrollable", ngVDefault);
         this.portraitNewgameNameFontScale        = getFloat(props, "portrait_newgame_name_font_scale", ngDefault);
         this.portraitNewgameNameScrollable       = getBool (props, "portrait_newgame_name_scrollable", ngHDefault);
         this.portraitNewgameNameVScrollable      = getBool (props, "portrait_newgame_name_vscrollable", ngVDefault);

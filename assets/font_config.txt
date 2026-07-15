@@ -240,31 +240,35 @@ portrait_newgame_welcome_scrollable=true
 portrait_newgame_welcome_vscrollable=false
 
 # All species/background category panels share one knob set. Each samples a
-# sub-slice of the upstream multi-column grid, but the font is sized as if
-# rendering the full 80-col terminal — so a multiplier of 1.5 here matches
-# the mainmenu glyph size.
+# sub-slice of the upstream multi-column grid.
 portrait_newgame_category_font_scale=1.6
 portrait_newgame_category_scrollable=true
 portrait_newgame_category_vscrollable=false
 
 # Description text shown above the sub-options (selected species/background
-# description). Rendered into its own full-width panel that samples the
-# rows between the category grid and the sub-options grid. Often wider than
-# the screen, so horizontal scrolling is typically wanted.
+# description).
 portrait_newgame_desc_font_scale=1.6
 portrait_newgame_desc_scrollable=true
 portrait_newgame_desc_vscrollable=false
 
 # Sub-options block at the bottom (random/aptitudes/help/space/tab). The
 # upstream 2-col grid is split into two stacked panels (left col then right
-# col) so the 8 prompts read as a single vertical list.
+# col) so the 8 prompts read as a single vertical list. Shared with the
+# weapon-selection screen's bottom row.
 portrait_newgame_sub_font_scale=1.5
 portrait_newgame_sub_scrollable=true
 portrait_newgame_sub_vscrollable=false
 
+# Weapon-selection screen (portrait): main weapon list only. The bottom
+# sub-options row is governed by portrait_newgame_sub_font_scale above.
+# Detected by "choice of weapons" title-scan.
+portrait_newgame_weapon_font_scale=1.6
+portrait_newgame_weapon_scrollable=true
+portrait_newgame_weapon_vscrollable=false
+
 # Character naming screen ("What is your name today?")
 # Shown during: the final newgame step where the player enters a name.
 # Detected by scanning for "What is your name today?" on any terminal row.
-portrait_newgame_name_font_scale=1.75
+portrait_newgame_name_font_scale=1.6
 portrait_newgame_name_scrollable=true
 portrait_newgame_name_vscrollable=true
