@@ -256,7 +256,11 @@ public class RegionRouter implements TerminalRenderer
 	private static final String NEWGAME_WELCOME_PREFIX = "Welcome";
 	private static final String NEWGAME_SPECIES_TOKEN = "species.";
 	private static final String NEWGAME_BACKGROUND_TOKEN = "background.";
-	private static final String NEWGAME_WEAPON_ANCHOR = "choice of weapons";
+	// Exact prompt from newgame.cc _prompt_weapon (line ~1849). Full string
+	// so it can't collide with in-game weapon-choice menus (Okawaru's gift
+	// uses "offers you a choice of weapons!" — different phrasing). Row
+	// position depends on the weapon-list length so we scan all rows.
+	private static final String NEWGAME_WEAPON_ANCHOR = "You have a choice of weapons.";
 
 	// Character naming screen anchor. _choose_name in newgame.cc renders
 	// "What is your name today? " via formatted_string into a popup; the
@@ -1007,7 +1011,7 @@ public class RegionRouter implements TerminalRenderer
 
 		if (subItemRow < 0 || cLeft < 0 || cMid <= cLeft)
 		{
-			ngwContentView.setRegionRows(0, TERMINAL_ROWS);
+			ngwContentView.setRegionRows(NEWGAME_WELCOME_ROW1, TERMINAL_ROWS);
 			ngwContentView.setRegionCols(0, TERMINAL_COLS);
 			ngwSubLeftView.setRegionRows(TERMINAL_ROWS, TERMINAL_ROWS);
 			ngwSubLeftView.setRegionCols(0, 0);
@@ -1018,7 +1022,7 @@ public class RegionRouter implements TerminalRenderer
 
 		int gridEnd = Math.min(subItemRow + WEAPON_SUB_GRID_ROWS, TERMINAL_ROWS);
 
-		ngwContentView.setRegionRows(0, subItemRow);
+		ngwContentView.setRegionRows(NEWGAME_WELCOME_ROW1, subItemRow);
 		ngwContentView.setRegionCols(0, TERMINAL_COLS);
 
 		ngwSubLeftView.setRegionRows(subItemRow, gridEnd);
@@ -3129,6 +3133,16 @@ public class RegionRouter implements TerminalRenderer
 	{
 		if (matchesAt(0, 0, MAINMENU_ANCHOR))
 			return MenuType.MAINMENU;
+		// Weapon popup checked FIRST: Popup::_render in CRT mode doesn't
+		// clear the screen (see ui.cc), so the background screen's "Welcome,
+		// ... background." text is still under the popup on row 0 — checking
+		// species/background before weapon would misfire to NEWGAME_BACKGROUND.
+		// The prompt is a unique string, so a whole-terminal scan is safe.
+		for (int r = 0; r < TERMINAL_ROWS; r++)
+		{
+			if (rowContains(r, NEWGAME_WEAPON_ANCHOR))
+				return MenuType.NEWGAME_WEAPON;
+		}
 		if (matchesAt(0, 0, NEWGAME_WELCOME_PREFIX))
 		{
 			if (rowContains(0, NEWGAME_SPECIES_TOKEN))
@@ -3136,11 +3150,6 @@ public class RegionRouter implements TerminalRenderer
 			if (rowContains(0, NEWGAME_BACKGROUND_TOKEN)
 					|| rowContains(1, NEWGAME_BACKGROUND_TOKEN))
 				return MenuType.NEWGAME_BACKGROUND;
-			for (int r = 1; r < 5; r++)
-			{
-				if (rowContains(r, NEWGAME_WEAPON_ANCHOR))
-					return MenuType.NEWGAME_WEAPON;
-			}
 		}
 		// High Scores menu title. Anchored here (not detectMenuType)
 		// because it's reachable pregame. Must stay after the MAINMENU

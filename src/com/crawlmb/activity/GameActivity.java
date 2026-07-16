@@ -894,10 +894,19 @@ public class GameActivity extends Activity
 		LinearLayout newgameWeapon = new LinearLayout(this);
 		newgameWeapon.setOrientation(LinearLayout.VERTICAL);
 
+		RegionTermView ngwWelcome = new RegionTermView(this,
+				RegionRouter.NEWGAME_WELCOME_ROW0, RegionRouter.NEWGAME_COL_LEFT,
+				RegionRouter.NEWGAME_WELCOME_ROW1, RegionRouter.NEWGAME_COL_FULL_END);
+		ngwWelcome.setFontScaleMultiplier(fontConfig.portraitNewgameWelcomeFontScale);
+		ngwWelcome.setHorizontalScrollEnabled(fontConfig.portraitNewgameWelcomeScrollable);
+		ngwWelcome.setVerticalScrollEnabled(fontConfig.portraitNewgameWelcomeVScrollable);
+
 		RegionTermView ngwContent = makeNewgameWeaponView();
 		RegionTermView ngwSubLeft = makeNewgameSubView();
 		RegionTermView ngwSubRight = makeNewgameSubView();
 
+		newgameWeapon.addView(ngwWelcome, new LinearLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 		newgameWeapon.addView(ngwContent, new LinearLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 		newgameWeapon.addView(ngwSubLeft, new LinearLayout.LayoutParams(
@@ -950,6 +959,7 @@ public class GameActivity extends Activity
 		router.addRegion(ngbDesc, RegionRouter.MenuType.NEWGAME_BACKGROUND);
 		router.addRegion(ngbSubLeft, RegionRouter.MenuType.NEWGAME_BACKGROUND);
 		router.addRegion(ngbSubRight, RegionRouter.MenuType.NEWGAME_BACKGROUND);
+		router.addRegion(ngwWelcome, RegionRouter.MenuType.NEWGAME_WEAPON);
 		router.addRegion(ngwContent, RegionRouter.MenuType.NEWGAME_WEAPON);
 		router.addRegion(ngwSubLeft, RegionRouter.MenuType.NEWGAME_WEAPON);
 		router.addRegion(ngwSubRight, RegionRouter.MenuType.NEWGAME_WEAPON);
@@ -1161,13 +1171,14 @@ public class GameActivity extends Activity
 		return v;
 	}
 
-	// Main weapon-list panel on the weapon-selection screen. Router re-aims
-	// to rows 0..subItemRow x full 80 cols once the sub-items grid resolves.
+	// Main weapon-list panel on the weapon-selection screen: prompt + weapon
+	// list, below the separate welcome panel. Router re-aims the bottom edge
+	// to subItemRow once the sub-items grid resolves.
 	private RegionTermView makeNewgameWeaponView()
 	{
 		FontConfig fc = FontConfig.load(getAssets());
 		RegionTermView v = new RegionTermView(this,
-				0, 0,
+				RegionRouter.NEWGAME_WELCOME_ROW1, 0,
 				RegionRouter.NEWGAME_SUB_ROW0, RegionRouter.TERMINAL_COLS);
 		v.setFontScaleMultiplier(fc.portraitNewgameWeaponFontScale);
 		v.setFontReferenceCols(RegionRouter.TERMINAL_COLS);
