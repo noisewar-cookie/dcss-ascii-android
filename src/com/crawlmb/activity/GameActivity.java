@@ -69,6 +69,7 @@ import com.crawlmb.NativeWrapper;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.WindowCompatAdapter;
+import com.crawlmb.view.GridOverlayController;
 import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
@@ -132,6 +133,11 @@ public class GameActivity extends Activity
 	// the post-return rebuildViews' first layout pass has sized the panels.
 	private boolean pendingRepositionEntry = false;
 	private RepositionController repositionController = null;
+	// Reposition Grid Overlay mode (see GridOverlayController). Requested
+	// from PreferencesActivity via the "repositionGrid" result extra;
+	// entered after a layout pass has sized the keyboard for the button bar.
+	private boolean pendingGridOverlayEntry = false;
+	private GridOverlayController gridOverlayController = null;
 	// Last bottom safe-area inset, captured by the inset listener for the
 	// reposition button bar in the no-keyboard case.
 	private int lastBottomInset = 0;
@@ -235,6 +241,8 @@ public class GameActivity extends Activity
             	}
             	if (data.getBooleanExtra("repositionUi", false))
             		pendingRepositionEntry = true;
+            	if (data.getBooleanExtra("repositionGrid", false))
+            		pendingGridOverlayEntry = true;
             }
         }
     }
@@ -425,6 +433,9 @@ public class GameActivity extends Activity
 
 			if (pendingRepositionEntry)
 				schedulePendingRepositionEntry();
+
+			if (pendingGridOverlayEntry)
+				schedulePendingGridOverlayEntry();
 		}
 	}
 
@@ -1143,6 +1154,60 @@ public class GameActivity extends Activity
 		repositionController.enter();
 	}
 
+	// Deferred entry into the grid overlay editor requested from
+	// Preferences: wait for a layout pass so the keyboard view is sized for
+	// the button bar. No router freeze needed — the mode's opaque root
+	// covers the whole screen.
+	private void schedulePendingGridOverlayEntry() {
+		pendingGridOverlayEntry = false;
+		if (screenLayout.getHeight() > 0)
+		{
+			enterGridOverlayMode();
+			return;
+		}
+		screenLayout.getViewTreeObserver().addOnGlobalLayoutListener(
+				new ViewTreeObserver.OnGlobalLayoutListener()
+				{
+					@Override
+					public void onGlobalLayout()
+					{
+						if (screenLayout.getHeight() <= 0)
+							return;
+						screenLayout.getViewTreeObserver()
+								.removeOnGlobalLayoutListener(this);
+						enterGridOverlayMode();
+					}
+				});
+	}
+
+	private void enterGridOverlayMode() {
+		if (gridOverlayController != null && gridOverlayController.isActive())
+			return;
+		gridOverlayController = new GridOverlayController(this, screenLayout,
+				portraitKeyboardView, lastBottomInset,
+				portraitFontConfig.repositionHighlightColor,
+				new GridOverlayController.Callbacks()
+				{
+					@Override
+					public void onSave(float[] lines)
+					{
+						gridOverlayController = null;
+						Preferences.setGridLines(lines);
+						// Nothing layout-visible changes — no rebuild needed.
+						restoreKeyboardAfterReload();
+					}
+
+					@Override
+					public void onExit(boolean restoreIme)
+					{
+						gridOverlayController = null;
+						if (restoreIme)
+							restoreKeyboardAfterReload();
+					}
+				});
+		gridOverlayController.enter();
+	}
+
 	private RegionTermView makeNewgameCategoryView(int row0, int col0, int row1, int col1)
 	{
 		FontConfig fc = FontConfig.load(getAssets());
@@ -1373,6 +1438,8 @@ public class GameActivity extends Activity
 		// here (the activity is going background); the next rebuild resets it.
 		if (repositionController != null && repositionController.isActive())
 			repositionController.cancel(false);
+		if (gridOverlayController != null && gridOverlayController.isActive())
+			gridOverlayController.exit(false);
 		// Drain pushes before the process can be cached and frozen
 		// (MIUI freezes within seconds; queued work would be lost).
 		// onStop runs after the next screen is visible, so the wait is
@@ -1393,6 +1460,9 @@ public class GameActivity extends Activity
 		// router before the redraw posted below can drive applyMode.
 		if (pendingRepositionEntry)
 			schedulePendingRepositionEntry();
+
+		if (pendingGridOverlayEntry)
+			schedulePendingGridOverlayEntry();
 
 		// When Android resumes the activity from the recents/task switcher,
 		// our view-tree state survives but DCSS only repaints on its own
@@ -1432,6 +1502,13 @@ public class GameActivity extends Activity
 				repositionController.cancel(true);
 			return true;
 		}
+		if (gridOverlayController != null && gridOverlayController.isActive()) {
+			if (isSystemKey(keyCode))
+				return super.onKeyDown(keyCode, event);
+			if (keyCode == KeyEvent.KEYCODE_BACK)
+				gridOverlayController.exit(true);
+			return true;
+		}
 		if (keyCode == KeyEvent.KEYCODE_BACK){
 			View transparencySliderView = findViewById(R.id.transparencySliderView);
 			if (transparencySliderView != null && transparencySliderView.getVisibility() == View.VISIBLE){
@@ -1448,6 +1525,8 @@ public class GameActivity extends Activity
 	@Override
 	public boolean onKeyUp(int keyCode, KeyEvent event) {
 		if (repositionController != null && repositionController.isActive())
+			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
+		if (gridOverlayController != null && gridOverlayController.isActive())
 			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
 		return gameKeyListener.onKeyUp(keyCode, event) || super.onKeyUp(keyCode, event);
 	}

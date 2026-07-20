@@ -290,12 +290,8 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			return false;
 		performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
 
-		int x = (int) event.getX();
-		int y = (int) event.getY();
-
-		int r, c;
-		c = (x * 3) / getWidth();
-		r = (y * 3) / getHeight();
+		int c = gridColumn(event.getX());
+		int r = gridRow(event.getY());
 
 		// On the newgame species/background screens the upstream menu is
 		// a 3-col grid but we render it as a stacked single-column list,
@@ -310,6 +306,24 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		keyListener.addDirectionKey(cellToKey((2 - r) * 3 + c + 1));
 
 		return true;
+	}
+
+	// 9-grid column/row from the user-configurable divider lines
+	// (Preferences.getGridLines, fractions of this view's bounds). When two
+	// dividers coincide the middle band is zero-width and unreachable —
+	// that's the intended 2x2 collapse.
+	private int gridColumn(float x)
+	{
+		float[] lines = Preferences.getGridLines();
+		float fx = x / getWidth();
+		return fx < lines[0] ? 0 : fx < lines[1] ? 1 : 2;
+	}
+
+	private int gridRow(float y)
+	{
+		float[] lines = Preferences.getGridLines();
+		float fy = y / getHeight();
+		return fy < lines[2] ? 0 : fy < lines[3] ? 1 : 2;
 	}
 
 	// Map a 9-grid cell (1 = bottom-left ... 9 = top-right) to its curses
@@ -363,14 +377,10 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		cancelGridHold();
 		if (!Preferences.getEnableTouch())
 			return;
-		int w = getWidth();
-		int h = getHeight();
-		if (w == 0 || h == 0)
+		if (getWidth() == 0 || getHeight() == 0)
 			return;
-		int c = ((int) event.getX() * 3) / w;
-		int r = ((int) event.getY() * 3) / h;
-		if (c < 0 || c > 2 || r < 0 || r > 2)
-			return;
+		int c = gridColumn(event.getX());
+		int r = gridRow(event.getY());
 		if (isNewgameColumnIgnored(c))
 			return;
 		int cell = (2 - r) * 3 + c + 1;

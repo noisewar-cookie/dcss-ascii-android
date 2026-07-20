@@ -52,6 +52,18 @@ final public class Preferences
 	public static final String KEY_PANELORDER = "crawl.panelorder";
 	public static final String[] PANEL_KEYS = { "map", "hud", "mlist", "msg" };
 
+	// 9-grid touch zone dividers as "v1,v2,h1,h2" — fractions of the touch
+	// area (v = vertical line x, h = horizontal line y from top). Lines may
+	// coincide (collapses the grid toward 2x2) but never cross, and stay
+	// GRID_LINE_PADDING away from the edges.
+	public static final String KEY_GRIDLINES = "crawl.gridlines";
+	// Snap step 1/36 lies on the default thirds (12/36, 24/36); padding is
+	// one snap step so the drag bounds align with the snap grid.
+	public static final float GRID_LINE_SNAP_STEP = 1f / 36f;
+	public static final float GRID_LINE_PADDING = 1f / 36f;
+	public static final float[] GRID_LINE_DEFAULTS =
+			{ 1f / 3f, 2f / 3f, 1f / 3f, 2f / 3f };
+
     private static final String KEYBOARD_LAYOUT_COUNT = "layout_count";
     public static final String KEYBOARD_LAYOUT_CURRENT = "layout_current";
     public static final String KEYBOARD_LABEL_PREFIX = "label_";
@@ -194,6 +206,63 @@ final public class Preferences
 		sharedPreferences.edit()
 				.putString(KEY_PANELORDER,
 						android.text.TextUtils.join(",", order)).apply();
+	}
+
+	// Parsed KEY_GRIDLINES cache — grid taps are a hot path; invalidated by
+	// setGridLines. Callers must not mutate the returned array.
+	private static float[] gridLinesCache = null;
+
+	// Validated grid line fractions {v1, v2, h1, h2}: ordered, within the
+	// padding bounds, else the default thirds.
+	public static float[] getGridLines()
+	{
+		if (gridLinesCache != null)
+			return gridLinesCache;
+		gridLinesCache = parseGridLines(
+				sharedPreferences.getString(KEY_GRIDLINES, ""));
+		return gridLinesCache;
+	}
+
+	public static void setGridLines(float[] lines)
+	{
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < lines.length; i++)
+		{
+			if (i > 0)
+				sb.append(',');
+			sb.append(lines[i]);
+		}
+		sharedPreferences.edit()
+				.putString(KEY_GRIDLINES, sb.toString()).apply();
+		gridLinesCache = lines.clone();
+	}
+
+	private static float[] parseGridLines(String stored)
+	{
+		if (!stored.isEmpty())
+		{
+			String[] parts = stored.split(",");
+			if (parts.length == 4)
+			{
+				float[] lines = new float[4];
+				try
+				{
+					for (int i = 0; i < 4; i++)
+						lines[i] = Float.parseFloat(parts[i]);
+					float lo = GRID_LINE_PADDING;
+					float hi = 1f - GRID_LINE_PADDING;
+					if (lines[0] >= lo && lines[0] <= lines[1]
+							&& lines[1] <= hi
+							&& lines[2] >= lo && lines[2] <= lines[3]
+							&& lines[3] <= hi)
+						return lines;
+				}
+				catch (NumberFormatException ignored)
+				{
+				}
+			}
+		}
+		return GRID_LINE_DEFAULTS.clone();
 	}
 
 	private static boolean isPanelPermutation(String[] order)

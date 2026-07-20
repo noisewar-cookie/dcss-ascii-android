@@ -91,6 +91,8 @@ public class PreferencesActivity extends PreferenceActivity implements
 
         setRepositionUiClickListener();
 
+        setRepositionGridClickListener();
+
         addBackupRestorePreferences();
 
         addCustomFolderPreferences();
@@ -675,6 +677,23 @@ public class PreferencesActivity extends PreferenceActivity implements
                     public boolean onPreferenceClick(Preference pref) {
                         Intent result = new Intent();
                         result.putExtra("repositionUi", true);
+                        setResult(RESULT_OK, result);
+                        finish();
+                        return true;
+                    }
+                });
+    }
+
+    // Returns to GameActivity, which enters the grid overlay editor on
+    // seeing the extra (see GameActivity.onActivityResult). Always enabled —
+    // the editor is a blank screen that doesn't touch the game panels.
+    private void setRepositionGridClickListener() {
+        findPreference("reposition_grid").setOnPreferenceClickListener(
+                new Preference.OnPreferenceClickListener() {
+                    @Override
+                    public boolean onPreferenceClick(Preference pref) {
+                        Intent result = new Intent();
+                        result.putExtra("repositionGrid", true);
                         setResult(RESULT_OK, result);
                         finish();
                         return true;

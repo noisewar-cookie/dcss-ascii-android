@@ -293,6 +293,10 @@
 	   android:title="Touch Direction Repeat"
 	   android:summary="Set a delay to repeat grid taps on hold."
 	   android:inputType="number" />
+	<Preference
+	   android:key="reposition_grid"
+	   android:title="@string/preferences_reposition_grid_title"
+	   android:summary="@string/preferences_reposition_grid_summary" />
 	<!--Not using this right now, but might in the future -->
 	<!--ListPreference
 	   android:title="Center screen tap"

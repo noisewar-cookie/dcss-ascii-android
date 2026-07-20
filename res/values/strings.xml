@@ -82,6 +82,8 @@
     <string name="reposition_panel_hud">HUD</string>
     <string name="reposition_panel_mlist">Enemies</string>
     <string name="reposition_panel_msg">Messages</string>
+    <string name="preferences_reposition_grid_title">Reposition Grid Overlay</string>
+    <string name="preferences_reposition_grid_summary">Drag the grid lines to reshape the touch direction zones</string>
     <string name="preferences_gameplugin_title">Selected variant</string>
     <string name="preferences_gameplugin_summary">Note that these Game settings stick to the active profile</string>
     <string name="preferences_enablevkey_title">Enable virtual keyboard</string>
