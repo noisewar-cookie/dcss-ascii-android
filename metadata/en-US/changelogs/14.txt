@@ -1,0 +1,4 @@
+Release 14 (0.34.1)
+
+New Features:
+• Added grid overlay lines repositioning.
