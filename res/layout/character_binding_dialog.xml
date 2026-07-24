@@ -3,6 +3,8 @@
     android:id="@+id/layout_root"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
     android:padding="10dp" >
     <TextView
         android:id="@android:id/message"
@@ -15,49 +17,78 @@
         android:text="@string/dialog_change_character_message" >
         <requestFocus/>
     </TextView>
-    <EditText
-        android:id="@+id/character_field"
+    <LinearLayout
+        android:id="@+id/character_row"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
         android:layout_below="@android:id/message"
-        android:gravity="center"
-        android:inputType="text"
-        android:maxLength="1"
-        android:textAppearance="?android:attr/textAppearanceLarge" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal" >
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Key: "
+            android:textAppearance="?android:attr/textAppearanceLarge" />
+        <EditText
+            android:id="@+id/character_field"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:inputType="text"
+            android:maxLength="1"
+            android:minEms="6"
+            android:textAppearance="?android:attr/textAppearanceLarge" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/longpress_row"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_below="@id/character_row"
+        android:gravity="center_vertical"
+        android:orientation="horizontal" >
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Alt: "
+            android:textAppearance="?android:attr/textAppearanceLarge" />
+        <EditText
+            android:id="@+id/longpress_field"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:inputType="text"
+            android:maxLength="1"
+            android:minEms="6"
+            android:textAppearance="?android:attr/textAppearanceLarge" />
+    </LinearLayout>
     <LinearLayout
         android:id="@+id/buttons"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/character_field"
-        android:gravity="center_vertical"
-        android:orientation="horizontal" >
+        android:layout_below="@id/longpress_row"
+        android:orientation="vertical" >
         <Button
             android:id="@+id/positiveButton"
-            android:layout_width="0dp"
-            android:text="@android:string/ok"
+            android:layout_width="fill_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1" />
+            android:text="Accept" />
         <Button
             android:id="@+id/specialButton"
-            android:layout_width="0dp"
+            android:layout_width="fill_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Special characters"
-            />
+            android:text="Special characters" />
         <Button
             android:id="@+id/revertButton"
-            android:layout_width="0dp"
+            android:layout_width="fill_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Revert"
-            />
+            android:text="Revert" />
         <Button
             android:id="@+id/negativeButton"
-            android:text="@android:string/cancel"
-            android:layout_width="0dp"
+            android:layout_width="fill_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1" />
+            android:text="@android:string/cancel" />
     </LinearLayout>
 
 </RelativeLayout>

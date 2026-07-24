@@ -40,6 +40,10 @@ public class FontConfig
     public final int portraitQuickControlsFontColor;
     // Border/highlight color of the "Reposition In-Game UI" mode.
     public final int repositionHighlightColor;
+    // Crawl keyboard long-press hint superscripts: color and opacity (0-1,
+    // absolute — independent of the keyboard transparency slider).
+    public final int keyboardHintColor;
+    public final float keyboardHintOpacity;
     public final float portraitItemsFontScale;
     public final boolean portraitItemsScrollable;
     public final boolean portraitItemsVScrollable;
@@ -147,6 +151,9 @@ public class FontConfig
         // menu prompts including "Enter your name:".
         this.portraitQuickControlsFontColor  = getColor(props, "portrait_quickcontrols_font_color", 0xFFC0C0C0);
         this.repositionHighlightColor  = getColor(props, "reposition_highlight_color", 0xFFFFFF00);
+        this.keyboardHintColor         = getColor(props, "keyboard_hint_color", 0xFFAAAAAA);
+        this.keyboardHintOpacity       = Math.max(0f, Math.min(1f,
+                getFloat(props, "keyboard_hint_opacity", 0.75f)));
         this.portraitItemsFontScale    = getFloat(props, "portrait_items_font_scale", this.portraitDefaultFontScale);
         this.portraitItemsScrollable   = getBool (props, "portrait_items_scrollable", this.portraitDefaultScrollable);
         this.portraitItemsVScrollable  = getBool (props, "portrait_items_vscrollable", false);

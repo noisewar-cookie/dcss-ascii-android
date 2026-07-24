@@ -7,12 +7,12 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.InputFilter;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -24,6 +24,7 @@ import android.widget.Toast;
 
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
+import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.keyboard.CrawlKeyboardWrapper;
 import com.crawlmb.keyboard.CrawlKeyboardWrapper.SpecialKey;
 import com.crawlmb.keyboard.KeyboardLayoutSpinnerAdapter;
@@ -41,14 +42,22 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
     private KeyboardLayoutSpinnerAdapter adapter;
     private int changingKey = -1;
     private int changingKeyIndex = -1;
+    // Pending choices in the binding dialog, committed on Accept.
+    // Re-tapping a field keeps them; only the display text clears.
+    private int pendingSpecialCode = -1;    // -1 = none
+    private String pendingMainChar = null;
+    private String pendingLongpress = null;
+    private boolean settingFieldText = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        WindowCompatAdapter.applyEdgeToEdge(this);
 
         LayoutInflater layoutInflater = LayoutInflater.from(this);
         RelativeLayout parentLayout = (RelativeLayout) layoutInflater.inflate(R.layout.custom_keyboard, null);
         setContentView(parentLayout);
+        WindowCompatAdapter.padRootForSystemBars(parentLayout);
 
         // Add keyboard
         virtualKeyboard = new CrawlKeyboardWrapper(this, this);
@@ -101,8 +110,10 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
         }
         changingKey = key;
         changingKeyIndex = keyIndex;
+        pendingSpecialCode = -1;
+        pendingMainChar = null;
+        pendingLongpress = null;
         Dialog characterBindingDialog = createCharacterBindingDialog();
-        characterBindingDialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
         characterBindingDialog.show();
     }
 
@@ -140,7 +151,7 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
         final Dialog characterBindingDialog = new Dialog(this);
         characterBindingDialog.setContentView(R.layout.character_binding_dialog);
         final char changingChar = (char) changingKey;
-        characterBindingDialog.setTitle("Changing character " + changingChar + " to...");
+        characterBindingDialog.setTitle("Custom Layout");
         final EditText characterField = (EditText) characterBindingDialog.findViewById(R.id.character_field);
         characterField.addTextChangedListener(new TextWatcher()
         {
@@ -159,7 +170,15 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
             @Override
             public void afterTextChanged(Editable s)
             {
-                characterField.selectAll();
+                if (settingFieldText)
+                {
+                    return;
+                }
+                // A typed character overrides any pending special key
+                pendingSpecialCode = -1;
+                pendingMainChar = s.length() > 0 ? s.toString() : null;
+                // Focus parks on the focusable dialog root, so the next
+                // field tap is a fresh focus gain
                 characterField.clearFocus();
                 InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
                 imm.hideSoftInputFromWindow(characterField.getWindowToken(), 0);
@@ -168,8 +187,62 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
         characterField.setOnFocusChangeListener(new View.OnFocusChangeListener() {
             @Override
             public void onFocusChange(View view, boolean isFocussed) {
+                // Clear on tap so typing never replaces text (the IME's
+                // composing state fights that); pending moves to the hint
                 if (isFocussed){
-                    characterField.selectAll();
+                    clearFieldAndShowIme(characterField);
+                }
+            }
+        });
+        final EditText longpressField = (EditText) characterBindingDialog.findViewById(R.id.longpress_field);
+        // Hints show the current bindings; typed text is the pending change
+        SpecialKey currentSpecial = SpecialKey.getCodeToKeyMap().get(changingKey);
+        characterField.setHint(currentSpecial != null
+                ? currentSpecial.toString() : String.valueOf(changingChar));
+        int currentLongpress = Preferences.getLongpressInLayout(this, virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex);
+        String altHint = "None";
+        if (currentLongpress != -1){
+            altHint = String.valueOf((char) currentLongpress);
+        }else{
+            CharSequence defaultAlt = virtualKeyboard.virtualKeyboardView.getKeyboard()
+                    .getKeys().get(changingKeyIndex).popupCharacters;
+            if (defaultAlt != null && defaultAlt.length() > 0){
+                altHint = String.valueOf(defaultAlt.charAt(0));
+            }
+        }
+        longpressField.setHint(altHint);
+        longpressField.addTextChangedListener(new TextWatcher()
+        {
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count)
+            {
+                //Not needed
+            }
+
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after)
+            {
+                //Not needed
+            }
+
+            @Override
+            public void afterTextChanged(Editable s)
+            {
+                if (settingFieldText)
+                {
+                    return;
+                }
+                pendingLongpress = s.length() > 0 ? s.toString() : null;
+                longpressField.clearFocus();
+                InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+                imm.hideSoftInputFromWindow(longpressField.getWindowToken(), 0);
+            }
+        });
+        longpressField.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View view, boolean isFocussed) {
+                if (isFocussed){
+                    clearFieldAndShowIme(longpressField);
                 }
             }
         });
@@ -179,17 +252,30 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
             @Override
             public void onClick(View v)
             {
-                if (characterField.getText().length() == 0)
+                boolean mainSet = pendingSpecialCode != -1 || pendingMainChar != null;
+                if (!mainSet && pendingLongpress == null)
                 {
                     Toast.makeText(CustomKeyboardActivity.this, R.string.please_select_a_character, Toast.LENGTH_SHORT).show();
                     return;
                 }
 
-                Editable bindChar = characterField.getText();
-                char code = bindChar.charAt(0);
-                String label = String.valueOf(code);
+                String label = null;
+                if (pendingSpecialCode != -1)
+                {
+                    label = SpecialKey.getCodeToKeyMap().get(pendingSpecialCode).toString();
+                    Preferences.addKeybindingToLayout(v.getContext(), virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex, pendingSpecialCode, null);
+                }
+                else if (pendingMainChar != null)
+                {
+                    label = pendingMainChar;
+                    Preferences.addKeybindingToLayout(v.getContext(), virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex, pendingMainChar.charAt(0), pendingMainChar);
+                }
 
-                Preferences.addKeybindingToLayout(v.getContext(), virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex , code, label);
+                // No pending = no change; a longpress is only removed by Revert
+                if (pendingLongpress != null)
+                {
+                    Preferences.setLongpressInLayout(v.getContext(), virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex, pendingLongpress.charAt(0));
+                }
 
                 if (Preferences.getLayoutCount() == 0){
                     Preferences.setCustomLayoutCount(1);
@@ -197,7 +283,14 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
                 Preferences.setCurrentKeyboardLayout(1);
                 characterBindingDialog.dismiss();
                 setViews();
-                Toast.makeText(v.getContext(), "Set character " + changingChar + " to " + label, Toast.LENGTH_SHORT).show();
+                if (mainSet)
+                {
+                    Toast.makeText(v.getContext(), "Set character " + changingChar + " to " + label, Toast.LENGTH_SHORT).show();
+                }
+                else
+                {
+                    Toast.makeText(v.getContext(), "Set longpress for " + changingChar + " to " + pendingLongpress, Toast.LENGTH_SHORT).show();
+                }
 
             }
         });
@@ -224,8 +317,7 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
         specialButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                characterBindingDialog.dismiss();
-                showGetSpecialCharacterDialog();
+                showGetSpecialCharacterDialog(characterField);
             }
         });
         //TODO: Have a "revert to default" button
@@ -234,22 +326,53 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
         return characterBindingDialog;
     }
 
-    private void showGetSpecialCharacterDialog()
+    private void showGetSpecialCharacterDialog(final EditText characterField)
     {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setAdapter(new ArrayAdapter<SpecialKey>(getBaseContext(), R.layout.simple_list_item_black, SpecialKey.values()), new DialogInterface.OnClickListener()
         {
             public void onClick(DialogInterface dialog, int which)
             {
-                int code = SpecialKey.values()[which].getCode();
-                Preferences.addKeybindingToLayout(CustomKeyboardActivity.this, virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex, code, null);
-                setViews();
+                SpecialKey specialKey = SpecialKey.values()[which];
+                pendingSpecialCode = specialKey.getCode();
+                pendingMainChar = null;
+                setFieldText(characterField, specialKey.toString());
             }
         });
         builder.setNegativeButton(android.R.string.cancel, null);
-        char changingChar = (char) changingKey;
-        builder.setTitle("Changing character " + changingChar + " to...");
+        builder.setTitle("Custom Layout");
         builder.show();
+    }
+
+    // Clearing text during the focus-granting touch makes TextView ignore
+    // the tap's ACTION_UP — the step that shows the IME — so defer the clear
+    // and request the IME explicitly.
+    private void clearFieldAndShowIme(final EditText field)
+    {
+        field.post(new Runnable() {
+            @Override
+            public void run() {
+                // The pending choice stays visible as the hint
+                if (field.getText().length() > 0){
+                    field.setHint(field.getText().toString());
+                }
+                setFieldText(field, "");
+                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                imm.showSoftInput(field, 0);
+            }
+        });
+    }
+
+    // Set field text programmatically, bypassing the maxLength=1 filter
+    // (special key names are longer) and the user-typing watcher.
+    private void setFieldText(EditText field, String text)
+    {
+        settingFieldText = true;
+        InputFilter[] filters = field.getFilters();
+        field.setFilters(new InputFilter[0]);
+        field.setText(text);
+        field.setFilters(filters);
+        settingFieldText = false;
     }
 
     @Override

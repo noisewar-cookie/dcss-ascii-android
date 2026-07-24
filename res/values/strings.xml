@@ -222,7 +222,7 @@
     <string name="custom_layout">CUSTOM</string>
     <string name="layout_prefix">"Layout "</string>
     <string name="please_select_a_character">Please select a character</string>
-    <string name="dialog_change_character_message">Choose a character to change the key to</string>
+    <string name="dialog_change_character_message">Choose A New Key</string>
     <string name="transparency_slider_title">Drag to set transparency</string>
 
 

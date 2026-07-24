@@ -65,11 +65,12 @@
      </Row>
     
     <Row  android:rowEdgeFlags="bottom">
-        <Key android:codes="-6" android:keyLabel="^X" 
-                android:keyWidth="20%p" android:keyEdgeFlags="left"/>
-        <Key android:codes="-2" android:keyLabel="ABC" android:keyWidth="20%p" />
+        <Key android:codes="-6" android:keyIcon="@drawable/sym_keyboard_control"
+                android:keyWidth="15%p" android:keyEdgeFlags="left"/>
+        <Key android:codes="-2" android:keyLabel="ABC" android:keyWidth="15%p" />
 		<Key android:codes="63" android:keyLabel="\?"/>
         <Key android:codes="44" android:keyLabel=","/>
+        <Key android:codes="43" android:keyLabel="+"/>
         <Key android:codes="45" android:keyLabel="-"/>
         <Key android:codes="48" android:keyLabel="0" />
         <Key android:codes="13" android:keyIcon="@drawable/sym_keyboard_return"

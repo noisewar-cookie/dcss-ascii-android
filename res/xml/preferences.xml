@@ -270,6 +270,7 @@
           android:title="Customize keyboard"
           android:summary="Change the keys on the on-screen keyboard"
           android:key="custom_keyboard"/>
+	<!-- Keyboard pickers hidden; CrawlKeyboardView is the only keyboard.
 	<ListPreference
 	   android:key="crawl.portraitkb"
 	   android:title="@string/preferences_portraitkb_title"
@@ -277,7 +278,6 @@
 	   android:entries="@array/virtualKeyboards"
 	   android:entryValues="@array/virtualKeyboardValues"
 	   android:defaultValue="@string/portraitkb.default"/>
-	<!-- Landscape keyboard picker hidden; portrait-only for now.
 	<ListPreference
 	   android:key="crawl.landscapekb"
 	   android:title="@string/preferences_landscapekb_title"

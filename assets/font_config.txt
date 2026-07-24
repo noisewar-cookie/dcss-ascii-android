@@ -66,6 +66,14 @@ portrait_quickcontrols_font_color=8f5630
 # Formats: RRGGBB, #RRGGBB, 0xRRGGBB, or 8-digit AARRGGBB.
 reposition_highlight_color=FFFF00
 
+# Crawl keyboard: long-press hint superscripts (the small character in the
+# top-right corner of a key showing its long-press alternative).
+# Color formats: RRGGBB, #RRGGBB, 0xRRGGBB, or 8-digit AARRGGBB.
+# Opacity is 0.0-1.0, absolute — independent of the keyboard transparency
+# slider so hints stay readable on a transparent keyboard.
+keyboard_hint_color=AAAAAA
+keyboard_hint_opacity=0.75
+
 # Portrait: map panel
 # Shown during: gameplay — top portion, dungeon viewport
 # Terminal region: 37 cols x 17 rows  (terminal cols 0-36, rows 0-16)

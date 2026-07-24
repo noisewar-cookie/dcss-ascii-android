@@ -7,6 +7,9 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.app.AlertDialog;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import com.crawlmb.keyboard.CrawlKeyboardWrapper.KeyboardType;
 import com.crawlmb.keymap.KeyMapper;
 
@@ -68,6 +71,11 @@ final public class Preferences
     public static final String KEYBOARD_LAYOUT_CURRENT = "layout_current";
     public static final String KEYBOARD_LABEL_PREFIX = "label_";
     public static final String KEYBOARD_CODE_PREFIX = "code_";
+    public static final String KEYBOARD_LONGPRESS_PREFIX = "longpress_";
+    // Version of the built-in key layouts the stored remaps were written
+    // against. Bumped when keys are inserted/removed so index-keyed remaps
+    // can be migrated. Absent = 1 (pre-insertion layouts).
+    private static final String KEYBOARD_REMAP_VERSION = "keyboard_remap_version";
 
 	private static final String KEY_HAPTICFEEDBACKENABLED = "crawl.hapticfeedbackenabled";
 	private static final String KEY_KEYBOARDARROWSENABLED = "crawl.keyboardarrowsenabled";
@@ -481,6 +489,91 @@ final public class Preferences
         editor.apply();
     }
 
+    public static void setLongpressInLayout(Context context, KeyboardType keyboardType, int keyIndex, int code){
+        String sharedPreferenceName = keyboardType.name() + "_1"; // Change this if we're using multiple layouts
+        SharedPreferences sharedPreferences = context.getSharedPreferences(sharedPreferenceName, 0);
+        sharedPreferences.edit().putInt(KEYBOARD_LONGPRESS_PREFIX + keyIndex, code).apply();
+    }
+
+    // Custom longpress code for a key in the custom layout, or -1 if none.
+    public static int getLongpressInLayout(Context context, KeyboardType keyboardType, int keyIndex){
+        String sharedPreferenceName = keyboardType.name() + "_1"; // Change this if we're using multiple layouts
+        SharedPreferences sharedPreferences = context.getSharedPreferences(sharedPreferenceName, 0);
+        return sharedPreferences.getInt(KEYBOARD_LONGPRESS_PREFIX + keyIndex, -1);
+    }
+
+    // Layout v2 inserted "," at QWERTY index 31 and "+" at SYMBOLS index
+    // 34, shifting later key indices up by one; shift stored remaps to
+    // match. Runs once; safe on fresh installs (empty remap files).
+    public static void migrateKeyboardRemaps(Context context){
+        if (sharedPreferences.getInt(KEYBOARD_REMAP_VERSION, 1) >= 2){
+            return;
+        }
+        shiftRemapIndices(context, KeyboardType.QWERTY, 31);
+        shiftRemapIndices(context, KeyboardType.SYMBOLS, 34);
+        sharedPreferences.edit().putInt(KEYBOARD_REMAP_VERSION, 2).apply();
+    }
+
+    // Moves every remap entry with index >= insertIndex up by one. Final
+    // state is computed before writing so overlapping old/new indices
+    // (code_32 removed as old, rewritten as new) can't clobber each other.
+    private static void shiftRemapIndices(Context context, KeyboardType keyboardType, int insertIndex){
+        SharedPreferences prefs = getKeyboardPreferences(context, 1, keyboardType);
+        Map<String, ?> all = prefs.getAll();
+        Map<String, Object> moved = new HashMap<>();
+        for (Map.Entry<String, ?> entry : all.entrySet()){
+            Integer index = remapEntryIndex(entry.getKey());
+            if (index == null || index < insertIndex){
+                continue;
+            }
+            String prefix = remapEntryPrefix(entry.getKey());
+            moved.put(prefix + (index + 1), entry.getValue());
+        }
+        if (moved.isEmpty()){
+            return;
+        }
+        SharedPreferences.Editor editor = prefs.edit();
+        for (String key : all.keySet()){
+            Integer index = remapEntryIndex(key);
+            if (index != null && index >= insertIndex && !moved.containsKey(key)){
+                editor.remove(key);
+            }
+        }
+        for (Map.Entry<String, Object> entry : moved.entrySet()){
+            if (entry.getValue() instanceof Integer){
+                editor.putInt(entry.getKey(), (Integer) entry.getValue());
+            }else if (entry.getValue() instanceof String){
+                editor.putString(entry.getKey(), (String) entry.getValue());
+            }
+        }
+        editor.apply();
+    }
+
+    private static String remapEntryPrefix(String preferenceKey){
+        if (preferenceKey.startsWith(KEYBOARD_CODE_PREFIX)){
+            return KEYBOARD_CODE_PREFIX;
+        }
+        if (preferenceKey.startsWith(KEYBOARD_LABEL_PREFIX)){
+            return KEYBOARD_LABEL_PREFIX;
+        }
+        if (preferenceKey.startsWith(KEYBOARD_LONGPRESS_PREFIX)){
+            return KEYBOARD_LONGPRESS_PREFIX;
+        }
+        return null;
+    }
+
+    private static Integer remapEntryIndex(String preferenceKey){
+        String prefix = remapEntryPrefix(preferenceKey);
+        if (prefix == null){
+            return null;
+        }
+        try{
+            return Integer.parseInt(preferenceKey.substring(prefix.length()));
+        }catch (NumberFormatException e){
+            return null;
+        }
+    }
+
     public static void clearKeybindingInLayout(Context context, KeyboardType keyboardType, int keyIndex){
         String sharedPreferenceName = keyboardType.name() + "_1"; // Change this if we're using multiple layouts
         SharedPreferences sharedPreferences = context.getSharedPreferences(sharedPreferenceName, 0);
@@ -492,6 +585,8 @@ final public class Preferences
 
         String labelPreferenceName = KEYBOARD_LABEL_PREFIX + keyIndex;
         editor.remove(labelPreferenceName);
+
+        editor.remove(KEYBOARD_LONGPRESS_PREFIX + keyIndex);
 
         editor.apply();
     }

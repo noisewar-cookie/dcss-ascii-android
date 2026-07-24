@@ -52,6 +52,7 @@ import android.widget.PopupWindow;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
+import com.crawlmb.FontConfig;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.keyboard.CrawlKeyboardWrapper.SpecialKey;
@@ -150,6 +151,8 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
     private int mLabelTextSize;
     private int mKeyTextSize;
     private int mKeyTextColor;
+    private int mKeyHintColor = 0xFFAAAAAA;
+    private float mKeyHintAlphaScale = 0.75f;
     private float mShadowRadius;
     private int mShadowColor;
     private float mBackgroundDimAmount;
@@ -217,6 +220,11 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
     private int mPopupX;
     private int mPopupY;
     private int mRepeatKeyIndex = NOT_A_KEY;
+    private boolean mAltArmed;
+    private int mAltKeyIndex = NOT_A_KEY;
+    private int mAltCode = -1;
+    private PopupWindow mAltPopup;
+    private TextView mAltPopupText;
     private int mPopupLayout;
     private boolean mAbortKey;
     private Key mInvalidatedKey;
@@ -276,7 +284,9 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                     }
                     break;
                 case MSG_LONGPRESS:
-                    openPopupIfRequired((MotionEvent) msg.obj);
+                    if (!armLongPressAlt()) {
+                        openPopupIfRequired((MotionEvent) msg.obj);
+                    }
                     break;
             }
         }
@@ -301,6 +311,10 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
         int keyTextSize = 0;
 
         keyAlphaLevel = Preferences.getKeyboardTransparency();
+
+        FontConfig fontConfig = FontConfig.load(context.getAssets());
+        mKeyHintColor = fontConfig.keyboardHintColor;
+        mKeyHintAlphaScale = fontConfig.keyboardHintOpacity;
 
         int n = a.getIndexCount();
         
@@ -854,6 +868,28 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
             } else if (key.icon != null) {
                 setKeyDrawable(canvas, padding, key, key.icon);
             }
+            // Corner hint showing the long-press alternative character
+            // (custom-layout remap first, then android:popupCharacters)
+            int altCode = -1;
+            if (currentKeyboardPreferences != null) {
+                altCode = currentKeyboardPreferences.getInt(
+                        Preferences.KEYBOARD_LONGPRESS_PREFIX + i, -1);
+            }
+            if (altCode == -1 && key.popupCharacters != null
+                    && key.popupCharacters.length() > 0) {
+                altCode = key.popupCharacters.charAt(0);
+            }
+            if (altCode != -1 && !key.repeatable) {
+                float hintSize = mKeyTextSize * 0.5f;
+                paint.setTextSize(hintSize);
+                paint.setTypeface(Typeface.DEFAULT);
+                paint.setColor(mKeyHintColor);
+                paint.setAlpha((int) (255 * mKeyHintAlphaScale));
+                canvas.drawText(String.valueOf((char) altCode),
+                        key.width - padding.right - hintSize * 0.9f + 8,
+                        padding.top + hintSize * 1.3f - 8, paint);
+                paint.setColor(mKeyTextColor);
+            }
             canvas.translate(-key.x - kbdPaddingLeft, -key.y - kbdPaddingTop);
         }
         mInvalidatedKey = null;
@@ -1143,6 +1179,91 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                 key.x + key.width + getPaddingLeft(), key.y + key.height + getPaddingTop());
     }
 
+    // Long-press alt: armed at the long-press timeout, committed on
+    // release (Gboard-style). Repeatable keys keep hold-to-repeat.
+    private boolean armLongPressAlt() {
+        if (mCurrentKey < 0 || mCurrentKey >= mKeys.length) {
+            return false;
+        }
+        Key key = mKeys[mCurrentKey];
+        int altCode = getAltCode(mCurrentKey);
+        if (key.repeatable || altCode == -1) {
+            return false;
+        }
+        mAltArmed = true;
+        mAltKeyIndex = mCurrentKey;
+        mAltCode = altCode;
+        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        showAltPopup(key, altCode);
+        return true;
+    }
+
+    // Effective long-press alt for a key: custom-layout remap first, then
+    // the default from android:popupCharacters. -1 = none.
+    private int getAltCode(int index) {
+        SharedPreferences prefs = Preferences.getCurrentKeyboardPreferences(getContext(), keyboardType);
+        if (prefs != null) {
+            int code = prefs.getInt(Preferences.KEYBOARD_LONGPRESS_PREFIX + index, -1);
+            if (code != -1) {
+                return code;
+            }
+        }
+        Key key = mKeys[index];
+        if (key.popupCharacters != null && key.popupCharacters.length() > 0) {
+            return key.popupCharacters.charAt(0);
+        }
+        return -1;
+    }
+
+    // Key-sized popup above the key showing the alt to be committed.
+    // Opaque regardless of the transparency slider — it's a confirmation,
+    // not part of the key grid.
+    private void showAltPopup(Key key, int altCode) {
+        if (mAltPopup == null) {
+            mAltPopupText = new TextView(getContext());
+            mAltPopupText.setBackgroundDrawable(
+                    getResources().getDrawable(R.drawable.btn_keyboard_key_ics));
+            mAltPopupText.setTextColor(mKeyTextColor);
+            mAltPopupText.setTypeface(Typeface.DEFAULT_BOLD);
+            mAltPopupText.setGravity(Gravity.CENTER);
+            mAltPopup = new PopupWindow(getContext());
+            mAltPopup.setBackgroundDrawable(null);
+            mAltPopup.setContentView(mAltPopupText);
+            mAltPopup.setTouchable(false);
+        }
+        mAltPopupText.setTextSize(TypedValue.COMPLEX_UNIT_PX, mKeyTextSize * 1.2f);
+        mAltPopupText.setText(String.valueOf((char) altCode));
+        int popupW = key.width;
+        int popupH = key.height;
+        int[] offset = new int[2];
+        getLocationInWindow(offset);
+        // Bottom edge at the key's top, horizontally centered on the key's
+        // right edge; clamped so edge keys stay on screen.
+        int x = offset[0] + getPaddingLeft() + key.x + key.width - popupW / 2;
+        int y = offset[1] + getPaddingTop() + key.y - popupH;
+        x = Math.max(offset[0], Math.min(x, offset[0] + getWidth() - popupW));
+        mAltPopup.setWidth(popupW);
+        mAltPopup.setHeight(popupH);
+        if (mAltPopup.isShowing()) {
+            mAltPopup.update(x, y, popupW, popupH);
+        } else {
+            mAltPopup.showAtLocation(mPopupParent, Gravity.NO_GRAVITY, x, y);
+        }
+    }
+
+    private void dismissAltPopup() {
+        if (mAltPopup != null && mAltPopup.isShowing()) {
+            mAltPopup.dismiss();
+        }
+    }
+
+    // keyIndex NOT_A_KEY: alt characters bypass the per-key remap and are
+    // ignored by the CustomKeyboardActivity rebind flow.
+    private void sendLongPressAlt() {
+        mKeyboardActionListener.onKey(NOT_A_KEY, mAltCode, null);
+        mKeyboardActionListener.onRelease(mAltCode);
+    }
+
     private boolean openPopupIfRequired(MotionEvent me) {
         // Check if we have a popup layout specified first.
         if (mPopupLayout == 0) {
@@ -1324,6 +1445,9 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
             case MotionEvent.ACTION_DOWN:
             	performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 mAbortKey = false;
+                mAltArmed = false;
+                mAltKeyIndex = NOT_A_KEY;
+                dismissAltPopup();
                 mStartX = touchX;
                 mStartY = touchY;
                 mLastCodeX = touchX;
@@ -1375,6 +1499,12 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                                     mCurrentKeyTime + eventTime - mLastMoveTime;
                             mCurrentKey = keyIndex;
                             mCurrentKeyTime = 0;
+                            // Sliding off an armed key cancels the alt
+                            if (mAltArmed) {
+                                mAltArmed = false;
+                                mAltKeyIndex = NOT_A_KEY;
+                                dismissAltPopup();
+                            }
                         }
                     }
                 }
@@ -1412,8 +1542,15 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                 Arrays.fill(mKeyIndices, NOT_A_KEY);
                 // If we're not on a repeating key (which sends on a DOWN event)
                 if (mRepeatKeyIndex == NOT_A_KEY && !mMiniKeyboardOnScreen && !mAbortKey) {
-                    detectAndSendKey(mCurrentKey, touchX, touchY, eventTime);
+                    if (mAltArmed && mCurrentKey == mAltKeyIndex) {
+                        sendLongPressAlt();
+                    } else {
+                        detectAndSendKey(mCurrentKey, touchX, touchY, eventTime);
+                    }
                 }
+                mAltArmed = false;
+                mAltKeyIndex = NOT_A_KEY;
+                dismissAltPopup();
                 invalidateKey(keyIndex);
                 mRepeatKeyIndex = NOT_A_KEY;
                 break;
@@ -1421,6 +1558,9 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                 removeMessages();
                 dismissPopupKeyboard();
                 mAbortKey = true;
+                mAltArmed = false;
+                mAltKeyIndex = NOT_A_KEY;
+                dismissAltPopup();
                 showPreview(NOT_A_KEY);
                 invalidateKey(mCurrentKey);
                 break;
@@ -1456,6 +1596,7 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
         if (mPreviewPopup.isShowing()) {
             mPreviewPopup.dismiss();
         }
+        dismissAltPopup();
         removeMessages();
         
         dismissPopupKeyboard();

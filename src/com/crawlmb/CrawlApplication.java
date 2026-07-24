@@ -14,6 +14,7 @@ public class CrawlApplication extends Application
 
 		appContext = getApplicationContext();
 		Preferences.init(getResources(), getSharedPreferences(Preferences.NAME, MODE_PRIVATE));
+		Preferences.migrateKeyboardRemaps(this);
 	}
 
 	// For native up-calls (NativeWrapper.notifyGameSaved) that arrive on
