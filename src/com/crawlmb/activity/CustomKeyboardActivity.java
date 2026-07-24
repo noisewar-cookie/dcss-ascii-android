@@ -61,6 +61,8 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
 
         // Add keyboard
         virtualKeyboard = new CrawlKeyboardWrapper(this, this);
+        // Show longpress alt assignments here even if the user disabled them
+        virtualKeyboard.virtualKeyboardView.setForceAltEnabled(true);
         parentLayout.addView(virtualKeyboard.virtualKeyboardView);
 
         View buttons = layoutInflater.inflate(R.layout.custom_keyboard_options, null);

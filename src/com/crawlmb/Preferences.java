@@ -79,6 +79,7 @@ final public class Preferences
 
 	private static final String KEY_HAPTICFEEDBACKENABLED = "crawl.hapticfeedbackenabled";
 	private static final String KEY_KEYBOARDARROWSENABLED = "crawl.keyboardarrowsenabled";
+	private static final String KEY_LONGPRESSENABLED = "crawl.longpressenabled";
 	private static final String KEY_TOUCHDIRECTIONREPEAT = "crawl.touchdirectionrepeat";
 
     private static SharedPreferences sharedPreferences;
@@ -424,6 +425,10 @@ final public class Preferences
 
 	public static boolean getKeyboardArrowsEnabled(){
 		return sharedPreferences.getBoolean(KEY_KEYBOARDARROWSENABLED, true);
+	}
+
+	public static boolean getLongpressAltEnabled(){
+		return sharedPreferences.getBoolean(KEY_LONGPRESSENABLED, true);
 	}
 
 	// Repeat interval (ms) for held 9-grid direction taps. 0 disables the

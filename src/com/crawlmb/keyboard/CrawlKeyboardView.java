@@ -223,6 +223,7 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
     private boolean mAltArmed;
     private int mAltKeyIndex = NOT_A_KEY;
     private int mAltCode = -1;
+    private boolean mForceAltEnabled;
     private PopupWindow mAltPopup;
     private TextView mAltPopupText;
     private int mPopupLayout;
@@ -801,6 +802,7 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
         final int keyCount = keys.length;
 
         SharedPreferences currentKeyboardPreferences = Preferences.getCurrentKeyboardPreferences(getContext(), keyboardType);
+        final boolean altKeysEnabled = isAltEnabled();
         for (int i = 0; i < keyCount; i++) {
             final Key key = keys[i];
             if (drawSingleKey && invalidKey != key) {
@@ -871,11 +873,11 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
             // Corner hint showing the long-press alternative character
             // (custom-layout remap first, then android:popupCharacters)
             int altCode = -1;
-            if (currentKeyboardPreferences != null) {
+            if (altKeysEnabled && currentKeyboardPreferences != null) {
                 altCode = currentKeyboardPreferences.getInt(
                         Preferences.KEYBOARD_LONGPRESS_PREFIX + i, -1);
             }
-            if (altCode == -1 && key.popupCharacters != null
+            if (altKeysEnabled && altCode == -1 && key.popupCharacters != null
                     && key.popupCharacters.length() > 0) {
                 altCode = key.popupCharacters.charAt(0);
             }
@@ -1179,10 +1181,20 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                 key.x + key.width + getPaddingLeft(), key.y + key.height + getPaddingTop());
     }
 
+    // Toggle longpress on override while customizing keyboard.
+    public void setForceAltEnabled(boolean force) {
+        mForceAltEnabled = force;
+        invalidateAllKeys();
+    }
+
+    private boolean isAltEnabled() {
+        return mForceAltEnabled || Preferences.getLongpressAltEnabled();
+    }
+
     // Long-press alt: armed at the long-press timeout, committed on
     // release (Gboard-style). Repeatable keys keep hold-to-repeat.
     private boolean armLongPressAlt() {
-        if (mCurrentKey < 0 || mCurrentKey >= mKeys.length) {
+        if (!isAltEnabled() || mCurrentKey < 0 || mCurrentKey >= mKeys.length) {
             return false;
         }
         Key key = mKeys[mCurrentKey];
