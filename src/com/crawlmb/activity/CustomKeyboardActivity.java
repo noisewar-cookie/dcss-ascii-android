@@ -9,15 +9,20 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.TextWatcher;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.Spinner;
 import android.widget.Toast;
@@ -47,6 +52,9 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
     private int pendingSpecialCode = -1;    // -1 = none
     private String pendingMainChar = null;
     private String pendingLongpress = null;
+    // Ctrl ticks; only letters can be Ctrl chords, always off on dialog open
+    private boolean pendingMainCtrl = false;
+    private boolean pendingLongpressCtrl = false;
     private boolean settingFieldText = false;
 
     @Override
@@ -115,6 +123,8 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
         pendingSpecialCode = -1;
         pendingMainChar = null;
         pendingLongpress = null;
+        pendingMainCtrl = false;
+        pendingLongpressCtrl = false;
         Dialog characterBindingDialog = createCharacterBindingDialog();
         characterBindingDialog.show();
     }
@@ -151,10 +161,23 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
     private Dialog createCharacterBindingDialog()
     {
         final Dialog characterBindingDialog = new Dialog(this);
+        characterBindingDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         characterBindingDialog.setContentView(R.layout.character_binding_dialog);
-        final char changingChar = (char) changingKey;
-        characterBindingDialog.setTitle("Custom Layout");
+        // Top-anchor the window and ignore the IME so opening/closing the
+        // soft keyboard never shifts the dialog around
+        Window window = characterBindingDialog.getWindow();
+        if (window != null)
+        {
+            window.setGravity(Gravity.TOP);
+            WindowManager.LayoutParams attrs = window.getAttributes();
+            attrs.y = Math.round(40 * getResources().getDisplayMetrics().density);
+            window.setAttributes(attrs);
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        }
         final EditText characterField = (EditText) characterBindingDialog.findViewById(R.id.character_field);
+        final EditText longpressField = (EditText) characterBindingDialog.findViewById(R.id.longpress_field);
+        final ImageView mainCtrlTick = (ImageView) characterBindingDialog.findViewById(R.id.character_ctrl_tick);
+        final ImageView altCtrlTick = (ImageView) characterBindingDialog.findViewById(R.id.longpress_ctrl_tick);
         characterField.addTextChangedListener(new TextWatcher()
         {
             @Override
@@ -179,6 +202,28 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
                 // A typed character overrides any pending special key
                 pendingSpecialCode = -1;
                 pendingMainChar = s.length() > 0 ? s.toString() : null;
+                if (pendingMainChar != null && pendingMainCtrl)
+                {
+                    if (isCtrlPairable(pendingMainChar.charAt(0)))
+                    {
+                        // Editing the Editable inside afterTextChanged fights
+                        // the IME; post the "Ctrl + X" display rewrite instead
+                        characterField.post(new Runnable()
+                        {
+                            @Override
+                            public void run()
+                            {
+                                setFieldText(characterField, ctrlDisplay(pendingMainChar));
+                            }
+                        });
+                    }
+                    else
+                    {
+                        pendingMainCtrl = false;
+                    }
+                }
+                updateCtrlTick(mainCtrlTick, pendingMainCtrl, isMainCtrlAllowed());
+                updateFieldTextSize(characterField);
                 // Focus parks on the focusable dialog root, so the next
                 // field tap is a fresh focus gain
                 characterField.clearFocus();
@@ -196,15 +241,14 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
                 }
             }
         });
-        final EditText longpressField = (EditText) characterBindingDialog.findViewById(R.id.longpress_field);
         // Hints show the current bindings; typed text is the pending change
         SpecialKey currentSpecial = SpecialKey.getCodeToKeyMap().get(changingKey);
         characterField.setHint(currentSpecial != null
-                ? currentSpecial.toString() : String.valueOf(changingChar));
+                ? currentSpecial.toString() : formatCode(changingKey));
         int currentLongpress = Preferences.getLongpressInLayout(this, virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex);
         String altHint = "None";
         if (currentLongpress != -1){
-            altHint = String.valueOf((char) currentLongpress);
+            altHint = formatCode(currentLongpress);
         }else{
             CharSequence defaultAlt = virtualKeyboard.virtualKeyboardView.getKeyboard()
                     .getKeys().get(changingKeyIndex).popupCharacters;
@@ -213,6 +257,38 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
             }
         }
         longpressField.setHint(altHint);
+        updateFieldTextSize(characterField);
+        updateFieldTextSize(longpressField);
+        updateCtrlTick(mainCtrlTick, false, true);
+        updateCtrlTick(altCtrlTick, false, true);
+        mainCtrlTick.setOnClickListener(new OnClickListener()
+        {
+            @Override
+            public void onClick(View view)
+            {
+                pendingMainCtrl = !pendingMainCtrl;
+                updateCtrlTick(mainCtrlTick, pendingMainCtrl, isMainCtrlAllowed());
+                if (pendingMainChar != null)
+                {
+                    showPendingDisplay(characterField, pendingMainCtrl
+                            ? ctrlDisplay(pendingMainChar) : pendingMainChar);
+                }
+            }
+        });
+        altCtrlTick.setOnClickListener(new OnClickListener()
+        {
+            @Override
+            public void onClick(View view)
+            {
+                pendingLongpressCtrl = !pendingLongpressCtrl;
+                updateCtrlTick(altCtrlTick, pendingLongpressCtrl, isAltCtrlAllowed());
+                if (pendingLongpress != null)
+                {
+                    showPendingDisplay(longpressField, pendingLongpressCtrl
+                            ? ctrlDisplay(pendingLongpress) : pendingLongpress);
+                }
+            }
+        });
         longpressField.addTextChangedListener(new TextWatcher()
         {
             @Override
@@ -235,6 +311,26 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
                     return;
                 }
                 pendingLongpress = s.length() > 0 ? s.toString() : null;
+                if (pendingLongpress != null && pendingLongpressCtrl)
+                {
+                    if (isCtrlPairable(pendingLongpress.charAt(0)))
+                    {
+                        longpressField.post(new Runnable()
+                        {
+                            @Override
+                            public void run()
+                            {
+                                setFieldText(longpressField, ctrlDisplay(pendingLongpress));
+                            }
+                        });
+                    }
+                    else
+                    {
+                        pendingLongpressCtrl = false;
+                    }
+                }
+                updateCtrlTick(altCtrlTick, pendingLongpressCtrl, isAltCtrlAllowed());
+                updateFieldTextSize(longpressField);
                 longpressField.clearFocus();
                 InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
                 imm.hideSoftInputFromWindow(longpressField.getWindowToken(), 0);
@@ -269,14 +365,36 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
                 }
                 else if (pendingMainChar != null)
                 {
-                    label = pendingMainChar;
-                    Preferences.addKeybindingToLayout(v.getContext(), virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex, pendingMainChar.charAt(0), pendingMainChar);
+                    char mainChar = pendingMainChar.charAt(0);
+                    if (pendingMainCtrl && isCtrlPairable(mainChar))
+                    {
+                        // Key caps use compact lowercase ^x (fits better);
+                        // dialog fields keep "Ctrl + X"
+                        label = ctrlDisplay(pendingMainChar);
+                        Preferences.addKeybindingToLayout(v.getContext(), virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex,
+                                Character.toLowerCase(mainChar) - 'a' + 1,
+                                "^" + Character.toLowerCase(mainChar));
+                    }
+                    else
+                    {
+                        label = pendingMainChar;
+                        Preferences.addKeybindingToLayout(v.getContext(), virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex, mainChar, pendingMainChar);
+                    }
                 }
 
                 // No pending = no change; a longpress is only removed by Revert
+                String longpressDisplay = null;
                 if (pendingLongpress != null)
                 {
-                    Preferences.setLongpressInLayout(v.getContext(), virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex, pendingLongpress.charAt(0));
+                    char altChar = pendingLongpress.charAt(0);
+                    int altCode = altChar;
+                    longpressDisplay = pendingLongpress;
+                    if (pendingLongpressCtrl && isCtrlPairable(altChar))
+                    {
+                        altCode = Character.toLowerCase(altChar) - 'a' + 1;
+                        longpressDisplay = ctrlDisplay(pendingLongpress);
+                    }
+                    Preferences.setLongpressInLayout(v.getContext(), virtualKeyboard.getCurrentKeyboardType(), changingKeyIndex, altCode);
                 }
 
                 if (Preferences.getLayoutCount() == 0){
@@ -287,11 +405,11 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
                 setViews();
                 if (mainSet)
                 {
-                    Toast.makeText(v.getContext(), "Set character " + changingChar + " to " + label, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(v.getContext(), "Set character " + formatCode(changingKey) + " to " + label, Toast.LENGTH_SHORT).show();
                 }
                 else
                 {
-                    Toast.makeText(v.getContext(), "Set longpress for " + changingChar + " to " + pendingLongpress, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(v.getContext(), "Set longpress for " + formatCode(changingKey) + " to " + longpressDisplay, Toast.LENGTH_SHORT).show();
                 }
 
             }
@@ -319,7 +437,7 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
         specialButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                showGetSpecialCharacterDialog(characterField);
+                showGetSpecialCharacterDialog(characterField, mainCtrlTick);
             }
         });
         //TODO: Have a "revert to default" button
@@ -328,7 +446,7 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
         return characterBindingDialog;
     }
 
-    private void showGetSpecialCharacterDialog(final EditText characterField)
+    private void showGetSpecialCharacterDialog(final EditText characterField, final ImageView mainCtrlTick)
     {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setAdapter(new ArrayAdapter<SpecialKey>(getBaseContext(), R.layout.simple_list_item_black, SpecialKey.values()), new DialogInterface.OnClickListener()
@@ -338,6 +456,9 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
                 SpecialKey specialKey = SpecialKey.values()[which];
                 pendingSpecialCode = specialKey.getCode();
                 pendingMainChar = null;
+                // Specials can't be Ctrl chords
+                pendingMainCtrl = false;
+                updateCtrlTick(mainCtrlTick, false, false);
                 setFieldText(characterField, specialKey.toString());
             }
         });
@@ -366,7 +487,8 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
     }
 
     // Set field text programmatically, bypassing the maxLength=1 filter
-    // (special key names are longer) and the user-typing watcher.
+    // (special key names and "Ctrl + X" are longer) and the user-typing
+    // watcher.
     private void setFieldText(EditText field, String text)
     {
         settingFieldText = true;
@@ -375,6 +497,74 @@ public class CustomKeyboardActivity extends Activity implements KeyListener, Ada
         field.setText(text);
         field.setFilters(filters);
         settingFieldText = false;
+        updateFieldTextSize(field);
+    }
+
+    // Reflect the pending value on whichever surface is visible: rewrite
+    // the text if present, otherwise the hint. Writing text into a
+    // focused, cleared field fights the IME and strands characters.
+    private void showPendingDisplay(EditText field, String display)
+    {
+        if (field.getText().length() > 0)
+        {
+            setFieldText(field, display);
+        }
+        else
+        {
+            field.setHint(display);
+            updateFieldTextSize(field);
+        }
+    }
+
+    // Multi-char content (special key names, "Ctrl + X") shrinks so the
+    // fields stay compact
+    private void updateFieldTextSize(EditText field)
+    {
+        CharSequence visible = field.getText().length() > 0 ? field.getText() : field.getHint();
+        boolean small = visible != null && visible.length() > 1;
+        field.setTextSize(TypedValue.COMPLEX_UNIT_SP, small ? 15 : 22);
+    }
+
+    private void updateCtrlTick(ImageView tick, boolean ticked, boolean enabled)
+    {
+        tick.setSelected(ticked && enabled);
+        tick.setEnabled(enabled);
+        tick.setAlpha(enabled ? 1f : 0.35f);
+    }
+
+    // Console crawl only defines Ctrl chords for letters
+    private static boolean isCtrlPairable(char c)
+    {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    }
+
+    private boolean isMainCtrlAllowed()
+    {
+        if (pendingSpecialCode != -1)
+        {
+            return false;
+        }
+        return pendingMainChar == null || isCtrlPairable(pendingMainChar.charAt(0));
+    }
+
+    private boolean isAltCtrlAllowed()
+    {
+        return pendingLongpress == null || isCtrlPairable(pendingLongpress.charAt(0));
+    }
+
+    private static String ctrlDisplay(String ch)
+    {
+        return "Ctrl + " + Character.toUpperCase(ch.charAt(0));
+    }
+
+    // Display form of a stored key code: control codes 1-26 as "Ctrl + X"
+    private static String formatCode(int code)
+    {
+        if (code >= 1 && code <= 26)
+        {
+            return "Ctrl + " + (char) ('A' + code - 1);
+        }
+        return String.valueOf((char) code);
     }
 
     @Override

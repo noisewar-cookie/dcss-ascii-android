@@ -17,51 +17,74 @@
         android:text="@string/dialog_change_character_message" >
         <requestFocus/>
     </TextView>
+    <!-- Fixed-width right-aligned labels line the colons up; weighted
+         fields keep both rows' inputs identical and width-stable; ticks
+         end flush with the buttons below -->
     <LinearLayout
         android:id="@+id/character_row"
-        android:layout_width="wrap_content"
+        android:layout_width="fill_parent"
         android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
         android:layout_below="@android:id/message"
         android:gravity="center_vertical"
         android:orientation="horizontal" >
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="56dp"
             android:layout_height="wrap_content"
+            android:gravity="right"
             android:text="Key: "
             android:textAppearance="?android:attr/textAppearanceLarge" />
         <EditText
             android:id="@+id/character_field"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
+            android:layout_weight="1"
             android:layout_height="wrap_content"
+            android:minHeight="48dp"
             android:gravity="center"
             android:inputType="text"
             android:maxLength="1"
-            android:minEms="6"
             android:textAppearance="?android:attr/textAppearanceLarge" />
+        <ImageView
+            android:id="@+id/character_ctrl_tick"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginLeft="10dp"
+            android:padding="10dp"
+            android:background="@drawable/ctrl_tick_box"
+            android:contentDescription="Ctrl modifier"
+            android:src="@drawable/sym_keyboard_control" />
     </LinearLayout>
     <LinearLayout
         android:id="@+id/longpress_row"
-        android:layout_width="wrap_content"
+        android:layout_width="fill_parent"
         android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
         android:layout_below="@id/character_row"
         android:gravity="center_vertical"
         android:orientation="horizontal" >
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="56dp"
             android:layout_height="wrap_content"
+            android:gravity="right"
             android:text="Alt: "
             android:textAppearance="?android:attr/textAppearanceLarge" />
         <EditText
             android:id="@+id/longpress_field"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
+            android:layout_weight="1"
             android:layout_height="wrap_content"
+            android:minHeight="48dp"
             android:gravity="center"
             android:inputType="text"
             android:maxLength="1"
-            android:minEms="6"
             android:textAppearance="?android:attr/textAppearanceLarge" />
+        <ImageView
+            android:id="@+id/longpress_ctrl_tick"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginLeft="10dp"
+            android:padding="10dp"
+            android:background="@drawable/ctrl_tick_box"
+            android:contentDescription="Ctrl modifier"
+            android:src="@drawable/sym_keyboard_control" />
     </LinearLayout>
     <LinearLayout
         android:id="@+id/buttons"

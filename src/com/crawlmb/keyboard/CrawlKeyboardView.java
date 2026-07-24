@@ -853,6 +853,12 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                     paint.setTextSize(mKeyTextSize);
                     paint.setTypeface(Typeface.DEFAULT);
                 }
+                // Shrink long labels like "Ctrl + A" to fit the key cap
+                float availableWidth = key.width - padding.left - padding.right - 4;
+                float textWidth = paint.measureText(label);
+                if (availableWidth > 0 && textWidth > availableWidth) {
+                    paint.setTextSize(paint.getTextSize() * availableWidth / textWidth);
+                }
                 // Draw a drop shadow for the text
                 paint.setShadowLayer(mShadowRadius, 0, 0, mShadowColor);
                 paint.setAlpha(keyAlphaLevel);
@@ -882,13 +888,17 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
                 altCode = key.popupCharacters.charAt(0);
             }
             if (altCode != -1 && !key.repeatable) {
+                String hintText = formatAltCode(altCode);
                 float hintSize = mKeyTextSize * 0.5f;
                 paint.setTextSize(hintSize);
                 paint.setTypeface(Typeface.DEFAULT);
                 paint.setColor(mKeyHintColor);
                 paint.setAlpha((int) (255 * mKeyHintAlphaScale));
-                canvas.drawText(String.valueOf((char) altCode),
-                        key.width - padding.right - hintSize * 0.9f + 8,
+                // Right edge anchored inside the key so multi-char hints
+                // like "^A" don't overflow
+                canvas.drawText(hintText,
+                        key.width - padding.right + 8
+                                - paint.measureText(hintText) - hintSize * 0.35f,
                         padding.top + hintSize * 1.3f - 8, paint);
                 paint.setColor(mKeyTextColor);
             }
@@ -1210,6 +1220,15 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
         return true;
     }
 
+    // Compact display for alt codes: control codes 1-26 as "^X" (matches
+    // the SYMBOLS_SHIFT key caps), else the character itself.
+    private static String formatAltCode(int altCode) {
+        if (altCode >= 1 && altCode <= 26) {
+            return "^" + (char) ('A' + altCode - 1);
+        }
+        return String.valueOf((char) altCode);
+    }
+
     // Effective long-press alt for a key: custom-layout remap first, then
     // the default from android:popupCharacters. -1 = none.
     private int getAltCode(int index) {
@@ -1243,8 +1262,10 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
             mAltPopup.setContentView(mAltPopupText);
             mAltPopup.setTouchable(false);
         }
-        mAltPopupText.setTextSize(TypedValue.COMPLEX_UNIT_PX, mKeyTextSize * 1.2f);
-        mAltPopupText.setText(String.valueOf((char) altCode));
+        String altText = formatAltCode(altCode);
+        mAltPopupText.setTextSize(TypedValue.COMPLEX_UNIT_PX,
+                mKeyTextSize * (altText.length() > 1 ? 0.9f : 1.2f));
+        mAltPopupText.setText(altText);
         int popupW = key.width;
         int popupH = key.height;
         int[] offset = new int[2];

@@ -24,23 +24,30 @@ public class CrawlKeyboardWrapper implements CrawlKeyboardView.OnKeyboardActionL
     }
     public enum SpecialKey
     {
-        ARROWDOWNKEY(R.drawable.sym_keyboard_down, 0402),
-        ARROWLEFTKEY(R.drawable.sym_keyboard_left, 0404),
-        ARROWRIGHTKEY(R.drawable.sym_keyboard_right, 0405),
-        ARROWUPKEY(R.drawable.sym_keyboard_up, 0403),
-        ENTERKEY(R.drawable.sym_keyboard_return, 13),
-        ESCKEY(R.drawable.sym_keyboard_esc, 0x1B),
-        TAB(R.drawable.sym_keyboard_tab, '\t'),
-        BACKSPACEKEY(R.drawable.sym_keyboard_delete, 0x9F);
+        ARROWDOWNKEY(R.drawable.sym_keyboard_down, 0402, "Arrow ↓"),
+        ARROWLEFTKEY(R.drawable.sym_keyboard_left, 0404, "Arrow ←"),
+        ARROWRIGHTKEY(R.drawable.sym_keyboard_right, 0405, "Arrow →"),
+        ARROWUPKEY(R.drawable.sym_keyboard_up, 0403, "Arrow ↑"),
+        ENTERKEY(R.drawable.sym_keyboard_return, 13, "Enter"),
+        ESCKEY(R.drawable.sym_keyboard_esc, 0x1B, "Esc"),
+        TAB(R.drawable.sym_keyboard_tab, '\t', "Tab"),
+        BACKSPACEKEY(R.drawable.sym_keyboard_delete, 0x9F, "Backspace");
 
         private final int resourceId;
         private final int code;
+        private final String displayName;
         private static SparseArray<SpecialKey> codeToKeyMap;
 
-        SpecialKey(int resourceId, int code){
+        SpecialKey(int resourceId, int code, String displayName){
             this.resourceId = resourceId;
             this.code = code;
+            this.displayName = displayName;
             getCodeToKeyMap().put(code, this);
+        }
+
+        @Override
+        public String toString(){
+            return displayName;
         }
 
         public static SparseArray<SpecialKey> getCodeToKeyMap(){
