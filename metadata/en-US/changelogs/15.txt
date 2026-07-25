@@ -1,0 +1,9 @@
+Release 15 (0.34.1)
+
+New Features:
+• Keyboard revamp incl. longpress alt keys.
+• Improved custom keyboard layouts.
+• Targeting SDK 36 per new Play Store guidelines.
+
+Bug Fixes:
+• Fixed message prompts breaking HUD rendering.
