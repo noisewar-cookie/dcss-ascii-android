@@ -86,6 +86,14 @@ bool android_reflow_weapon_stats = true;    // base stats stack + skill de-inden
 bool android_reflow_armour_stats = true;    // armour/shield stats stack (describe.cc.patch)
 bool android_reflow_missile_stats = true;   // thrown-weapon stats stack (describe.cc.patch)
 
+// Deferred more(): load_level re-activates timed-portal markers whose
+// force_more would block before _post_init draws the screen (black map /
+// partial HUD in the split layout). startup.cc.patch opens the defer window
+// around load_level; message.cc.patch records the request instead of
+// blocking; startup.cc.patch fires it after the initial draw.
+bool android_defer_more = false;
+bool android_more_pending = false;
+
 // Probably a redundant conversion, since it gets converted later on,
 // but it's a bit of leftover code from the curses stuff
 #define KEY_HOME	0406		/* home key */

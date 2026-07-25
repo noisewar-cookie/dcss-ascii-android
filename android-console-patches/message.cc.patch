@@ -2,7 +2,7 @@ diff --git a/crawl-ref/source/message.cc b/crawl-ref/source/message.cc
 --- a/crawl-ref/source/message.cc
 +++ b/crawl-ref/source/message.cc
 @@ -538,7 +538,13 @@
- 
+
      unsigned int out_width() const
      {
 -        return width() - (use_first_col() ? 1 : 0);
@@ -14,12 +14,31 @@ diff --git a/crawl-ref/source/message.cc b/crawl-ref/source/message.cc
 +        }
 +        return w;
      }
- 
+
      unsigned int out_height() const
+@@ -680,8 +680,18 @@
+     void more(bool full, bool user=false)
+     {
+         rng::generator rng(rng::UI);
+
+         if (_pre_more())
+             return;
+
++        // Android: during game load the screen isn't drawn yet; record the
++        // request instead of blocking — startup.cc fires the prompt after
++        // the initial draw.
++        extern bool android_defer_more, android_more_pending;
++        if (android_defer_more)
++        {
++            android_more_pending = true;
++            return;
++        }
++
+         if (you.running)
 @@ -700,7 +700,13 @@
          if (user)
              flush_input_buffer(FLUSH_FORCE_MORE);
- 
+
          int last_row = crawl_view.msgsz.y;
 +        // Android word wrap: the msg window is taller than the visible
 +        // panel; anchor the more-prompt right below the newest message so
@@ -30,3 +49,22 @@ diff --git a/crawl-ref/source/message.cc b/crawl-ref/source/message.cc
          if (first_col_more())
          {
              cgotoxy(1, last_row, GOTO_MSG);
+@@ -1940,10 +1949,18 @@
+ void more(bool user_forced)
+ {
+     rng::generator rng(rng::UI);
+
+     if (!crawl_state.io_inited)
+         return;
+     flush_prev_message();
++    // Android: deferred during load — return before clear_messages() so the
++    // messages are still visible when the deferred prompt fires.
++    extern bool android_defer_more, android_more_pending;
++    if (android_defer_more)
++    {
++        android_more_pending = true;
++        return;
++    }
+     msgwin.more(false, user_forced);
+     clear_messages();
+ }
