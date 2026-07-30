@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 
 import com.crawlmb.FontConfig;
+import com.crawlmb.NativeWrapper;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.keyboard.CrawlKeyboardView;
@@ -1503,18 +1504,23 @@ public class RegionRouter implements TerminalRenderer
 	{
 		String[] lines = context.getResources()
 				.getStringArray(R.array.loading_message_array);
-		int rowCount = Math.min(lines.length, TERMINAL_ROWS);
-		for (int r = 0; r < rowCount; r++)
+		// display_lock: classifyFrame mutates router state; this runs on the
+		// UI thread and must not interleave with a game-thread storm.
+		synchronized (NativeWrapper.display_lock)
 		{
-			String line = lines[r];
-			int colCount = Math.min(line.length(), TERMINAL_COLS);
-			for (int c = 0; c < colCount; c++)
-				drawPoint(r, c, line.charAt(c), Color.WHITE, Color.BLACK, false);
+			int rowCount = Math.min(lines.length, TERMINAL_ROWS);
+			for (int r = 0; r < rowCount; r++)
+			{
+				String line = lines[r];
+				int colCount = Math.min(line.length(), TERMINAL_COLS);
+				for (int c = 0; c < colCount; c++)
+					drawPoint(r, c, line.charAt(c), Color.WHITE, Color.BLACK, false);
+			}
+			// Same finalize a native frame gets: classify (a no-op transition —
+			// the loading anchor keeps PREGAME/PREGAME) and surface the pixels.
+			classifyFrame();
+			invalidateAllViews();
 		}
-		// Same finalize a native frame gets: classify (a no-op transition —
-		// the loading anchor keeps PREGAME/PREGAME) and surface the pixels.
-		classifyFrame();
-		invalidateAllViews();
 	}
 
 	private void scheduleRedrawAfterLayout(final View target)
@@ -2606,23 +2612,24 @@ public class RegionRouter implements TerminalRenderer
 		return false;
 	}
 
-	// Replay the full 48x80 terminal state to every active view via drawPoint
-	// (same routing DCSS's refreshTerminal would trigger, minus ~3840 JNI
-	// round trips). Runs on the UI thread after a layout pass that recreated
-	// bitmaps; the game thread may be updating terminalShadow concurrently
-	// but drawPoint's per-view renderLock serialises the writes and a stale
-	// cell just gets overwritten by the next storm.
+	// Replay the full 48x80 terminal state to every active view via
+	// drawPoint. UI thread, after a layout pass recreated bitmaps. Must hold
+	// display_lock: cells routed under a torn mid-recompute anchor state are
+	// never repaired (steady-state routing is diff-only).
 	private void replayAllFromShadow()
 	{
-		for (int r = 0; r < TERMINAL_ROWS; r++)
-			for (int c = 0; c < TERMINAL_COLS; c++)
-			{
-				char ch = terminalShadow[r][c];
-				if (ch == 0)
-					ch = ' ';
-				drawPoint(r, c, ch, terminalFg[r][c],
-						terminalBg[r][c], false);
-			}
+		synchronized (NativeWrapper.display_lock)
+		{
+			for (int r = 0; r < TERMINAL_ROWS; r++)
+				for (int c = 0; c < TERMINAL_COLS; c++)
+				{
+					char ch = terminalShadow[r][c];
+					if (ch == 0)
+						ch = ' ';
+					drawPoint(r, c, ch, terminalFg[r][c],
+							terminalBg[r][c], false);
+				}
+		}
 		if (fullView != null)
 			fullView.postInvalidate();
 		if (skillsView != null)

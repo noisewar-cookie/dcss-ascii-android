@@ -14,7 +14,9 @@ public class NativeWrapper
 	private TerminalRenderer renderer = null;
 	private GameKeyListener keyListener = null;
 
-	private final String display_lock = "lock";
+	// Serializes all terminal-state access: taken by frameUpdate (game
+	// thread) and RegionRouter's UI-thread replay paths.
+	public static final Object display_lock = new Object();
 	private static final String TAG = NativeWrapper.class.getCanonicalName();
 
 	public void gameStart()

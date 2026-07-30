@@ -2,6 +2,26 @@ diff --git a/crawl-ref/source/describe.cc b/crawl-ref/source/describe.cc
 index 0a381e125d..49984ec693 100644
 --- a/crawl-ref/source/describe.cc
 +++ b/crawl-ref/source/describe.cc
+@@ -264,10 +264,18 @@ static string _format_prop_desc(string prop_name, string prop_desc)
+ #ifdef USE_TILE_LOCAL
+     if (tiles.is_using_small_layout())
+         return prop_name + prop_desc;
+ #endif
+
+     const int name_len = strwidth(prop_name);
+-    linebreak_string(prop_desc, 80 - name_len);
++    // Word wrap (Android): wrap at the panel width so the ui-layer wrap cap
++    // never re-folds these lines -- its folds don't carry the hanging indent.
++    extern int android_prose_wrap_cols;
++    extern bool android_reflow_prop_desc;
++    const int wrap_width = android_prose_wrap_cols > 0
++                           && android_reflow_prop_desc
++        ? max(20, android_prose_wrap_cols - name_len)
++        : 80 - name_len;
++    linebreak_string(prop_desc, wrap_width);
+     string padding = string(name_len, ' ');
+     string justified_desc = replace_all(prop_desc, "\n", "\n" + padding);
+
 @@ -1384,11 +1384,17 @@ static string _skill_target_desc(skill_type skill, int scaled_target,
  static void _append_skill_target_desc(string &description, skill_type skill,
                                          int scaled_target)

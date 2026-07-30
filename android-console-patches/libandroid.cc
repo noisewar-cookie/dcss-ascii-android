@@ -85,6 +85,7 @@ bool android_reflow_orders_prompt = true;   // 't' orders layout (shout.cc.patch
 bool android_reflow_weapon_stats = true;    // base stats stack + skill de-indent (describe.cc.patch)
 bool android_reflow_armour_stats = true;    // armour/shield stats stack (describe.cc.patch)
 bool android_reflow_missile_stats = true;   // thrown-weapon stats stack (describe.cc.patch)
+bool android_reflow_prop_desc = true;       // ego/artprop hanging-indent wrap (describe.cc.patch)
 
 // Deferred more(): load_level re-activates timed-portal markers whose
 // force_more would block before _post_init draws the screen (black map /
