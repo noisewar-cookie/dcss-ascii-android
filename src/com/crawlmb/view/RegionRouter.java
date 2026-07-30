@@ -947,7 +947,16 @@ public class RegionRouter implements TerminalRenderer
 		while (descStart + 1 < subItemRow
 				&& rowIsBlank(descStart) && rowIsBlank(descStart + 1))
 			descStart++;
-		desc.setRegionRows(descStart, subItemRow);
+		// Trim trailing blank rows. DCSS's descriptions Switcher allocates
+		// height = tallest child description, so shorter descriptions leave
+		// blank rows above sub_items. Since our Java panels stack with
+		// WRAP_CONTENT (LinearLayout), shrinking the row range collapses the
+		// gap. Keep one blank row as spacer between description and sub_items.
+		int descEnd = subItemRow;
+		while (descEnd > descStart + 1 && rowIsBlank(descEnd - 1)
+				&& rowIsBlank(descEnd - 2))
+			descEnd--;
+		desc.setRegionRows(descStart, descEnd);
 		desc.setRegionCols(0, TERMINAL_COLS);
 		desc.setRowColShift(null);
 
