@@ -186,7 +186,11 @@ public class RegionTermView extends View
 		return true;
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public int getStartCol() { return startCol; }
+	/** @deprecated Unused. */
+	@Deprecated
 	public int getEndCol() { return endCol; }
 	public int getEndRow() { return endRow; }
 
@@ -255,16 +259,22 @@ public class RegionTermView extends View
 		invalidate();
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public float getContentZoom()
 	{
 		return contentZoom;
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public boolean isHorizontalScrollEnabled()
 	{
 		return horizontalScrollEnabled;
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public boolean isVerticalScrollEnabled()
 	{
 		return verticalScrollEnabled;
@@ -1196,6 +1206,8 @@ public class RegionTermView extends View
 	// as soon as the layout pass completes. Use this to hide stale-scale
 	// pixels during an INVISIBLE→VISIBLE transition where the font scale
 	// is about to change.
+	/** @deprecated Unused. */
+	@Deprecated
 	public void clearBitmap()
 	{
 		synchronized (renderLock)

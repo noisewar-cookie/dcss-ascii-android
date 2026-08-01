@@ -701,7 +701,8 @@ void crawl_quit(const char* msg)
 	longjmp(jbuf,1);
 }
 
-void advanceLine()
+// Deprecated: no callers in crawl or the patches.
+[[deprecated]] void advanceLine()
 {
 	y++;
 	if (y >= MENU_LINES)

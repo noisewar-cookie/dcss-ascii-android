@@ -466,7 +466,9 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
     /**
      * Returns the {@link OnKeyboardActionListener} object.
      * @return the listener attached to this keyboard
+     * @deprecated Unused AOSP KeyboardView API.
      */
+    @Deprecated
     protected OnKeyboardActionListener getOnKeyboardActionListener() {
         return mKeyboardActionListener;
     }
@@ -561,8 +563,10 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
         return mShowPreview;
     }
     
+    /** @deprecated Unused AOSP KeyboardView API. */
+    @Deprecated
     public void setVerticalCorrection(int verticalOffset) {
-        
+
     }
     public void setPopupParent(View v) {
         mPopupParent = v;
@@ -581,14 +585,18 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
      * codes for adjacent keys.  When disabled, only the primary key code will be
      * reported.
      * @param enabled whether or not the proximity correction is enabled
+     * @deprecated Unused AOSP KeyboardView API.
      */
+    @Deprecated
     public void setProximityCorrectionEnabled(boolean enabled) {
         mProximityCorrectOn = enabled;
     }
 
     /**
      * Returns true if proximity correction is enabled.
+     * @deprecated Unused AOSP KeyboardView API.
      */
+    @Deprecated
     public boolean isProximityCorrectionEnabled() {
         return mProximityCorrectOn;
     }
@@ -916,6 +924,8 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
     }
 
 
+    /** @deprecated Unused AOSP KeyboardView API. */
+    @Deprecated
     private void setKeyBounds(Canvas canvas, Drawable keyBackground, int kbdPaddingLeft, int kbdPaddingTop, Key key) {
         final Rect bounds = keyBackground.getBounds();
         if (key.width != bounds.right ||
@@ -1658,6 +1668,8 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
         }
     }
 
+    /** @deprecated Unused AOSP KeyboardView API. */
+    @Deprecated
     public boolean handleBack() {
         if (mPopupKeyboard.isShowing()) {
             dismissPopupKeyboard();

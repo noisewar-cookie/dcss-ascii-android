@@ -115,6 +115,8 @@ final public class Preferences
 		return sharedPreferences.getBoolean(Preferences.KEY_FULLSCREEN, true);
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public static void setFullScreen(boolean value)
 	{
 		SharedPreferences.Editor ed = sharedPreferences.edit();
@@ -294,16 +296,22 @@ final public class Preferences
 		return (config.orientation == Configuration.ORIENTATION_PORTRAIT);
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public static int getOrientation()
 	{
 		return Integer.parseInt(sharedPreferences.getString(Preferences.KEY_ORIENTATION, "0"));
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public static int getDefaultFontSize()
 	{
 		return fontSize;
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public static int setDefaultFontSize(int value)
 	{
 		return fontSize = value;
@@ -317,6 +325,8 @@ final public class Preferences
 		sharedPreferences.edit().putInt(Preferences.KEY_KEYBOARDTRANSPARENCY, transparency).apply();
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public static boolean getVibrate()
 	{
 		return sharedPreferences.getBoolean(Preferences.KEY_VIBRATE, false);
@@ -385,6 +395,8 @@ final public class Preferences
 		return sharedPreferences.getBoolean(Preferences.KEY_ENABLETOUCH, true);
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public static int alert(Context ctx, String title, String msg)
 	{
 		new AlertDialog.Builder(ctx).setTitle(title).setMessage(msg)

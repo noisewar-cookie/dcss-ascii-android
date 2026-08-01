@@ -1,0 +1,40 @@
+# Upstream DCSS submodule — not this project's code.
+# Re-include only the console-interface headers that libandroid.cc implements
+# (console fns + JNI contract), so those adapter functions aren't false-flagged
+# as dead. Layered negation is required: a `!` can't rescue a file whose parent
+# dir is excluded, so each ancestor is un-excluded down to the two headers.
+android-crawl-console/*
+!android-crawl-console/crawl-ref
+android-crawl-console/crawl-ref/*
+!android-crawl-console/crawl-ref/source
+android-crawl-console/crawl-ref/source/*
+!android-crawl-console/crawl-ref/source/libconsole.h
+!android-crawl-console/crawl-ref/source/libunix.h
+
+# Upstream DCSS docs bundled from crawl
+docs/
+
+# Assets copied from the submodule (dat vaults, help text, settings, fonts)
+assets/dat/
+assets/docs/
+assets/settings/
+assets/help.html
+assets/quick_controls.txt
+assets/reloading.txt
+assets/font_config.txt
+assets/*.ttf
+assets/*LICENSE*.txt
+assets/dat-hash.txt
+
+# Play Store metadata (screenshots, marketing copy)
+metadata/
+
+# JVM heap dumps
+*.hprof
+
+# Character title-screen art — no code linkage
+res/drawable/title_*.png
+
+# Virtual-keyboard icon PNGs (key-background 9-patches + glyphs) — no code linkage
+res/drawable-hdpi/btn_keyboard_key_*
+res/drawable/sym_keyboard_*.png

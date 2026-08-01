@@ -31,3 +31,14 @@ releaseChecklist.md
 
 # Local release tooling
 prepare-release.ps1
+
+# graphify: commit graph.json + report + labels (token-costly to rebuild);
+# ignore local caches, machine paths, and free-to-regenerate artifacts.
+graphify-out/cache/
+graphify-out/.graphify_root
+graphify-out/.graphify_python
+graphify-out/.graphify_analysis.json
+graphify-out/cost.json
+graphify-out/graph.html
+graphify-out/GRAPH_REPORT.md
+graphify-out/20*-*-*/

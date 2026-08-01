@@ -58,6 +58,8 @@ public class RegionRouter implements TerminalRenderer
 		NEWGAME_SPECIES, NEWGAME_BACKGROUND, NEWGAME_WEAPON, NEWGAME_NAME
 	}
 
+	/** @deprecated Dead: {@link #setScrollStateListener} is never called. */
+	@Deprecated
 	public interface ScrollStateListener
 	{
 		// Called on UI thread when fullView's effective scrollable state
@@ -515,6 +517,8 @@ public class RegionRouter implements TerminalRenderer
 		return Math.max(0, Math.min(cols, TERMINAL_COLS - 1));
 	}
 
+	/** @deprecated Unused. */
+	@Deprecated
 	public LayoutMode getCurrentMode()
 	{
 		return currentMode;
@@ -1103,6 +1107,8 @@ public class RegionRouter implements TerminalRenderer
 		this.fontConfig = config;
 	}
 
+	/** @deprecated Dead: never called, so scrollStateListener stays null. */
+	@Deprecated
 	public void setScrollStateListener(ScrollStateListener l)
 	{
 		this.scrollStateListener = l;
@@ -1422,6 +1428,7 @@ public class RegionRouter implements TerminalRenderer
 			applyNewgameWeaponSubBounds();
 		}
 
+		// Dead: scrollStateListener is never set, so this always skips.
 		if (scrollStateListener != null)
 		{
 			boolean menuScrollable = activeMenu != null

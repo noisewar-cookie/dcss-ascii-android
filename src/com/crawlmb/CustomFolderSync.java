@@ -202,6 +202,8 @@ public final class CustomFolderSync
         return ok;
     }
 
+    /** @deprecated Unused — superseded by per-save push. */
+    @Deprecated
     public static void pushAsync(Context ctx)
     {
         if (!Paths.isCustomMode(ctx))
