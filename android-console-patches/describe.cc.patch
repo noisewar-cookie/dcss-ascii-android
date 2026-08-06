@@ -1,13 +1,10 @@
 diff --git a/crawl-ref/source/describe.cc b/crawl-ref/source/describe.cc
-index 0a381e125d..49984ec693 100644
+index 0a381e125d..f75c33953f 100644
 --- a/crawl-ref/source/describe.cc
 +++ b/crawl-ref/source/describe.cc
-@@ -264,10 +264,18 @@ static string _format_prop_desc(string prop_name, string prop_desc)
- #ifdef USE_TILE_LOCAL
-     if (tiles.is_using_small_layout())
-         return prop_name + prop_desc;
+@@ -267,7 +267,15 @@ static string _format_prop_desc(string prop_name, string prop_desc)
  #endif
-
+ 
      const int name_len = strwidth(prop_name);
 -    linebreak_string(prop_desc, 80 - name_len);
 +    // Word wrap (Android): wrap at the panel width so the ui-layer wrap cap
@@ -21,8 +18,8 @@ index 0a381e125d..49984ec693 100644
 +    linebreak_string(prop_desc, wrap_width);
      string padding = string(name_len, ' ');
      string justified_desc = replace_all(prop_desc, "\n", "\n" + padding);
-
-@@ -1384,11 +1384,17 @@ static string _skill_target_desc(skill_type skill, int scaled_target,
+ 
+@@ -1384,11 +1392,17 @@ static string _skill_target_desc(skill_type skill, int scaled_target,
  static void _append_skill_target_desc(string &description, skill_type skill,
                                          int scaled_target)
  {
@@ -42,7 +39,7 @@ index 0a381e125d..49984ec693 100644
                                                      you.training[skill]);
      }
  }
-@@ -1406,7 +1412,13 @@ static string _desc_attack_delay(const item_def &item)
+@@ -1406,7 +1420,13 @@ static string _desc_attack_delay(const item_def &item)
  
      const int cur_delay = you.attack_delay_with(&dummy).expected();
  
@@ -57,17 +54,17 @@ index 0a381e125d..49984ec693 100644
  }
  
  static string _describe_missile_dmg_brand(const item_def &item)
-@@ -1536,9 +1548,16 @@ static void _append_skill_needed(string &description, const item_def &item,
+@@ -1536,9 +1556,16 @@ static void _append_skill_needed(string &description, const item_def &item,
      const bool useful = !is_useless_item(item) && crawl_state.need_save;
      if (useful)
      {
+-        description += "\n";
+-        if (indent)
 +        extern int android_prose_wrap_cols;
 +        extern bool android_reflow_weapon_stats;
 +        // Weapon/thrown callers (indent=true) get a spacer row above
 +        // "Your skill:"; bauble/talisman callers do not.
 +        description += indent ? "\n\n" : "\n";
--        description += "\n";
--        if (indent)
 +        if (indent && !(android_prose_wrap_cols > 0
 +                        && android_reflow_weapon_stats))
 +        {
@@ -76,7 +73,7 @@ index 0a381e125d..49984ec693 100644
          description += _your_skill_desc(skill, can_set_target, target_skill,
                                          std::move(skill_padding));
      }
-@@ -1552,6 +1569,13 @@ static void _append_weapon_stats(string &description, const item_def &item)
+@@ -1552,6 +1579,13 @@ static void _append_weapon_stats(string &description, const item_def &item)
      const int base_dam = property(item, PWPN_DAMAGE);
      const int mindelay_skill = _item_training_target(item);
  
@@ -90,7 +87,7 @@ index 0a381e125d..49984ec693 100644
      if (item.base_type == OBJ_STAVES
          && item.is_identified()
          && staff_skill(static_cast<stave_type>(item.sub_type)) != SK_NONE
-@@ -1567,16 +1591,20 @@ static void _append_weapon_stats(string &description, const item_def &item)
+@@ -1567,16 +1601,20 @@ static void _append_weapon_stats(string &description, const item_def &item)
      {
          const char *inf = Options.char_set == CSET_ASCII ? "inf" : "\u221e"; //"∞"
          description += make_stringf(
@@ -115,7 +112,7 @@ index 0a381e125d..49984ec693 100644
      }
  
      description += make_stringf(
-@@ -2162,11 +2190,18 @@ static string _describe_ammo(const item_def &item)
+@@ -2162,11 +2200,18 @@ static string _describe_ammo(const item_def &item)
          const int throw_delay = (10 + dam / 2);
          const int target_skill = _item_training_target(item);
  
@@ -135,7 +132,7 @@ index 0a381e125d..49984ec693 100644
              (float) throw_delay / 10,
              (float) FASTEST_PLAYER_THROWING_SPEED / 10,
              target_skill / 10
-@@ -2281,13 +2316,20 @@ static string _describe_armour(const item_def &item, bool verbose, bool monster)
+@@ -2281,13 +2326,20 @@ static string _describe_armour(const item_def &item, bool verbose, bool monster)
          }
          if (!monster)
              description += "\n\n";
@@ -158,7 +155,7 @@ index 0a381e125d..49984ec693 100644
                          + to_string(shield_block_limit(item));
              if (is_unrandom_artefact(item, UNRAND_WARLOCK_MIRROR))
                  description += _warlock_mirror_reflect_desc();
-@@ -2299,14 +2341,16 @@ static string _describe_armour(const item_def &item, bool verbose, bool monster)
+@@ -2299,14 +2351,16 @@ static string _describe_armour(const item_def &item, bool verbose, bool monster)
                          + to_string(property(item, PARM_AC));
              if (get_armour_slot(item) == SLOT_BODY_ARMOUR)
              {
@@ -177,7 +174,7 @@ index 0a381e125d..49984ec693 100644
                              + to_string(evp / 30);
              }
          }
-@@ -4210,12 +4254,20 @@ void inscribe_item(item_def &item)
+@@ -4210,12 +4264,20 @@ void inscribe_item(item_def &item)
   */
  static string _player_spell_stats(const spell_type spell)
  {
@@ -199,7 +196,7 @@ index 0a381e125d..49984ec693 100644
                       schools.find("/") != string::npos ? "s" : "",
                       schools.c_str());
  
-@@ -4239,7 +4291,8 @@ static string _player_spell_stats(const spell_type spell)
+@@ -4239,7 +4301,8 @@ static string _player_spell_stats(const spell_type spell)
      }
      else
          failure = failure_rate_to_string(raw_spell_fail(spell));
@@ -209,3 +206,37 @@ index 0a381e125d..49984ec693 100644
  
      const string damage_string = spell_damage_string(spell);
      const string max_dam_string = spell_max_damage_string(spell);
+@@ -7569,11 +7632,22 @@ static string _describe_talisman_form(transformation form_type)
+     // Actually output the table
+     ostringstream description;
+ 
+-    description << string(60, '_') << "\n\n";
++    // Word wrap (Android): the fixed 60-wide section rules and the column-
++    // wide table underline both overshoot the panel wrap width and get
++    // re-folded, doubling up. Cap them to the wrap width when wrap is on.
++    extern int android_prose_wrap_cols;
++    extern bool android_reflow_talisman_dividers;
++    const bool wrap_div = android_prose_wrap_cols > 0
++                          && android_reflow_talisman_dividers;
++    const int solid_div = wrap_div ? min(60, android_prose_wrap_cols) : 60;
++
++    description << string(solid_div, '_') << "\n\n";
+ 
+     vector<formatted_string> lines = cols.formatted_lines();
+     description << lines[0].to_colour_string() << "\n";
+-    description << string(column_width.back(), '-') << "\n";
++    description << string(wrap_div
++                          ? min(column_width.back(), android_prose_wrap_cols)
++                          : column_width.back(), '-') << "\n";
+     description << lines[1].to_colour_string() << "\n";
+     description << lines[2].to_colour_string() << "\n";
+     description << "<white>" << lines[3].to_colour_string() << "<lightgrey>\n";
+@@ -7677,7 +7751,7 @@ static string _describe_talisman_form(transformation form_type)
+                     << "\n";
+     }
+ 
+-    description << string(60, '_') << "\n";
++    description << string(solid_div, '_') << "\n";
+ 
+     return description.str();
+ }
