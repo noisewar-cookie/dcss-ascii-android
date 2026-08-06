@@ -1,21 +1,8 @@
 diff --git a/crawl-ref/source/startup.cc b/crawl-ref/source/startup.cc
+index 5a564a0d78..137cffe672 100644
 --- a/crawl-ref/source/startup.cc
 +++ b/crawl-ref/source/startup.cc
-@@ -307,6 +307,13 @@ static void _post_init(bool newc)
- #ifdef USE_TILE_WEB
-     if (tiles.get_ui_state() == UI_CRT)
-         tiles.set_ui_state(UI_NORMAL);
- #endif
-
-+    // Android: load_level re-activates timed-portal markers whose
-+    // force_more would block before the screen is drawn below. Defer any
-+    // more() until the initial draw completes (fired after viewwindow).
-+    extern bool android_defer_more, android_more_pending;
-+    android_more_pending = false;
-+    android_defer_more = true;
-+
-     load_level(you.entering_level ? you.transit_stair :
-@@ -393,9 +400,22 @@ static void _post_init(bool newc)
+@@ -393,6 +393,10 @@ static void _post_init(bool newc)
      // This just puts the view up for the first turn.
      you.redraw_title = true;
      you.redraw_status_lights = true;
@@ -26,21 +13,9 @@ diff --git a/crawl-ref/source/startup.cc b/crawl-ref/source/startup.cc
      print_stats();
      update_screen();
      viewwindow();
-     update_screen();
-
-+    // Initial draw complete — fire any more() deferred during load, so the
-+    // prompt shows over the fully drawn screen.
-+    android_defer_more = false;
-+    if (android_more_pending)
-+    {
-+        android_more_pending = false;
-+        more();
-+    }
-+
-     activate_notes(true);
-@@ -1037,11 +1052,13 @@ bool startup_step()
+@@ -1037,11 +1041,13 @@ bool startup_step()
          choice.name = SysEnv.crawl_name;
-
+ 
  #ifdef __ANDROID__
 +#ifdef USE_TILE_LOCAL
      // Request the Android virtual keyboard. Waiting for the SDLActivity to be
@@ -49,6 +24,6 @@ diff --git a/crawl-ref/source/startup.cc b/crawl-ref/source/startup.cc
      sleep(1);
  #endif
 +#endif
-
+ 
  #ifndef DGAMELAUNCH
-
+ 

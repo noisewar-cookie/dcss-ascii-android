@@ -1,8 +1,28 @@
 diff --git a/crawl-ref/source/files.cc b/crawl-ref/source/files.cc
-index f2d101a424..dbdcb01481 100644
+index f2d101a424..c6ede6ba91 100644
 --- a/crawl-ref/source/files.cc
 +++ b/crawl-ref/source/files.cc
-@@ -2625,6 +2625,11 @@ static void _save_game_exit()
+@@ -2248,6 +2248,19 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
+     if (make_changes || load_mode == LOAD_RESTART_GAME)
+     {
+         bool message = !(load_mode == LOAD_RESTART_GAME && descent_peek);
++#ifdef __ANDROID__
++        // Marker reactivation can force_more before the new level is drawn
++        // (e.g. timed-portal ambient sounds), blocking over a black map
++        // panel. Defer the prompt; viewwindow (view.cc) fires it after the
++        // map paints. Covers every entry path: _post_init (continue /
++        // LOAD_RESTART_GAME) and floor_transition (stairs / LOAD_ENTER_LEVEL).
++        if (message)
++        {
++            extern bool android_defer_more, android_more_pending;
++            android_more_pending = false;
++            android_defer_more = true;
++        }
++#endif
+         env.markers.activate_all(message);
+     }
+ 
+@@ -2625,6 +2638,11 @@ static void _save_game_exit()
      you.save = 0;
  }
  
@@ -14,7 +34,7 @@ index f2d101a424..dbdcb01481 100644
  void save_game(bool leave_game, const char *farewellmsg)
  {
      unwind_bool saving_game(crawl_state.saving_game, true);
-@@ -2667,6 +2672,10 @@ void save_game(bool leave_game, const char *farewellmsg)
+@@ -2667,6 +2685,10 @@ void save_game(bool leave_game, const char *farewellmsg)
          {
              you.save->commit();
              save_game_prefs();
@@ -25,7 +45,7 @@ index f2d101a424..dbdcb01481 100644
          }
          return;
      }
-@@ -2675,6 +2684,10 @@ void save_game(bool leave_game, const char *farewellmsg)
+@@ -2675,6 +2697,10 @@ void save_game(bool leave_game, const char *farewellmsg)
      // so Valgrind doesn't complain.
      _save_game_exit();
  

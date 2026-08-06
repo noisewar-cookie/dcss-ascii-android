@@ -1,0 +1,26 @@
+diff --git a/crawl-ref/source/view.cc b/crawl-ref/source/view.cc
+index 13e0572a53..e92fb65439 100644
+--- a/crawl-ref/source/view.cc
++++ b/crawl-ref/source/view.cc
+@@ -679,6 +679,21 @@ void viewwindow(bool show_updates, bool tiles_only, animation *a, view_renderer
+             {
+                 puttext(crawl_view.viewp.x, crawl_view.viewp.y, vbuf);
+                 update_monster_pane();
++#ifdef __ANDROID__
++                // A force_more deferred during level load (files.cc) would
++                // otherwise block over a black map. The map + monster pane
++                // have now painted, so release and fire the pending prompt.
++                extern bool android_defer_more, android_more_pending;
++                if (android_defer_more)
++                {
++                    android_defer_more = false;
++                    if (android_more_pending)
++                    {
++                        android_more_pending = false;
++                        more();
++                    }
++                }
++#endif
+             }
+ #else
+             UNUSED(tiles_only);

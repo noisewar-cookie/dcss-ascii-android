@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/describe.cc b/crawl-ref/source/describe.cc
-index 0a381e125d..f75c33953f 100644
+index 0a381e125d..355295dab6 100644
 --- a/crawl-ref/source/describe.cc
 +++ b/crawl-ref/source/describe.cc
 @@ -267,7 +267,15 @@ static string _format_prop_desc(string prop_name, string prop_desc)
@@ -174,7 +174,17 @@ index 0a381e125d..f75c33953f 100644
                              + to_string(evp / 30);
              }
          }
-@@ -4210,12 +4264,20 @@ void inscribe_item(item_def &item)
+@@ -4063,6 +4117,9 @@ command_type describe_item_popup(const item_def &item,
+         footer_text += formatted_string(_actions_desc(actions));
+         auto footer = make_shared<Text>();
+         footer->set_text(footer_text);
++        // Word wrap (Android): mirror the body Text so the cyan action list
++        // folds at the panel width (ui.cc.patch cap) instead of overflowing.
++        footer->set_wrap_text(true);
+         footer->set_margin_for_crt(1, 0, 0, 0);
+         footer->set_margin_for_sdl(20, 0, 0, 0);
+         vbox->add_child(std::move(footer));
+@@ -4210,12 +4267,20 @@ void inscribe_item(item_def &item)
   */
  static string _player_spell_stats(const spell_type spell)
  {
@@ -196,7 +206,7 @@ index 0a381e125d..f75c33953f 100644
                       schools.find("/") != string::npos ? "s" : "",
                       schools.c_str());
  
-@@ -4239,7 +4301,8 @@ static string _player_spell_stats(const spell_type spell)
+@@ -4239,7 +4304,8 @@ static string _player_spell_stats(const spell_type spell)
      }
      else
          failure = failure_rate_to_string(raw_spell_fail(spell));
@@ -206,7 +216,7 @@ index 0a381e125d..f75c33953f 100644
  
      const string damage_string = spell_damage_string(spell);
      const string max_dam_string = spell_max_damage_string(spell);
-@@ -7569,11 +7632,22 @@ static string _describe_talisman_form(transformation form_type)
+@@ -7569,11 +7635,22 @@ static string _describe_talisman_form(transformation form_type)
      // Actually output the table
      ostringstream description;
  
@@ -231,7 +241,7 @@ index 0a381e125d..f75c33953f 100644
      description << lines[1].to_colour_string() << "\n";
      description << lines[2].to_colour_string() << "\n";
      description << "<white>" << lines[3].to_colour_string() << "<lightgrey>\n";
-@@ -7677,7 +7751,7 @@ static string _describe_talisman_form(transformation form_type)
+@@ -7677,7 +7754,7 @@ static string _describe_talisman_form(transformation form_type)
                      << "\n";
      }
  
