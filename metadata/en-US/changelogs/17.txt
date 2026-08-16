@@ -1,0 +1,8 @@
+Release 17 (0.34.1)
+
+New Features:
+• New in-game Help and Wiki shortcuts, toggleable in prefs.
+
+Bug Fixes:
+• Fixed inaccessible app menu when keyboard is disabled.
+• Additional description and list screen fixes.
