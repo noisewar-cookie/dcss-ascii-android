@@ -1,8 +1,8 @@
 {
   "android-console-patches/libandroid.cc": {
-    "mtime": 1785998104.834759,
-    "ast_hash": "907e920bf823af83b44629ef00d1daba",
-    "semantic_hash": "907e920bf823af83b44629ef00d1daba"
+    "mtime": 1786860932.6044214,
+    "ast_hash": "7406c117be898b4172de17a681cd2cd5",
+    "semantic_hash": "7406c117be898b4172de17a681cd2cd5"
   },
   "android-console-patches/setup.sh": {
     "mtime": 1778895531.472682,
@@ -10,9 +10,9 @@
     "semantic_hash": "19a74e19b07e7f78e67dabca37b333ba"
   },
   "build.gradle": {
-    "mtime": 1786047504.0940754,
-    "ast_hash": "099698638b5ab6a7b1143a5b4db19eb1",
-    "semantic_hash": "099698638b5ab6a7b1143a5b4db19eb1"
+    "mtime": 1786864595.4801495,
+    "ast_hash": "44d8ed6d1a257d9b30e05ac909f61fa3",
+    "semantic_hash": "44d8ed6d1a257d9b30e05ac909f61fa3"
   },
   "gradlew": {
     "mtime": 1776494228.7899022,
@@ -35,9 +35,9 @@
     "semantic_hash": "328aa83cb57881a6c90af8bc0e8fe491"
   },
   "src/com/crawlmb/CrawlApplication.java": {
-    "mtime": 1784784646.5954273,
-    "ast_hash": "a73ca8b928d3d050d4588ed883e0851d",
-    "semantic_hash": "a73ca8b928d3d050d4588ed883e0851d"
+    "mtime": 1786765392.4841201,
+    "ast_hash": "63d50eeb4f856fd080fddcbd9050f844",
+    "semantic_hash": "63d50eeb4f856fd080fddcbd9050f844"
   },
   "src/com/crawlmb/CrawlDialog.java": {
     "mtime": 1776494222.0393744,
@@ -60,9 +60,9 @@
     "semantic_hash": "827029a3bfa9b51e3fc52f6a53383520"
   },
   "src/com/crawlmb/FontConfig.java": {
-    "mtime": 1784787447.1468234,
-    "ast_hash": "d18dbac4144013c4b4a94a12fc803e45",
-    "semantic_hash": "d18dbac4144013c4b4a94a12fc803e45"
+    "mtime": 1786833724.7436206,
+    "ast_hash": "5fb54f6e2f69897391645468da63fb06",
+    "semantic_hash": "5fb54f6e2f69897391645468da63fb06"
   },
   "src/com/crawlmb/GameThread.java": {
     "mtime": 1776494222.0287502,
@@ -75,9 +75,9 @@
     "semantic_hash": "faba4fcd6c0aafa1705cf847bd2a2dd3"
   },
   "src/com/crawlmb/NativeWrapper.java": {
-    "mtime": 1785393336.452425,
-    "ast_hash": "4d63c4964dc6536b0b4c8ef3ba0bff77",
-    "semantic_hash": "4d63c4964dc6536b0b4c8ef3ba0bff77"
+    "mtime": 1786854681.0013163,
+    "ast_hash": "8c7c6f6ff084349746eacd602f63bf31",
+    "semantic_hash": "8c7c6f6ff084349746eacd602f63bf31"
   },
   "src/com/crawlmb/PassThroughListener.java": {
     "mtime": 1776494222.0231988,
@@ -95,9 +95,9 @@
     "semantic_hash": "daff9d197d7d2ea7c55b2ac9cf419622"
   },
   "src/com/crawlmb/Preferences.java": {
-    "mtime": 1785542643.8737242,
-    "ast_hash": "25101211ca764d2696416876ada96a5d",
-    "semantic_hash": "25101211ca764d2696416876ada96a5d"
+    "mtime": 1786856037.7397764,
+    "ast_hash": "9c21e5ea68c7a25b5245795f7c4539fb",
+    "semantic_hash": "9c21e5ea68c7a25b5245795f7c4539fb"
   },
   "src/com/crawlmb/TouchDirectionRepeatPreference.java": {
     "mtime": 1783818906.831584,
@@ -125,9 +125,9 @@
     "semantic_hash": "cc79c34b25313a0eefdcaaab815a5b18"
   },
   "src/com/crawlmb/activity/GameActivity.java": {
-    "mtime": 1784518940.2647038,
-    "ast_hash": "792b79c858cb48a6cd4eb498efa76a04",
-    "semantic_hash": "792b79c858cb48a6cd4eb498efa76a04"
+    "mtime": 1786856037.7172654,
+    "ast_hash": "9a89143affd026b7c4e9f26205a57467",
+    "semantic_hash": "9a89143affd026b7c4e9f26205a57467"
   },
   "src/com/crawlmb/activity/HelpActivity.java": {
     "mtime": 1778744960.008869,
@@ -215,14 +215,14 @@
     "semantic_hash": "ed212c173d4c3e7af645672e8c4f1edb"
   },
   "src/com/crawlmb/view/RegionRouter.java": {
-    "mtime": 1785998150.1535087,
-    "ast_hash": "437b1ed17aa9b1fe4a32ea6f63e7ce8f",
-    "semantic_hash": "437b1ed17aa9b1fe4a32ea6f63e7ce8f"
+    "mtime": 1786863824.6978178,
+    "ast_hash": "c6c22b8e81e5887aa0f9d8606da46a43",
+    "semantic_hash": "c6c22b8e81e5887aa0f9d8606da46a43"
   },
   "src/com/crawlmb/view/RegionTermView.java": {
-    "mtime": 1785998156.506817,
-    "ast_hash": "d20c581cccdca4e9a7e451921ca02556",
-    "semantic_hash": "d20c581cccdca4e9a7e451921ca02556"
+    "mtime": 1786679857.5652099,
+    "ast_hash": "0c4e83dabb19f1c55f9d90500696179a",
+    "semantic_hash": "0c4e83dabb19f1c55f9d90500696179a"
   },
   "src/com/crawlmb/view/RepositionController.java": {
     "mtime": 1783768196.2058744,
@@ -353,5 +353,30 @@
     "mtime": 1776494357.621691,
     "ast_hash": "4c4c9a3d64257c1742bf1daf69db33a0",
     "semantic_hash": "4c4c9a3d64257c1742bf1daf69db33a0"
+  },
+  "src/com/crawlmb/IconConfig.java": {
+    "mtime": 1786671803.2597947,
+    "ast_hash": "4c7f7e7972754d478a1edd3dbec91400",
+    "semantic_hash": "4c7f7e7972754d478a1edd3dbec91400"
+  },
+  "src/com/crawlmb/view/HudButtonController.java": {
+    "mtime": 1786682789.4833584,
+    "ast_hash": "5f14e4321f4374680b4d13c75278acfa",
+    "semantic_hash": "5f14e4321f4374680b4d13c75278acfa"
+  },
+  "src/com/crawlmb/view/ModalOverlayController.java": {
+    "mtime": 1786854649.419155,
+    "ast_hash": "7ff47112fd15376777384e017dee09b7",
+    "semantic_hash": "7ff47112fd15376777384e017dee09b7"
+  },
+  "src/com/crawlmb/view/TwoDScrollView.java": {
+    "mtime": 1786836557.2548761,
+    "ast_hash": "3206bf546ce6e3735747699baedb69df",
+    "semantic_hash": "3206bf546ce6e3735747699baedb69df"
+  },
+  "assets/icon_config.txt": {
+    "mtime": 1786683801.8374805,
+    "ast_hash": "18ef606868d0ac12be8b2d1f82611cc9",
+    "semantic_hash": "18ef606868d0ac12be8b2d1f82611cc9"
   }
 }
