@@ -2928,6 +2928,16 @@ public class RegionRouter implements TerminalRenderer
 			}
 		skipSplitRegionsThisStorm = false;
 
+		// Footer compression remaps fullView rows non-bijectively (the more
+		// block moves up under short content; vacated gap/footer rows have no
+		// source). Differential per-cell routing can't clear the rows nothing
+		// maps onto, so stale pixels from a prior longer list linger (the
+		// SPELLS "Show" footer corruption, which a resume-triggered full
+		// repaint fixed). While compression is active, repaint fullView wholly
+		// from the clean shadow so the bitmap always matches the remap.
+		if (fullViewFooterStart >= 0)
+			replayFullViewFromShadow();
+
 		invalidateAllViews();
 
 		// This frame is the post-applyMode repaint of the reload destination:

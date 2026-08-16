@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/describe.cc b/crawl-ref/source/describe.cc
-index 0a381e125d..355295dab6 100644
+index 0a381e125d..e88f78a074 100644
 --- a/crawl-ref/source/describe.cc
 +++ b/crawl-ref/source/describe.cc
 @@ -267,7 +267,15 @@ static string _format_prop_desc(string prop_name, string prop_desc)
@@ -93,10 +93,10 @@ index 0a381e125d..355295dab6 100644
          description += make_stringf(
 -            "Base accuracy: %s  Base damage: %s  ",
 +            "Base accuracy: %s%sBase damage: %s%s",
++            inf,
++            stat_sep,
              inf,
 -            inf);
-+            stat_sep,
-+            inf,
 +            stat_sep);
      }
      else
@@ -216,7 +216,82 @@ index 0a381e125d..355295dab6 100644
  
      const string damage_string = spell_damage_string(spell);
      const string max_dam_string = spell_max_damage_string(spell);
-@@ -7569,11 +7635,22 @@ static string _describe_talisman_form(transformation form_type)
+@@ -5580,6 +5646,24 @@ static void _attacks_table_row_throwing(const monster_info &mi,
+ static void _build_table_of_attacks(mon_attack_desc_info &di,
+                                     ostringstream &result)
+ {
++    // Word wrap (Android): the 3-column table (attack | max damage | bonus)
++    // overflows the narrow panel, so a long bonus folds back to column 0 under
++    // "Attacks". When wrap is on, shorten the damage header to "Max Dmg" for
++    // room and hang-indent the bonus so continuations align under "Bonus".
++    extern int android_prose_wrap_cols;
++    extern bool android_reflow_attack_bonus;
++    const bool reflow = android_prose_wrap_cols > 0
++                        && android_reflow_attack_bonus && di.has_any_flavour;
++    const char *dmg_header = "Max Damage";
++    if (reflow)
++    {
++        dmg_header = "Max Dmg";
++        size_t dmg_w = strlen(dmg_header);
++        for (const string &d : di.damage_descriptions)
++            dmg_w = max(dmg_w, (size_t) strwidth(d));
++        di.damage_width = dmg_w;
++    }
++
+     // Hopefully enough width for every possibility
+     di.damage_width    = min(di.damage_width, (size_t) 31);
+     di.bonus_width     = min(di.bonus_width, 69 - di.damage_width);
+@@ -5596,24 +5680,42 @@ static void _build_table_of_attacks(mon_attack_desc_info &di,
+     // First, the table header
+     result << padded_str(di.plural ? "Attacks" : "Attack",
+                          di.attk_desc_width + 2)
+-           << padded_str("Max Damage", di.damage_width + 2);
++           << padded_str(dmg_header, di.damage_width + 2);
+     if (di.has_any_flavour)
+     {
+-        result << padded_str(di.flavour_without_dam ? "Bonus"
+-                                                    : "After Damaging Hits",
+-                             di.bonus_width);
++        const string bonus_header = di.flavour_without_dam
++                                    ? "Bonus" : "After Damaging Hits";
++        // Bonus is the last column; skip trailing pad under reflow so the
++        // header row doesn't overshoot the panel and fold.
++        result << (reflow ? bonus_header
++                          : padded_str(bonus_header, di.bonus_width));
+     }
+     result << "\n";
+ 
+     // Table body
++    const int bonus_col = di.attk_desc_width + 2 + di.damage_width + 2;
+     for (unsigned int i = 0; i < di.attack_descriptions.size(); ++i)
+     {
+         result << chop_string(di.attack_descriptions[i], di.attk_desc_width)
+                << "  "
+                << chop_string(di.damage_descriptions[i], di.damage_width)
+-               << "  "
+-               << chop_string(di.bonus_descriptions[i], di.bonus_width)
+-               << "\n";
++               << "  ";
++        if (reflow)
++        {
++            string bonus = di.bonus_descriptions[i];
++            if (!bonus.empty())
++            {
++                const int avail = max(8, android_prose_wrap_cols - bonus_col);
++                linebreak_string(bonus, avail);
++                bonus = replace_all(bonus, "\n", "\n" + string(bonus_col, ' '));
++            }
++            result << bonus << "\n";
++        }
++        else
++        {
++            result << chop_string(di.bonus_descriptions[i], di.bonus_width)
++                   << "\n";
++        }
+     }
+ }
+ 
+@@ -7569,11 +7671,22 @@ static string _describe_talisman_form(transformation form_type)
      // Actually output the table
      ostringstream description;
  
@@ -241,7 +316,22 @@ index 0a381e125d..355295dab6 100644
      description << lines[1].to_colour_string() << "\n";
      description << lines[2].to_colour_string() << "\n";
      description << "<white>" << lines[3].to_colour_string() << "<lightgrey>\n";
-@@ -7677,7 +7754,7 @@ static string _describe_talisman_form(transformation form_type)
+@@ -7582,7 +7695,13 @@ static string _describe_talisman_form(transformation form_type)
+         description << "\nClass: " << uppercase_first(holiness_description(form->holiness));
+ 
+     // Now add various one-off bits of (generally non-scaling) data after that
+-    TablePrinter pr(4, 80);
++    // Word wrap (Android): the 4-col grid pads each cell to 20 and folds mid-
++    // cell on the narrow panel. Stack one stat per row instead when wrap is on.
++    extern bool android_reflow_talisman_stats;
++    const bool stack_stats = android_prose_wrap_cols > 0
++                             && android_reflow_talisman_stats;
++    TablePrinter pr(stack_stats ? 1 : 4,
++                    stack_stats ? android_prose_wrap_cols : 80);
+     pr.AddRow();
+ 
+     if (form->size != SIZE_CHARACTER)
+@@ -7677,7 +7796,7 @@ static string _describe_talisman_form(transformation form_type)
                      << "\n";
      }
  
