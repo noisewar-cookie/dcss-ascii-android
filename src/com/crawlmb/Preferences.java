@@ -76,6 +76,9 @@ final public class Preferences
     // against. Bumped when keys are inserted/removed so index-keyed remaps
     // can be migrated. Absent = 1 (pre-insertion layouts).
     private static final String KEYBOARD_REMAP_VERSION = "keyboard_remap_version";
+    // One-shot: reset users stranded in the "None" keyboard mode, which had
+    // no input surface before the DirectionalTouchView fix.
+    private static final String NO_KEYBOARD_UNSTICK_DONE = "no_keyboard_unstick_done";
 
 	private static final String KEY_HAPTICFEEDBACKENABLED = "crawl.hapticfeedbackenabled";
 	private static final String KEY_KEYBOARDARROWSENABLED = "crawl.keyboardarrowsenabled";
@@ -517,6 +520,26 @@ final public class Preferences
         String sharedPreferenceName = keyboardType.name() + "_1"; // Change this if we're using multiple layouts
         SharedPreferences sharedPreferences = context.getSharedPreferences(sharedPreferenceName, 0);
         return sharedPreferences.getInt(KEYBOARD_LONGPRESS_PREFIX + keyIndex, -1);
+    }
+
+    // "None" keyboard mode had no input surface (no DirectionalTouchView), so
+    // anyone who reached it — via the Show/Hide toggle or the pref — was stuck
+    // with no way out but wiping data. Now that None is usable, flip stranded
+    // users back to Crawl Keyboard once so the fix is visible on update. The
+    // one-shot flag means we never override a deliberate None choice later.
+    public static void unstickNoKeyboard(){
+        if (sharedPreferences.getBoolean(NO_KEYBOARD_UNSTICK_DONE, false)){
+            return;
+        }
+        SharedPreferences.Editor ed = sharedPreferences.edit();
+        if ("0".equals(getPortraitKeyboard())){
+            ed.putString(KEY_PORTRAITKB, "1");
+        }
+        if ("0".equals(getLandscapeKeyboard())){
+            ed.putString(KEY_LANDSCAPEKB, "1");
+        }
+        ed.putBoolean(NO_KEYBOARD_UNSTICK_DONE, true);
+        ed.apply();
     }
 
     // Layout v2 inserted "," at QWERTY index 31 and "+" at SYMBOLS index

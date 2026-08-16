@@ -423,6 +423,10 @@ public class GameActivity extends Activity
 				getWindow()
 						.setSoftInputMode(
 								WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+				// None: DirectionalTouchView is still the only tap-to-key and
+				// two-finger-longpress surface, so add it here too (fills the
+				// screen — no keyboard strip below). NO_ID = no ABOVE anchor.
+				addDirectionalKeyView(View.NO_ID, hapticFeedbackEnabled);
 			}
 
 			setContentView(screenLayout);
@@ -1328,8 +1332,10 @@ public class GameActivity extends Activity
 		RelativeLayout.LayoutParams directionalLayoutParams = new RelativeLayout.LayoutParams(
 				LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT);
 		directionalLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-		directionalLayoutParams
-				.addRule(RelativeLayout.ABOVE, virtualKeyboardId);
+		// No keyboard (NO_ID): fill the screen instead of anchoring above one.
+		if (virtualKeyboardId != View.NO_ID)
+			directionalLayoutParams
+					.addRule(RelativeLayout.ABOVE, virtualKeyboardId);
 		view.setLayoutParams(directionalLayoutParams);
 
 		if (term != null)
