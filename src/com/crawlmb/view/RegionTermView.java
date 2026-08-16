@@ -194,6 +194,11 @@ public class RegionTermView extends View
 	public int getEndCol() { return endCol; }
 	public int getEndRow() { return endRow; }
 
+	// Right edge (view-local px) of the rendered content, i.e. just past the
+	// last column. Lets an overlay anchor to where the text ends rather than to
+	// the view's full (often MATCH_PARENT) width. Valid after measure.
+	public int getContentRightX() { return drawOffsetX + canvas_width; }
+
 	// When true, onMeasure reports height based on maxContentRow (the lowest
 	// row with non-space content) + 1 spacer row, instead of the full
 	// canvas_height. The bitmap stays full-size; only the reported height

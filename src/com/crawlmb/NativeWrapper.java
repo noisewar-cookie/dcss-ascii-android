@@ -45,6 +45,9 @@ public class NativeWrapper
 	// True while a game is loaded (crawl_state.need_save) — false on the
 	// DCSS main menu / character creation. Safe from the UI thread.
 	public static native boolean gameInProgress();
+	// The '?' command keyhelp as a colour-tagged string, built from live
+	// keybindings. Call only while a game is in progress (thread parked in getch).
+	public static native String getCommandHelp();
 
 	public NativeWrapper(GameKeyListener s)
 	{

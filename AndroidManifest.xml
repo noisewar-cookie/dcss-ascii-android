@@ -6,6 +6,11 @@
          Framework (ACTION_OPEN_DOCUMENT_TREE), settings/morgue live in
          getExternalFilesDir(), and saves stay in app-private internal. -->
 
+    <!-- Network: only for the in-game wiki button's WebView (the modal that
+         loads dcss.roguelikes.gg). Normal install-time permission, no runtime
+         prompt. The rest of the app is fully offline. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Compile SDK specified in build.gradle -->
 
     <!-- Opt out of predictive back: targetSdk 36 enables it by default,

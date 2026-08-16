@@ -1,0 +1,14 @@
+diff --git a/crawl-ref/source/command.h b/crawl-ref/source/command.h
+index b2f6c78c1e..4594802e50 100644
+--- a/crawl-ref/source/command.h
++++ b/crawl-ref/source/command.h
+@@ -30,6 +30,9 @@ void show_spell_library_help();
+ 
+ void show_help(int section = CK_HOME, string highlight_string = "");
+ 
++// Android: plain-text '?' command keyhelp for the on-screen info modal.
++string get_command_help_text();
++
+ int show_keyhelp_menu(const vector<formatted_string> &lines);
+ 
+ // XXX: Actually defined in main.cc; we may want to move this to command.cc.

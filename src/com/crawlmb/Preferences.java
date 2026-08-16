@@ -84,6 +84,8 @@ final public class Preferences
 	private static final String KEY_KEYBOARDARROWSENABLED = "crawl.keyboardarrowsenabled";
 	private static final String KEY_LONGPRESSENABLED = "crawl.longpressenabled";
 	private static final String KEY_TOUCHDIRECTIONREPEAT = "crawl.touchdirectionrepeat";
+	private static final String KEY_HELPBUTTONENABLED = "crawl.helpbuttonenabled";
+	private static final String KEY_WIKIBUTTONENABLED = "crawl.wikibuttonenabled";
 
     private static SharedPreferences sharedPreferences;
 	private static int fontSize = 17;
@@ -444,6 +446,15 @@ final public class Preferences
 
 	public static boolean getLongpressAltEnabled(){
 		return sharedPreferences.getBoolean(KEY_LONGPRESSENABLED, true);
+	}
+
+	// On-screen HUD shortcut buttons (help / wiki). Default on.
+	public static boolean getHelpButtonEnabled(){
+		return sharedPreferences.getBoolean(KEY_HELPBUTTONENABLED, true);
+	}
+
+	public static boolean getWikiButtonEnabled(){
+		return sharedPreferences.getBoolean(KEY_WIKIBUTTONENABLED, true);
 	}
 
 	// Repeat interval (ms) for held 9-grid direction taps. 0 disables the

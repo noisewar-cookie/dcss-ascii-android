@@ -23,6 +23,7 @@
 #include "defines.h"
 
 #include "cio.h"
+#include "command.h"
 #include "delay.h"
 #include "enum.h"
 #include "externs.h"
@@ -377,6 +378,7 @@ extern "C"
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
 	void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz);
 	jboolean Java_com_crawlmb_NativeWrapper_gameInProgress( JNIEnv* env, jclass clz);
+	jstring Java_com_crawlmb_NativeWrapper_getCommandHelp( JNIEnv* env, jclass clz);
 };
 
 // Called on the game thread from NativeWrapper.gameStart, before initGame
@@ -413,6 +415,15 @@ void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz)
 jboolean Java_com_crawlmb_NativeWrapper_gameInProgress( JNIEnv* env, jclass clz)
 {
 	return crawl_state.need_save ? JNI_TRUE : JNI_FALSE;
+}
+
+// UI-thread query: the '?' command keyhelp as a colour-tagged string, for the
+// on-screen info modal. Built programmatically from the live (remappable)
+// keybindings, so it matches whatever the player has configured. Safe
+// cross-thread while the game thread is parked in getch.
+jstring Java_com_crawlmb_NativeWrapper_getCommandHelp( JNIEnv* env, jclass clz)
+{
+	return env->NewStringUTF(get_command_help_text().c_str());
 }
 
 void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir)

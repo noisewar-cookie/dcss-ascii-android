@@ -27,6 +27,9 @@ import android.graphics.Typeface;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
+import android.text.Spannable;
+import android.text.SpannableStringBuilder;
+import android.text.style.ForegroundColorSpan;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.ContextMenu;
@@ -47,6 +50,7 @@ import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.os.Handler;
 import android.os.Message;
 import android.widget.SeekBar;
@@ -55,10 +59,18 @@ import android.widget.SeekBar.OnSeekBarChangeListener;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import androidx.webkit.WebSettingsCompat;
+import androidx.webkit.WebViewFeature;
 
 import com.crawlmb.CrawlDialog;
 import com.crawlmb.CustomFolderSync;
 import com.crawlmb.FontConfig;
+import com.crawlmb.IconConfig;
 import com.crawlmb.PassThroughListener;
 import com.crawlmb.keylistener.GameKeyListener;
 import com.crawlmb.keyboard.CrawlKeyboardView;
@@ -73,6 +85,8 @@ import com.crawlmb.view.GridOverlayController;
 import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
+import com.crawlmb.view.HudButtonController;
+import com.crawlmb.view.ModalOverlayController;
 import com.crawlmb.view.RepositionController;
 import com.crawlmb.view.StatusBarView;
 import com.crawlmb.view.TerminalRenderer;
@@ -83,8 +97,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 public class GameActivity extends Activity
 {
@@ -138,6 +156,18 @@ public class GameActivity extends Activity
 	// entered after a layout pass has sized the keyboard for the button bar.
 	private boolean pendingGridOverlayEntry = false;
 	private GridOverlayController gridOverlayController = null;
+	// On-screen HUD shortcut buttons (help / wiki). Recreated each
+	// rebuildViews() so they re-anchor to the HUD's current slot.
+	private HudButtonController hudButtonController = null;
+	// Modal window opened by the HUD shortcut buttons. Recreated each
+	// rebuildViews() so it attaches to the current screenLayout.
+	private ModalOverlayController modalController = null;
+	// Wiki modal browser-back support. Each link tap swaps in a fresh WebView
+	// (see createWikiWebView), so there's no in-WebView history — we track the
+	// visited URLs ourselves and rebuild the previous page on BACK.
+	private final ArrayDeque<String> wikiBackStack = new ArrayDeque<>();
+	private WebView currentWikiWebView = null;
+	private boolean wikiModalActive = false;
 	// Last bottom safe-area inset, captured by the inset listener for the
 	// reposition button bar in the no-keyboard case.
 	private int lastBottomInset = 0;
@@ -429,6 +459,52 @@ public class GameActivity extends Activity
 				addDirectionalKeyView(View.NO_ID, hapticFeedbackEnabled);
 			}
 
+			// On-screen HUD shortcut buttons, added last so they layer above
+			// DirectionalTouchView and win taps over the touch overlay. Empty
+			// container area passes touches through. Recreated each rebuild so
+			// they re-anchor to the HUD's current slot after a reposition.
+			if (portraitHudView != null)
+			{
+				IconConfig iconConfig = IconConfig.load(getAssets());
+				modalController = new ModalOverlayController(this, screenLayout,
+						iconConfig, this::restoreKeyboardAfterReload);
+				hudButtonController = new HudButtonController(this, screenLayout,
+						portraitHudView, iconConfig,
+						new HudButtonController.Callbacks()
+						{
+							@Override
+							public boolean isHelpEnabled() {
+								return Preferences.getHelpButtonEnabled();
+							}
+							@Override
+							public boolean isWikiEnabled() {
+								return Preferences.getWikiButtonEnabled();
+							}
+							@Override
+							public boolean isOverlayActive() {
+								return (repositionController != null
+										&& repositionController.isActive())
+									|| (gridOverlayController != null
+										&& gridOverlayController.isActive())
+									|| (modalController != null
+										&& modalController.isActive());
+							}
+							@Override
+							public void onHelpTapped() {
+								showHelpModal();
+							}
+							@Override
+							public void onWikiTapped() {
+								showWikiModal();
+							}
+						});
+			}
+			else
+			{
+				hudButtonController = null;
+				modalController = null;
+			}
+
 			setContentView(screenLayout);
 			dialog.restoreDialog();
 
@@ -515,6 +591,455 @@ public class GameActivity extends Activity
 			if (imm != null)
 				imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
 		}
+	}
+
+	// Base size (SP) of the info-modal text before help_modal_font_scale.
+	private static final float HELP_MODAL_BASE_SP = 13f;
+	// DCSS LIGHTGRAY — the terminal default colour for text with no colour tag.
+	private static final int CRAWL_LIGHTGRAY = 0xFFC0C0C0;
+
+	// Info button: the '?' command keyhelp, pulled live from native so it
+	// reflects the player's actual (remappable) keybindings. It's 2-column
+	// monospace-aligned, so render fixed-width WITHOUT wrap and let the 2D
+	// scroll modal handle overflow — wrapping would shear the columns. Only
+	// valid mid-game; on the main menu there are no bindings to report.
+	private void showHelpModal() {
+		if (modalController == null)
+			return;
+		wikiModalActive = false;
+		TextView tv = new TextView(this);
+		if (NativeWrapper.gameInProgress())
+			tv.setText(parseCrawlColourString(NativeWrapper.getCommandHelp()));
+		else
+			tv.setText("Open a game to see the control keys.");
+		tv.setTextColor(CRAWL_LIGHTGRAY);
+		float scale = portraitFontConfig != null
+				? portraitFontConfig.helpModalFontScale : 0.8f;
+		tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, HELP_MODAL_BASE_SP * scale);
+		tv.setTypeface(Typeface.MONOSPACE);
+		modalController.show(tv, ModalOverlayController.SCROLL_BOTH);
+	}
+
+	// The 16 DCSS terminal colours (colour_to_str names), matching the ARGB
+	// palette the console renderer uses (colourMap in libandroid.cc), so the
+	// info modal's text colours match the in-game '?' help exactly. "gray"
+	// aliases included for safety; parse_string accepts them too.
+	private static final Map<String, Integer> CRAWL_COLOURS = buildCrawlColours();
+	private static Map<String, Integer> buildCrawlColours() {
+		Map<String, Integer> m = new HashMap<>();
+		m.put("black", 0xFF000000);
+		m.put("blue", 0xFF0040FF);
+		m.put("green", 0xFF008040);
+		m.put("cyan", 0xFF00A0A0);
+		m.put("red", 0xFFFF4040);
+		m.put("magenta", 0xFF9020FF);
+		m.put("brown", 0xFFA64800);
+		m.put("lightgrey", CRAWL_LIGHTGRAY);
+		m.put("lightgray", CRAWL_LIGHTGRAY);
+		m.put("darkgrey", 0xFF606060);
+		m.put("darkgray", 0xFF606060);
+		m.put("lightblue", 0xFF00FFFF);
+		m.put("lightgreen", 0xFF00FF00);
+		m.put("lightcyan", 0xFF20FFDC);
+		m.put("lightred", 0xFFFF5050);
+		m.put("lightmagenta", 0xFFFA4FFD);
+		m.put("yellow", 0xFFFFFF00);
+		m.put("white", 0xFFFFFFFF);
+		return m;
+	}
+
+	// Convert a DCSS to_colour_string() output into a coloured CharSequence.
+	// Grammar: open-only "<colour>" tags set the current foreground until the
+	// next tag; "<<" is a literal '<'; "<bg:colour>" (background) is ignored.
+	// Unknown tags are dropped. Text before any tag is LIGHTGRAY.
+	private CharSequence parseCrawlColourString(String s) {
+		SpannableStringBuilder out = new SpannableStringBuilder();
+		int cur = CRAWL_LIGHTGRAY;
+		int i = 0, n = s.length();
+		while (i < n) {
+			char ch = s.charAt(i);
+			if (ch == '<' && i + 1 < n && s.charAt(i + 1) == '<') {
+				appendColoured(out, "<", cur);
+				i += 2;
+				continue;
+			}
+			if (ch == '<') {
+				int close = s.indexOf('>', i + 1);
+				if (close < 0) {
+					appendColoured(out, s.substring(i), cur);
+					break;
+				}
+				String tag = s.substring(i + 1, close).toLowerCase(Locale.ROOT);
+				i = close + 1;
+				if (tag.startsWith("bg:"))
+					continue;
+				Integer c = CRAWL_COLOURS.get(tag);
+				if (c != null)
+					cur = c;
+				continue;
+			}
+			int next = s.indexOf('<', i);
+			if (next < 0)
+				next = n;
+			appendColoured(out, s.substring(i, next), cur);
+			i = next;
+		}
+		return out;
+	}
+
+	private static void appendColoured(SpannableStringBuilder out, String text,
+			int colour) {
+		if (text.isEmpty())
+			return;
+		int start = out.length();
+		out.append(text);
+		out.setSpan(new ForegroundColorSpan(colour), start, out.length(),
+				Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+	}
+
+	// Landing page: the Ashenzaris_Archive quick-reference (also the target of
+	// WIKI_JUMP_JS's "Character Attributes" jump).
+	private static final String WIKI_LANDING_URL =
+			"https://dcss.roguelikes.gg/wiki/Ashenzaris_Archive";
+
+	// Allowlist base: any content page under the wiki. Taps to URLs outside this
+	// prefix (external sites, the hamburger's "Play DCSS" links) are blocked;
+	// see wikiBlockReason, which also blocks the Special: namespace within it.
+	private static final String WIKI_ALLOW_PREFIX =
+			"https://dcss.roguelikes.gg/wiki/";
+
+	// Shown in place of the page when the load fails (no network etc.). The
+	// modal shell can't scroll a WebView (it scrolls itself), so this is a
+	// self-contained dark page the WebView renders directly.
+	private static final String WIKI_OFFLINE_HTML =
+			"<!DOCTYPE html><html><head><meta name='viewport' "
+			+ "content='width=device-width, initial-scale=1'>"
+			+ "<style>html,body{height:100%;margin:0;background:#0a0a0a;"
+			+ "color:#e0e0e0;font-family:sans-serif}"
+			+ "div{position:absolute;top:50%;left:0;right:0;"
+			+ "transform:translateY(-50%);padding:0 24px;text-align:center}"
+			+ "a{color:#8f9fff}</style></head><body><div>"
+			+ "<h2>Wiki unavailable</h2>"
+			+ "<p>Couldn't load the DCSS wiki. Check your internet "
+			+ "connection and try again.</p>"
+			+ "<p>" + WIKI_LANDING_URL + "</p>"
+			+ "</div></body></html>";
+
+	// Viewport meta forced into every main-frame HTML response (see
+	// rewriteMainFrame). initial-scale=0.8 must be present at first parse — not
+	// applied as a post-load mutation — or the visual zoom and the touch
+	// hit-test regions desync and link taps miss. width=device-width keeps the
+	// responsive mobile layout; the scale range keeps pinch-zoom enabled.
+	private static final String WIKI_VIEWPORT =
+			"<meta name=\"viewport\" content=\"width=device-width, "
+			+ "initial-scale=0.8, minimum-scale=0.25, maximum-scale=5\">";
+
+	// Injected into every main-frame HTML response (see rewriteMainFrame).
+	// Rule 1: wide blocks — data tables (spell/species pages), <pre> — otherwise
+	// get clipped at the viewport edge with no way to reach the cut-off columns;
+	// making each a block-level scroll box lets it pan horizontally on its own
+	// while the page keeps its responsive fit and 0.8 zoom.
+	// Rule 2: the wiki's night-theme CSS sets `background:` (shorthand) on
+	// wikitable th, which resets background-repeat to `repeat` and tiles the
+	// sortable-header arrow across the whole cell; restore no-repeat + right
+	// alignment (the arrow image and dark header colour still come from the
+	// skin). !important beats the skin's non-important rules.
+	private static final String WIKI_WIDE_CSS =
+			"<style>table,pre{display:block !important;max-width:100% !important;"
+			+ "overflow-x:auto !important;-webkit-overflow-scrolling:touch}"
+			+ ".jquery-tablesorter th.headerSort,"
+			+ ".sortable:not(.jquery-tablesorter)>*>tr:first-child>th{"
+			+ "background-repeat:no-repeat !important;"
+			+ "background-position:center right !important}"
+			+ "</style>";
+
+	// Matches the UA-rendered surfaces (default page background, scrollbars,
+	// form controls) to the forced night theme and avoids a light flash before
+	// the site CSS paints. The site's own dark styling is driven by the theme
+	// class (see forceCitizenDark), not this.
+	private static final String WIKI_DARK_META =
+			"<meta name=\"color-scheme\" content=\"dark\">";
+
+	// Runs once after the first load: jump to the "Character Attributes" section.
+	// It's a styled <div>, not a heading, so match by exact text on any element
+	// and retry briefly while the Citizen skin reflows.
+	private static final String WIKI_JUMP_JS =
+			"(function(){var n=0;function j(){var a=document.querySelectorAll("
+			+ "'div,span,h1,h2,h3,h4,p,strong,b,td,th,a');var t=null;"
+			+ "for(var i=0;i<a.length;i++){"
+			+ "if((a[i].textContent||'').trim()==='Character Attributes')"
+			+ "{t=a[i];break;}}"
+			+ "if(t){t.scrollIntoView(true);return;}"
+			+ "if(n++<12){setTimeout(j,150);}}j();})();";
+
+	private void showWikiModal() {
+		if (modalController == null)
+			return;
+		wikiBackStack.clear();
+		wikiBackStack.push(WIKI_LANDING_URL);
+		wikiModalActive = true;
+		currentWikiWebView = createWikiWebView(WIKI_LANDING_URL);
+		modalController.show(currentWikiWebView, ModalOverlayController.SCROLL_NONE);
+	}
+
+	// Rebuild the previous wiki page on BACK. Returns false when there's no
+	// history left (caller then dismisses the modal).
+	private boolean wikiGoBack() {
+		if (currentWikiWebView == null || wikiBackStack.size() <= 1)
+			return false;
+		wikiBackStack.pop();                 // drop the current page
+		swapWikiWebView(currentWikiWebView, wikiBackStack.peek());
+		return true;
+	}
+
+	// Build a fully configured WebView loading url. The jump to the Character
+	// Attributes section runs whenever the loaded page is the landing page —
+	// the initial open and every return to it (BACK or a link back), but not
+	// other articles.
+	//
+	// Link taps DON'T navigate in place: this GPU stops drawing a WebView's
+	// compositor layers after its first navigation (the page loads and stays
+	// scrollable but paints blank). A freshly created WebView always paints its
+	// first load, so shouldOverrideUrlLoading swaps in a new WebView per link —
+	// every navigation becomes a first load.
+	@android.annotation.SuppressLint("SetJavaScriptEnabled")
+	private WebView createWikiWebView(String url) {
+		WebView web = new WebView(this);
+		web.setBackgroundColor(Color.BLACK); // avoid white flash before paint
+		WebSettings s = web.getSettings();
+		s.setJavaScriptEnabled(true);
+		s.setDomStorageEnabled(true);
+		// Responsive mobile layout (honors the page's width=device-width meta);
+		// the 20% zoom-out is baked into the meta at parse time by
+		// rewriteMainFrame, so it's the page's initial scale. Pinch-zoom on.
+		s.setUseWideViewPort(true);
+		s.setLoadWithOverviewMode(true);
+		s.setBuiltInZoomControls(true);
+		s.setDisplayZoomControls(false);
+		// Dark mode comes from the site's OWN night theme (forced on in
+		// rewriteMainFrame), not from WebView force-dark — keep algorithmic
+		// darkening OFF. Force-dark ran a per-image classifier that inverted
+		// low-colour tiles (spell/weapon icons) at random; the site's designed
+		// dark theme shows every tile as authored.
+		if (WebViewFeature.isFeatureSupported(
+				WebViewFeature.ALGORITHMIC_DARKENING))
+			WebSettingsCompat.setAlgorithmicDarkeningAllowed(s, false);
+		web.setWebViewClient(new WebViewClient() {
+			private boolean failed = false;
+			private boolean jumped = !WIKI_LANDING_URL.equals(url);
+			private void fallback(WebView v) {
+				if (failed)
+					return;
+				failed = true;
+				v.loadDataWithBaseURL(null, WIKI_OFFLINE_HTML,
+						"text/html", "utf-8", null);
+			}
+			// Rewrite the viewport meta in the raw HTML of every top-level
+			// navigation, so initial-scale=0.8 is applied at first parse. Doing
+			// it here — rather than mutating the DOM after load — keeps the
+			// visual scale and the touch hit-test regions in sync, so link taps
+			// map correctly. Returns null (WebView loads normally) for
+			// non-HTML, non-GET, or on any fetch error.
+			@Override
+			public android.webkit.WebResourceResponse shouldInterceptRequest(
+					WebView v, WebResourceRequest req) {
+				return rewriteMainFrame(req);
+			}
+			// Route user-initiated top-level navigations into a fresh WebView
+			// (see method header). Server redirects (isRedirect) stay in place so
+			// the current WebView follows them — it's still its first load.
+			@Override
+			public boolean shouldOverrideUrlLoading(WebView v,
+					WebResourceRequest req) {
+				if (failed || !req.isForMainFrame() || req.isRedirect())
+					return false;
+				String u = req.getUrl().toString();
+				if (!u.startsWith("http"))
+					return false;
+				String block = wikiBlockReason(u);
+				if (block != null) {
+					Toast.makeText(GameActivity.this, block,
+							Toast.LENGTH_SHORT).show();
+					return true; // consume: keep the user on the current page
+				}
+				wikiBackStack.push(u);
+				swapWikiWebView(v, u);
+				return true;
+			}
+			@Override
+			public void onReceivedError(WebView v, WebResourceRequest req,
+					WebResourceError err) {
+				if (req.isForMainFrame())
+					fallback(v);
+			}
+			@Override
+			public void onPageFinished(WebView v, String url) {
+				if (failed)
+					return;
+				if (!jumped) {
+					jumped = true;
+					v.evaluateJavascript(WIKI_JUMP_JS, null);
+				}
+			}
+		});
+		web.loadUrl(url);
+		return web;
+	}
+
+	// Navigation policy for wiki link taps. Content pages under the wiki are
+	// allowed to browse freely; anything outside the wiki prefix (external
+	// sites, the hamburger's "Play DCSS" links) is blocked, as is MediaWiki's
+	// Special: namespace (login, account creation, utility pages) and
+	// edit/history/raw action links. Returns a toast message when blocked, or
+	// null when allowed.
+	private String wikiBlockReason(String url) {
+		String lower = url.toLowerCase(Locale.ROOT);
+		if (!lower.startsWith(WIKI_ALLOW_PREFIX.toLowerCase(Locale.ROOT)))
+			return "That link leaves the DCSS wiki.";
+		if (lower.contains("/wiki/special:") || lower.contains("title=special:")
+				|| lower.contains("action=") || lower.contains("veaction="))
+			return "This page isn't available in-app.";
+		return null;
+	}
+
+	// Replace the WebView currently in the modal with a fresh one loading url,
+	// keeping its position under the close button and its layout params.
+	private void swapWikiWebView(WebView old, String url) {
+		android.view.ViewParent p = old.getParent();
+		if (!(p instanceof ViewGroup))
+			return;
+		ViewGroup parent = (ViewGroup) p;
+		int idx = parent.indexOfChild(old);
+		ViewGroup.LayoutParams lp = old.getLayoutParams();
+		WebView fresh = createWikiWebView(url);
+		currentWikiWebView = fresh;
+		parent.removeView(old);
+		old.destroy();
+		parent.addView(fresh, idx, lp);
+	}
+
+	// Fetch a top-level HTML navigation ourselves and swap its viewport meta for
+	// WIKI_VIEWPORT, so the page lays out at initial-scale=0.8 from the first
+	// paint. Runs on a WebView worker thread, so the blocking fetch is fine.
+	// Anything we don't handle (subresources, non-GET, non-HTML, errors) returns
+	// null and the WebView loads it the normal way.
+	private android.webkit.WebResourceResponse rewriteMainFrame(
+			WebResourceRequest req) {
+		if (req == null || !req.isForMainFrame()
+				|| !"GET".equalsIgnoreCase(req.getMethod()))
+			return null;
+		java.net.HttpURLConnection c = null;
+		try {
+			java.net.URL url = new java.net.URL(req.getUrl().toString());
+			if (!url.getProtocol().startsWith("http"))
+				return null;
+			c = (java.net.HttpURLConnection) url.openConnection();
+			c.setInstanceFollowRedirects(true);
+			c.setConnectTimeout(15000);
+			c.setReadTimeout(15000);
+			// Forward the request's headers, but drop Accept-Encoding: setting it
+			// ourselves disables HttpURLConnection's transparent gzip decoding, so
+			// readAll would see raw gzip bytes. Link navigations send this header
+			// (the initial loadUrl doesn't) — that's why the first page rendered
+			// but link taps loaded garbage.
+			java.util.Map<String, String> hdrs = req.getRequestHeaders();
+			if (hdrs != null)
+				for (java.util.Map.Entry<String, String> e : hdrs.entrySet())
+					if (!"Accept-Encoding".equalsIgnoreCase(e.getKey()))
+						c.setRequestProperty(e.getKey(), e.getValue());
+			String cookie = android.webkit.CookieManager.getInstance()
+					.getCookie(url.toString());
+			if (cookie != null)
+				c.setRequestProperty("Cookie", cookie);
+			c.connect();
+			String contentType = c.getContentType();
+			if (contentType == null
+					|| !contentType.toLowerCase().contains("text/html"))
+				return null; // let the WebView load non-HTML itself
+			String charset = parseCharset(contentType);
+			java.io.InputStream in = c.getInputStream();
+			String enc = c.getContentEncoding();
+			if (enc != null && enc.toLowerCase().contains("gzip"))
+				in = new java.util.zip.GZIPInputStream(in);
+			String html = readAll(in, charset);
+			String modified = injectHeadHtml(
+					injectViewport(html), WIKI_DARK_META + WIKI_WIDE_CSS);
+			modified = forceCitizenDark(modified);
+			return new android.webkit.WebResourceResponse("text/html", charset,
+					new java.io.ByteArrayInputStream(
+							modified.getBytes(charset)));
+		} catch (Exception e) {
+			return null; // fall back to normal loading (error path fires later)
+		} finally {
+			if (c != null)
+				c.disconnect();
+		}
+	}
+
+	private static String parseCharset(String contentType) {
+		int i = contentType.toLowerCase().indexOf("charset=");
+		if (i >= 0) {
+			String cs = contentType.substring(i + 8).trim();
+			int semi = cs.indexOf(';');
+			if (semi >= 0)
+				cs = cs.substring(0, semi).trim();
+			cs = cs.replace("\"", "").replace("'", "");
+			if (java.nio.charset.Charset.isSupported(cs))
+				return cs;
+		}
+		return "utf-8";
+	}
+
+	private static String readAll(java.io.InputStream in, String charset)
+			throws java.io.IOException {
+		java.io.ByteArrayOutputStream out =
+				new java.io.ByteArrayOutputStream();
+		byte[] buf = new byte[8192];
+		int n;
+		while ((n = in.read(buf)) != -1)
+			out.write(buf, 0, n);
+		in.close();
+		return out.toString(charset);
+	}
+
+	// Replace the page's viewport meta with WIKI_VIEWPORT (or insert one after
+	// <head> if the page has none), so the mobile layout renders at 80%.
+	private static String injectViewport(String html) {
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+				"<meta[^>]*name=[\"']?viewport[\"']?[^>]*>",
+				java.util.regex.Pattern.CASE_INSENSITIVE).matcher(html);
+		if (m.find())
+			return m.replaceFirst(
+					java.util.regex.Matcher.quoteReplacement(WIKI_VIEWPORT));
+		java.util.regex.Matcher h = java.util.regex.Pattern.compile(
+				"<head[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE)
+				.matcher(html);
+		if (h.find())
+			return html.substring(0, h.end()) + WIKI_VIEWPORT
+					+ html.substring(h.end());
+		return html;
+	}
+
+	// The wiki (Citizen skin) serves anonymous users the light theme
+	// (skin-theme-clientpref-day on <html>); its clientPrefs() only overrides
+	// that from a stored localStorage pref we never set, so it stays light.
+	// Swap the class to the night theme so the site applies its OWN designed
+	// dark styling. Every page SSRs this class and every navigation is refetched
+	// here, so it's consistent across the modal.
+	private static String forceCitizenDark(String html) {
+		return html.replace("skin-theme-clientpref-day",
+				"skin-theme-clientpref-night");
+	}
+
+	// Insert an HTML snippet just inside <head> (no-op if the page has none).
+	private static String injectHeadHtml(String html, String snippet) {
+		java.util.regex.Matcher h = java.util.regex.Pattern.compile(
+				"<head[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE)
+				.matcher(html);
+		if (h.find())
+			return html.substring(0, h.end()) + snippet
+					+ html.substring(h.end());
+		return html;
 	}
 
 	private View buildReloadOverlay() {
@@ -1501,6 +2026,18 @@ public class GameActivity extends Activity
 
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
+		if (modalController != null && modalController.isActive()) {
+			if (isSystemKey(keyCode))
+				return super.onKeyDown(keyCode, event);
+			if (keyCode == KeyEvent.KEYCODE_BACK) {
+				// In the wiki modal, BACK acts as a browser back button until
+				// history is exhausted, then dismisses.
+				if (wikiModalActive && wikiGoBack())
+					return true;
+				modalController.dismiss();
+			}
+			return true;
+		}
 		if (repositionController != null && repositionController.isActive()) {
 			if (isSystemKey(keyCode))
 				return super.onKeyDown(keyCode, event);
@@ -1530,6 +2067,8 @@ public class GameActivity extends Activity
 
 	@Override
 	public boolean onKeyUp(int keyCode, KeyEvent event) {
+		if (modalController != null && modalController.isActive())
+			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
 		if (repositionController != null && repositionController.isActive())
 			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
 		if (gridOverlayController != null && gridOverlayController.isActive())

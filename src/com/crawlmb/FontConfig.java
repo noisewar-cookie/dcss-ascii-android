@@ -86,6 +86,10 @@ public class FontConfig
     public final float portraitHelpFontScale;
     public final boolean portraitHelpScrollable;
     public final boolean portraitHelpVScrollable;
+    // HUD info-button modal (the '?' command keyhelp overlay): multiplier on
+    // its base text size. Distinct from portraitHelp* above, which sizes the
+    // native full-screen help viewer.
+    public final float helpModalFontScale;
     public final float portraitMessagesFontScale;
     public final boolean portraitMessagesScrollable;
     public final boolean portraitMessagesVScrollable;
@@ -192,6 +196,7 @@ public class FontConfig
         this.portraitHelpFontScale     = getFloat(props, "portrait_help_font_scale", 1.4f);
         this.portraitHelpScrollable    = getBool (props, "portrait_help_scrollable", this.portraitDefaultScrollable);
         this.portraitHelpVScrollable   = getBool (props, "portrait_help_vscrollable", true);
+        this.helpModalFontScale        = getFloat(props, "help_modal_font_scale", 0.8f);
         this.portraitMessagesFontScale = getFloat(props, "portrait_messages_font_scale", this.portraitDefaultFontScale);
         this.portraitMessagesScrollable= getBool (props, "portrait_messages_scrollable", this.portraitDefaultScrollable);
         this.portraitMessagesVScrollable=getBool (props, "portrait_messages_vscrollable", true);

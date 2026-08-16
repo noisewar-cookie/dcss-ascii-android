@@ -227,6 +227,11 @@ portrait_help_font_scale=1.75
 portrait_help_scrollable=true
 portrait_help_vscrollable=true
 
+# HUD info button modal (the on-screen '?' keyhelp overlay). Multiplier on the
+# modal's base text size; the content is monospace 2-column, so it scrolls
+# rather than wrapping. Lower = smaller text.
+help_modal_font_scale=0.8
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Newgame species/background screens (portrait)
 # Each category renders into its own vertically-stacked panel that samples a

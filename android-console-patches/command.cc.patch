@@ -1,0 +1,18 @@
+diff --git a/crawl-ref/source/command.cc b/crawl-ref/source/command.cc
+index eed717b1a2..d8bd3f0095 100644
+--- a/crawl-ref/source/command.cc
++++ b/crawl-ref/source/command.cc
+@@ -1317,6 +1317,13 @@ static formatted_string _col_conv(void (*func)(column_composer &))
+     return contents;
+ }
+
++// Android: '?' command keyhelp as a colour-tagged string (same content and
++// colours as the interactive '?' help), for the on-screen info modal.
++string get_command_help_text()
++{
++    return _col_conv(_add_formatted_keyhelp).to_colour_string(LIGHTGRAY);
++}
++
+ static int _get_help_section(int section, formatted_string &header_out, formatted_string &text_out, int &scroll_out)
+ {
+     static map<int, int> hotkeys;

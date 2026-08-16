@@ -104,6 +104,10 @@
     <string name="preferences_keyboard_arrows_summary">Show red directional arrows on keyboard</string>
     <string name="preferences_longpress_alt_title">Enable longpress alt keys</string>
     <string name="preferences_longpress_alt_summary">Long-press a key to type the alt key shown in its corner</string>
+    <string name="preferences_helpbutton_title">Show help button</string>
+    <string name="preferences_helpbutton_summary">On-screen button by the HP/MP bars that opens the control-keys help</string>
+    <string name="preferences_wikibutton_title">Show wiki button</string>
+    <string name="preferences_wikibutton_summary">On-screen button by the stats that opens the game wiki</string>
 
     <string name="display_category">Display</string>
     <string name="control_category">Controls</string>

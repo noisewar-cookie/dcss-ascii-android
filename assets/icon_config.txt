@@ -1,0 +1,28 @@
+# DCSS Android On-screen Shortcut Buttons + Modal Configuration
+# ──────────────────────────────────────────────────────────────────────────────
+# The two HUD shortcut buttons (help / wiki) overlay the right edge of the
+# stats panel and travel with it when the HUD is repositioned. Each can also
+# be toggled off in Preferences > Controls. Tapping one opens a modal window.
+#
+# Color formats: RRGGBB, #RRGGBB, 0xRRGGBB, or 8-digit AARRGGBB.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Button icon opacity (0.0-1.0). Icons are tinted white; this is their alpha.
+hud_button_opacity=0.6
+
+# Button square height, measured in HUD text rows, so the icons scale with the
+# HUD font and stay aligned with the two-row stat blocks they sit beside.
+hud_button_row_span=2.0
+
+# Gap (dp) between the buttons and the right edge of the HUD stats panel.
+hud_button_margin_dp=4
+
+# Modal window: inset from the safe-area edges, as a percentage of each side.
+# The panel spans the screen minus the nav bar (or the full height if there is
+# no nav bar), with this margin applied equally to all sides within that area.
+modal_padding_percent=3
+
+# Modal window: solid border color and thickness (dp). Default matches the
+# app's HUD brown (portrait_quickcontrols_font_color in font_config.txt).
+modal_border_color=8f5630
+modal_border_width_dp=2
