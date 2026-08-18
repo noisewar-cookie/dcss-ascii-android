@@ -73,6 +73,28 @@ cd ..
 ./gradlew assembleDebug
 ```
 
+> **On a submodule version bump, re-audit the truncated talisman labels.**
+> The talisman description table is too wide for the narrow Android display, so
+> its column labels are shortened — but **only when word wrap is on**
+> (`android_prose_wrap_cols > 0`); the stock wide layout keeps the full upstream
+> labels. All of this lives in `describe.cc.patch` via two helpers,
+> `_ww_label(full, short)` and `_ww_special_dice_name()`:
+>
+> - Column labels: `UC Dmg`, `Body AC`, `Breath Size`, `Bees`, `Spell Skill`,
+>   `Tendrils`, `Petrify %`, `Ensnare %`, `Airstrike`, `Bat Recharge`, `RegenMP`,
+>   `Bite`, `Devour Reg`, `Takedown`.
+> - `special_damage_name` (kept at upstream length in `dat/forms/*.yaml`, mapped
+>   at display time): `Watery Grave Dmg`→`Grave Dmg`, `Frigid Wall Dmg`→`Frigid
+>   Dmg`, `Blinkbolt Dmg`→`Blinkbolt`.
+>
+> Both helpers match upstream by **exact string** (the `full` arg / the map
+> keys). If upstream renames a label or a special-damage name, the shortening
+> silently stops applying (the `full` string just passes through unchanged — no
+> build error). After a bump, re-scan the label list in `describe.cc`
+> (`_describe_form`) and the `special_damage_name` fields in `dat/forms/*.yaml`
+> for any new string longer than ~9 chars, and confirm the `_ww_*` `full` args
+> still match the current upstream strings.
+
 ## License
 
 This project is licensed under the [GNU General Public License v2.0](LICENSE) (or later), the same license as Dungeon Crawl Stone Soup.
