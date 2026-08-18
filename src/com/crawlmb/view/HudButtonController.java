@@ -2,7 +2,11 @@ package com.crawlmb.view;
 
 import android.app.Activity;
 import android.graphics.Color;
+import android.os.SystemClock;
+import android.view.HapticFeedbackConstants;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
@@ -29,6 +33,9 @@ public class HudButtonController
     {
         boolean isHelpEnabled();
         boolean isWikiEnabled();
+        // When true, buttons fire on long-press only; a short tap falls
+        // through to the touch controls beneath (see makeButton).
+        boolean isLongpressMode();
         // True while the reposition / grid overlay editors own the screen.
         boolean isOverlayActive();
         void onHelpTapped();
@@ -47,9 +54,16 @@ public class HudButtonController
     private static final float HELP_ASPECT = 20f / 20f;
     private static final float WIKI_ASPECT = 24f / 20f;
 
+    // Match the keyboard alt-key hold duration exactly.
+    private static final int LONGPRESS_TIMEOUT =
+            ViewConfiguration.getLongPressTimeout();
+
     private final RelativeLayout root;
     private final RegionTermView hudView;
     private final IconConfig cfg;
+    // Touch overlay beneath the buttons; a short tap in long-press mode is
+    // replayed to it as a normal control tap. May be null.
+    private final View passThroughTarget;
     private final Callbacks cb;
 
     private final FrameLayout container;
@@ -59,11 +73,13 @@ public class HudButtonController
     private int lastSize = -1;
 
     public HudButtonController(Activity activity, RelativeLayout root,
-            RegionTermView hudView, IconConfig cfg, Callbacks cb)
+            RegionTermView hudView, IconConfig cfg, View passThroughTarget,
+            Callbacks cb)
     {
         this.root = root;
         this.hudView = hudView;
         this.cfg = cfg;
+        this.passThroughTarget = passThroughTarget;
         this.cb = cb;
 
         float density = activity.getResources().getDisplayMetrics().density;
@@ -120,7 +136,105 @@ public class HudButtonController
         b.setClickable(true);
         b.setVisibility(View.GONE);
         b.setOnClickListener(onClick);
+        b.setOnTouchListener(new LongPressGate(b, () -> onClick.onClick(b)));
         return b;
+    }
+
+    // In long-press mode the button consumes the gesture and fires the action
+    // only after LONGPRESS_TIMEOUT. When off, just treat as normal tap.
+    private final class LongPressGate implements View.OnTouchListener
+    {
+        private final ImageView button;
+        private final Runnable action;
+        private final Runnable commit;
+        private boolean armed;
+        private boolean fired;
+
+        LongPressGate(ImageView button, Runnable action)
+        {
+            this.button = button;
+            this.action = action;
+            this.commit = () ->
+            {
+                if (!armed)
+                    return;
+                armed = false;
+                fired = true;
+                button.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                action.run();
+            };
+        }
+
+        @Override
+        public boolean onTouch(View v, MotionEvent e)
+        {
+            if (!cb.isLongpressMode())
+                return false;
+            switch (e.getActionMasked())
+            {
+            case MotionEvent.ACTION_DOWN:
+                armed = true;
+                fired = false;
+                button.postDelayed(commit, LONGPRESS_TIMEOUT);
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                // Sliding off the box before the timeout cancels the hold.
+                if (armed && !inBounds(e))
+                    disarm();
+                return true;
+            case MotionEvent.ACTION_UP:
+                if (!fired)
+                {
+                    boolean wasArmed = armed;
+                    disarm();
+                    // A release that never reached the timeout is a stray tap:
+                    // replay it to the controls beneath.
+                    if (wasArmed && inBounds(e))
+                        forwardTap(e);
+                }
+                fired = false;
+                return true;
+            default: // ACTION_CANCEL etc.
+                disarm();
+                fired = false;
+                return true;
+            }
+        }
+
+        private void disarm()
+        {
+            armed = false;
+            button.removeCallbacks(commit);
+        }
+
+        private boolean inBounds(MotionEvent e)
+        {
+            float x = e.getX();
+            float y = e.getY();
+            return x >= 0 && y >= 0
+                    && x < button.getWidth() && y < button.getHeight();
+        }
+    }
+
+    // Replay a tap at the event's screen location to the touch overlay, so a
+    // short tap on a long-press button lands as the control it covers.
+    private void forwardTap(MotionEvent e)
+    {
+        if (passThroughTarget == null)
+            return;
+        int[] loc = new int[2];
+        passThroughTarget.getLocationOnScreen(loc);
+        float x = e.getRawX() - loc[0];
+        float y = e.getRawY() - loc[1];
+        long t = SystemClock.uptimeMillis();
+        MotionEvent down = MotionEvent.obtain(
+                t, t, MotionEvent.ACTION_DOWN, x, y, 0);
+        passThroughTarget.dispatchTouchEvent(down);
+        down.recycle();
+        MotionEvent up = MotionEvent.obtain(
+                t, t, MotionEvent.ACTION_UP, x, y, 0);
+        passThroughTarget.dispatchTouchEvent(up);
+        up.recycle();
     }
 
     private void layout()

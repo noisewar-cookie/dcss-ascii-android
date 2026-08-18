@@ -469,7 +469,7 @@ public class GameActivity extends Activity
 				modalController = new ModalOverlayController(this, screenLayout,
 						iconConfig, this::restoreKeyboardAfterReload);
 				hudButtonController = new HudButtonController(this, screenLayout,
-						portraitHudView, iconConfig,
+						portraitHudView, iconConfig, portraitDirectionalView,
 						new HudButtonController.Callbacks()
 						{
 							@Override
@@ -479,6 +479,10 @@ public class GameActivity extends Activity
 							@Override
 							public boolean isWikiEnabled() {
 								return Preferences.getWikiButtonEnabled();
+							}
+							@Override
+							public boolean isLongpressMode() {
+								return Preferences.getHudButtonLongpressEnabled();
 							}
 							@Override
 							public boolean isOverlayActive() {

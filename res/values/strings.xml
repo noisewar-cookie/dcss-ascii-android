@@ -108,6 +108,8 @@
     <string name="preferences_helpbutton_summary">In-game help button to show keys / controls.</string>
     <string name="preferences_wikibutton_title">Show wiki button</string>
     <string name="preferences_wikibutton_summary">In-game wiki button to view Ashenzari\'s Archive.</string>
+    <string name="preferences_hudbutton_longpress_title">Long-press help/wiki buttons</string>
+    <string name="preferences_hudbutton_longpress_summary">Hold to activate, taps will passthrough.</string>
 
     <string name="display_category">Display</string>
     <string name="control_category">Controls</string>

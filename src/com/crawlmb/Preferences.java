@@ -86,6 +86,7 @@ final public class Preferences
 	private static final String KEY_TOUCHDIRECTIONREPEAT = "crawl.touchdirectionrepeat";
 	private static final String KEY_HELPBUTTONENABLED = "crawl.helpbuttonenabled";
 	private static final String KEY_WIKIBUTTONENABLED = "crawl.wikibuttonenabled";
+	private static final String KEY_HUDBUTTONLONGPRESS = "crawl.hudbuttonlongpress";
 
     private static SharedPreferences sharedPreferences;
 	private static int fontSize = 17;
@@ -455,6 +456,12 @@ final public class Preferences
 
 	public static boolean getWikiButtonEnabled(){
 		return sharedPreferences.getBoolean(KEY_WIKIBUTTONENABLED, true);
+	}
+
+	// When on, the HUD shortcut buttons require a long-press to fire; a short
+	// tap falls through to the touch controls beneath them. Default off.
+	public static boolean getHudButtonLongpressEnabled(){
+		return sharedPreferences.getBoolean(KEY_HUDBUTTONLONGPRESS, false);
 	}
 
 	// Repeat interval (ms) for held 9-grid direction taps. 0 disables the
