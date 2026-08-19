@@ -748,6 +748,15 @@ public class GameActivity extends Activity
 	// sortable-header arrow across the whole cell; restore no-repeat + right
 	// alignment (the arrow image and dark header colour still come from the
 	// skin). !important beats the skin's non-important rules.
+	// Rule 3: content "description" boxes (the italic god-lore quote, the
+	// bordered tip/warning callouts) carry a hardcoded near-white inline
+	// background — #f5faff on the lore <table>, #fbfbfb on the callouts — that
+	// the night theme leaves untouched (author inline styles win), while it
+	// recolours the text light, giving light-grey-on-white unreadable boxes.
+	// Match by that inline background value and force a dark surface + light
+	// text; links keep their theme colour. Saturated data cells (aptitude
+	// grid #33FF66/#99CCFF/...) and the coloured info banners (#fc6/#e0fae0)
+	// have their own dark text and stay readable, so they're left alone.
 	private static final String WIKI_WIDE_CSS =
 			"<style>table,pre{display:block !important;max-width:100% !important;"
 			+ "overflow-x:auto !important;-webkit-overflow-scrolling:touch}"
@@ -755,6 +764,12 @@ public class GameActivity extends Activity
 			+ ".sortable:not(.jquery-tablesorter)>*>tr:first-child>th{"
 			+ "background-repeat:no-repeat !important;"
 			+ "background-position:center right !important}"
+			+ ".mw-parser-output [style*=\"#f5faff\" i],"
+			+ ".mw-parser-output [style*=\"#fbfbfb\" i]"
+			+ "{background:#1c1c1c !important;color:#d8d8d8 !important}"
+			+ ".mw-parser-output [style*=\"#f5faff\" i] *:not(a),"
+			+ ".mw-parser-output [style*=\"#fbfbfb\" i] *:not(a)"
+			+ "{color:#d8d8d8 !important}"
 			+ "</style>";
 
 	// Matches the UA-rendered surfaces (default page background, scrollbars,

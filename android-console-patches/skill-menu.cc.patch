@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/skill-menu.cc b/crawl-ref/source/skill-menu.cc
-index 2d2afd8507..84119bd089 100644
+index 2d2afd8507..d3b759d002 100644
 --- a/crawl-ref/source/skill-menu.cc
 +++ b/crawl-ref/source/skill-menu.cc
 @@ -725,7 +725,7 @@ void SkillMenuSwitch::update()
@@ -11,6 +11,17 @@ index 2d2afd8507..84119bd089 100644
      for (auto it = m_states.begin(); it != m_states.end(); ++it)
      {
          if (it != m_states.begin())
+@@ -1282,8 +1282,8 @@ void SkillMenu::init_title()
+ {
+     m_title = new NoSelectTextItem();
+     m_title->set_bounds(m_pos,
+-                        coord_def(m_max_coord.x, m_pos.y + 1));
+-    ++m_pos.y;
++                        coord_def(m_max_coord.x, m_pos.y + 2));
++    m_pos.y += 2;
+     m_title->set_fg_colour(WHITE);
+     m_ff->attach_item(m_title);
+     m_title->set_visible(true);
 @@ -1307,36 +1307,23 @@ void SkillMenu::init_button_row()
      m_help->set_fg_colour(LIGHTGREY);
      m_help->set_visible(true);
@@ -144,3 +155,12 @@ index 2d2afd8507..84119bd089 100644
      sw = new SkillMenuSwitch("", '!');
      m_switches[SKM_VIEW] = sw;
      if (!is_set(SKMF_SPECIAL) || you.wizard)
+@@ -1635,7 +1665,7 @@ void SkillMenu::set_title()
+     string t;
+     if (is_set(SKMF_EXPERIENCE))
+     {
+-        t = "You have gained great experience. "
++        t = "You have gained great experience.\n"
+             "Select the skills to train.";
+     }
+ 
