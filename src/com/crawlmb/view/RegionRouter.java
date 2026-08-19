@@ -551,6 +551,13 @@ public class RegionRouter implements TerminalRenderer
 	// the UI thread while the game thread owns the flag.
 	private volatile boolean skipSplitRegionsThisStorm = false;
 
+	// Set by onFrame on a transition into a fullView-hosted menu; routeCell then
+	// skips this storm's fullView paint. Without it a menu->menu hop that keeps
+	// fullView visible but rescales it (spell/ability list 1.75 -> describe
+	// 1.60) flashes the new content at the old scale for one vsync before
+	// applyMode rescales. applyMode clears + replays fullView here anyway.
+	private volatile boolean skipFullViewThisStorm = false;
+
 	// Anchor for the single-column fold of the skills menu. Recomputed on
 	// each transition INTO MenuType.SKILLS by scanning terminalShadow for
 	// the two occurrences of "     Skill" on the same row. skillsLeftCol
@@ -1851,7 +1858,8 @@ public class RegionRouter implements TerminalRenderer
 		// it a vsync later); without this gate a pending draw traversal
 		// flashes the raw frame in release builds. Shadow replay repaints
 		// fullView when it next becomes visible, so nothing is missed.
-		if (fullView != null && !menuTypeHidesFullView(currentMenuType))
+		if (fullView != null && !menuTypeHidesFullView(currentMenuType)
+				&& !skipFullViewThisStorm)
 			forwardToFullView(r, c, ch, fcolor, bcolor, extendedErase);
 		// Skip splitRegions during a gameplay->menu transition frame: the
 		// frame's chars belong to a menu, and forwarding them at terminal
@@ -2912,6 +2920,14 @@ public class RegionRouter implements TerminalRenderer
 		// INTO gameplay clears and repaints them.
 		skipSplitRegionsThisStorm = wasGameplay
 				&& currentMode != LayoutMode.GAMEPLAY;
+		// Same guard for fullView menu->menu scale hops (see field). Condition
+		// mirrors applyMode's fullVisible branch (which clears + replays); off
+		// while frozen, where fullView is INVISIBLE and applyMode is deferred.
+		skipFullViewThisStorm = transition
+				&& fullView != null
+				&& currentMode != LayoutMode.GAMEPLAY
+				&& !menuTypeHidesFullView(currentMenuType)
+				&& !repositionFrozen;
 
 		// 3. Route under the NEW state. On a transition, replay the whole
 		// grid so views that just became active are fully painted before
@@ -2927,6 +2943,7 @@ public class RegionRouter implements TerminalRenderer
 						terminalBg[r][c], false);
 			}
 		skipSplitRegionsThisStorm = false;
+		skipFullViewThisStorm = false;
 
 		// Footer compression remaps fullView rows non-bijectively (the more
 		// block moves up under short content; vacated gap/footer rows have no
