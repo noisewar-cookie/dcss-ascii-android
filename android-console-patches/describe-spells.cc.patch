@@ -1,8 +1,8 @@
 diff --git a/crawl-ref/source/describe-spells.cc b/crawl-ref/source/describe-spells.cc
-index a4a1a95d31..fa9302da88 100644
+index a4a1a95d31..82214456df 100644
 --- a/crawl-ref/source/describe-spells.cc
 +++ b/crawl-ref/source/describe-spells.cc
-@@ -623,13 +623,34 @@ static void _describe_book(const spellbook_contents &book,
+@@ -623,13 +623,42 @@ static void _describe_book(const spellbook_contents &book,
  
      description.cprintf("%s", book.label.c_str());
  
@@ -11,11 +11,19 @@ index a4a1a95d31..fa9302da88 100644
 +    // then schools) sized to fit android_prose_wrap_cols.
 +    extern int android_prose_wrap_cols;
 +    extern bool android_reflow_spellbook_table;
++    extern bool android_reflow_monster_spells;
 +    const bool stacked = source_item
 +                         && android_prose_wrap_cols > 0
 +                         && android_reflow_spellbook_table;
++    // Monster spell lists (no source_item) print two-per-row at ~80 cols,
++    // which wraps mid-column at the prose cap. Flatten to one spell per line.
++    const bool mon_single_col = !source_item
++                                && android_prose_wrap_cols > 0
++                                && android_reflow_monster_spells;
 +    const int name_w = stacked
 +        ? max(12, min(32, android_prose_wrap_cols - 15))
++        : mon_single_col
++        ? max(12, min(32, android_prose_wrap_cols - 6))
 +        : 32;
 +
      // only display header for book spells
@@ -41,7 +49,7 @@ index a4a1a95d31..fa9302da88 100644
      }
      description.cprintf("\n");
  
-@@ -669,7 +690,8 @@ static void _describe_book(const spellbook_contents &book,
+@@ -669,7 +698,8 @@ static void _describe_book(const spellbook_contents &book,
          const int effect_len = effect_str.length();
          const int range_len = range_str.empty() ? 0 : 3;
          const int effect_range_space = effect_len && range_len ? 1 : 0;
@@ -51,7 +59,23 @@ index a4a1a95d31..fa9302da88 100644
                                  - (dith_marker.length() > 0 ? 1 : 0);
  
          if (effect_len && !testbits(get_spell_flags(spell), spflag::WL_check))
-@@ -711,12 +733,27 @@ static void _describe_book(const spellbook_contents &book,
+@@ -693,11 +723,11 @@ static void _describe_book(const spellbook_contents &book,
+         // only display type & level for book spells
+         if (doublecolumn)
+         {
+-            // print monster spells in two columns
+-            if (first_line_element)
+-                description.cprintf("    ");
+-            else
++            // one spell per line when flattened for word wrap, else two columns
++            if (mon_single_col || !first_line_element)
+                 description.cprintf("\n");
++            else
++                description.cprintf("    ");
+             first_line_element = !first_line_element;
+             continue;
+         }
+@@ -711,16 +741,31 @@ static void _describe_book(const spellbook_contents &book,
  
          string known = "";
          if (!mon_owner && crawl_state.need_save)
@@ -83,4 +107,10 @@ index a4a1a95d31..fa9302da88 100644
 +        }
      }
  
-     // are we halfway through a column?
+-    // are we halfway through a column?
+-    if (doublecolumn && book.spells.size() % 2)
++    // are we halfway through a column? (single-col already ends each line)
++    if (doublecolumn && !mon_single_col && book.spells.size() % 2)
+         description.cprintf("\n");
+ }
+ 

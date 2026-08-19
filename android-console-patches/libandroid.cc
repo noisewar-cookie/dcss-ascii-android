@@ -82,6 +82,7 @@ static int android_msg_rows = 0;
 // by the corresponding patch.
 bool android_reflow_spell_stats = true;     // Level/School/Fail stack (describe.cc.patch)
 bool android_reflow_spellbook_table = true; // two-line spell list (describe-spells.cc.patch)
+bool android_reflow_monster_spells = true;  // monster spell list -> one/row (describe-spells.cc.patch)
 bool android_reflow_orders_prompt = true;   // 't' orders layout (shout.cc.patch)
 bool android_reflow_weapon_stats = true;    // base stats stack + skill de-indent (describe.cc.patch)
 bool android_reflow_armour_stats = true;    // armour/shield stats stack (describe.cc.patch)
