@@ -167,6 +167,9 @@ public class GameActivity extends Activity
 	// visited URLs ourselves and rebuild the previous page on BACK.
 	private final ArrayDeque<String> wikiBackStack = new ArrayDeque<>();
 	private WebView currentWikiWebView = null;
+	// Centered "Loading wiki…" placeholder shown over the WebView until the page
+	// finishes painting; toggled by createWikiWebView's load callbacks.
+	private TextView wikiLoadingView = null;
 	private boolean wikiModalActive = false;
 	// Last bottom safe-area inset, captured by the inset listener for the
 	// reposition button bar in the no-keyboard case.
@@ -798,7 +801,21 @@ public class GameActivity extends Activity
 		wikiBackStack.push(WIKI_LANDING_URL);
 		wikiModalActive = true;
 		currentWikiWebView = createWikiWebView(WIKI_LANDING_URL);
-		modalController.show(currentWikiWebView, ModalOverlayController.SCROLL_NONE);
+		// The WebView paints black until its first page loads (a network round
+		// trip); overlay a centered placeholder that its load callbacks clear.
+		FrameLayout container = new FrameLayout(this);
+		container.setBackgroundColor(Color.BLACK);
+		container.addView(currentWikiWebView, new FrameLayout.LayoutParams(
+				FrameLayout.LayoutParams.MATCH_PARENT,
+				FrameLayout.LayoutParams.MATCH_PARENT));
+		wikiLoadingView = new TextView(this);
+		wikiLoadingView.setText("Loading wiki…");
+		wikiLoadingView.setTextColor(CRAWL_LIGHTGRAY);
+		wikiLoadingView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
+		container.addView(wikiLoadingView, new FrameLayout.LayoutParams(
+				FrameLayout.LayoutParams.WRAP_CONTENT,
+				FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+		modalController.show(container, ModalOverlayController.SCROLL_NONE);
 	}
 
 	// Rebuild the previous wiki page on BACK. Returns false when there's no
@@ -850,6 +867,7 @@ public class GameActivity extends Activity
 				if (failed)
 					return;
 				failed = true;
+				setWikiLoadingVisible(false);
 				v.loadDataWithBaseURL(null, WIKI_OFFLINE_HTML,
 						"text/html", "utf-8", null);
 			}
@@ -895,6 +913,7 @@ public class GameActivity extends Activity
 			public void onPageFinished(WebView v, String url) {
 				if (failed)
 					return;
+				setWikiLoadingVisible(false);
 				if (!jumped) {
 					jumped = true;
 					v.evaluateJavascript(WIKI_JUMP_JS, null);
@@ -935,6 +954,15 @@ public class GameActivity extends Activity
 		parent.removeView(old);
 		old.destroy();
 		parent.addView(fresh, idx, lp);
+		// The fresh WebView paints black until the next page loads; show the
+		// placeholder again (its onPageFinished/fallback clears it).
+		setWikiLoadingVisible(true);
+	}
+
+	// Toggle the "Loading wiki…" placeholder. No-op once the modal is gone.
+	private void setWikiLoadingVisible(boolean visible) {
+		if (wikiLoadingView != null)
+			wikiLoadingView.setVisibility(visible ? View.VISIBLE : View.GONE);
 	}
 
 	// Fetch a top-level HTML navigation ourselves and swap its viewport meta for
