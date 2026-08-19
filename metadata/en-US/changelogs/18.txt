@@ -1,0 +1,9 @@
+Release 18 (0.34.1)
+
+New Features:
+• Long-press option for Help/Wiki shortcuts.
+• Improved wiki dark mode.
+
+Bug Fixes:
+• Fixed various shop and spell list render issues.
+• Better formatting of talisman descriptions.
