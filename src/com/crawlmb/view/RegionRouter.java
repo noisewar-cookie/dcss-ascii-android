@@ -2938,6 +2938,11 @@ public class RegionRouter implements TerminalRenderer
 		if (fullViewFooterStart >= 0)
 			replayFullViewFromShadow();
 
+		// Same non-bijective footer compression on the itemsView path (ITEMS/
+		// HELP — e.g. shops after a batch purchase shrinks the list).
+		if (itemsView != null && itemsFooterStartRow >= 0)
+			replayItemsFromShadow();
+
 		invalidateAllViews();
 
 		// This frame is the post-applyMode repaint of the reload destination:
