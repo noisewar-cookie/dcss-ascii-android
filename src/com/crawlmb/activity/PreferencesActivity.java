@@ -93,6 +93,8 @@ public class PreferencesActivity extends PreferenceActivity implements
 
         setRepositionGridClickListener();
 
+        gateUnfoldedPrefs();
+
         addBackupRestorePreferences();
 
         addCustomFolderPreferences();
@@ -637,6 +639,17 @@ public class PreferencesActivity extends PreferenceActivity implements
     private void guardPref(Preference p) {
         p.setEnabled(false);
         p.setSummary(R.string.unavailable_in_custom_mode_title);
+    }
+
+    // The unfolded category is only meaningful on foldables. Remove it
+    // wholesale on everything else so the option never appears on phones or
+    // tablets that can't split at a hinge.
+    private void gateUnfoldedPrefs() {
+        Preference cat = findPreference("unfolded");
+        if (cat == null)
+            return;
+        if (!Preferences.getFoldableSeen())
+            getPreferenceScreen().removePreference(cat);
     }
 
     private void setHelpIntent() {

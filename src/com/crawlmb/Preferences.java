@@ -55,6 +55,22 @@ final public class Preferences
 	public static final String KEY_PANELORDER = "crawl.panelorder";
 	public static final String[] PANEL_KEYS = { "map", "hud", "mlist", "msg" };
 
+	// Unfolded mode (foldables opened in book posture). Settings are kept
+	// separate from the single-screen ones above so folding back reverts to
+	// the single-screen layout untouched. KEY_UNFOLDED is the user gate
+	// (default on, only exposed once KEY_FOLDABLESEEN is set); KEY_UNFOLDEDMAPSIDE
+	// picks which half holds the map ("left"/"right"); KEY_UNFOLDEDPANELORDER is
+	// the vertical stack order of the non-map panels; KEY_UNFOLDEDKEYBOARDSIDE
+	// picks which half the keyboard sits on ("left"/"right").
+	public static final String KEY_UNFOLDED = "crawl.dualscreen";
+	public static final String KEY_FOLDABLESEEN = "crawl.foldableseen";
+	public static final String KEY_UNFOLDEDMAPSIDE = "crawl.dualmapside";
+	public static final String KEY_UNFOLDEDPANELORDER = "crawl.dualpanelorder";
+	public static final String KEY_UNFOLDEDKEYBOARDSIDE = "crawl.dualkeyboardside";
+	public static final String[] UNFOLDED_PANEL_KEYS = { "hud", "mlist", "msg" };
+	public static final String SIDE_LEFT = "left";
+	public static final String SIDE_RIGHT = "right";
+
 	// 9-grid touch zone dividers as "v1,v2,h1,h2" — fractions of the touch
 	// area (v = vertical line x, h = horizontal line y from top). Lines may
 	// coincide (collapses the grid toward 2x2) but never cross, and stay
@@ -223,6 +239,99 @@ final public class Preferences
 		sharedPreferences.edit()
 				.putString(KEY_PANELORDER,
 						android.text.TextUtils.join(",", order)).apply();
+	}
+
+	// --- Unfolded (foldable) settings -----------------------------------
+
+	public static boolean getUnfoldedEnabled()
+	{
+		return sharedPreferences.getBoolean(KEY_UNFOLDED, true);
+	}
+
+	public static void setUnfoldedEnabled(boolean value)
+	{
+		sharedPreferences.edit().putBoolean(KEY_UNFOLDED, value).apply();
+	}
+
+	// Sticky: set once the app ever observes a fold feature or a hinge sensor,
+	// so the unfolded preferences stay visible even while folded shut.
+	public static boolean getFoldableSeen()
+	{
+		return sharedPreferences.getBoolean(KEY_FOLDABLESEEN, false);
+	}
+
+	public static void setFoldableSeen(boolean value)
+	{
+		if (value == getFoldableSeen())
+			return;
+		sharedPreferences.edit().putBoolean(KEY_FOLDABLESEEN, value).apply();
+	}
+
+	public static String getUnfoldedMapSide()
+	{
+		String s = sharedPreferences.getString(KEY_UNFOLDEDMAPSIDE, SIDE_LEFT);
+		return SIDE_RIGHT.equals(s) ? SIDE_RIGHT : SIDE_LEFT;
+	}
+
+	public static void setUnfoldedMapSide(String side)
+	{
+		sharedPreferences.edit().putString(KEY_UNFOLDEDMAPSIDE,
+				SIDE_RIGHT.equals(side) ? SIDE_RIGHT : SIDE_LEFT).apply();
+	}
+
+	// The half holding the panels is the one the map is NOT on.
+	public static String getUnfoldedPanelSide()
+	{
+		return SIDE_LEFT.equals(getUnfoldedMapSide()) ? SIDE_RIGHT : SIDE_LEFT;
+	}
+
+	public static String[] getUnfoldedPanelOrder()
+	{
+		String stored = sharedPreferences.getString(KEY_UNFOLDEDPANELORDER, "");
+		if (!stored.isEmpty())
+		{
+			String[] order = stored.split(",");
+			if (order.length == UNFOLDED_PANEL_KEYS.length
+					&& isUnfoldedPanelPermutation(order))
+				return order;
+		}
+		return UNFOLDED_PANEL_KEYS.clone();
+	}
+
+	public static void setUnfoldedPanelOrder(String[] order)
+	{
+		sharedPreferences.edit().putString(KEY_UNFOLDEDPANELORDER,
+				android.text.TextUtils.join(",", order)).apply();
+	}
+
+	// Defaults to the panels' half so, out of the box, the keyboard sits under
+	// the message/prompt panels rather than over the view-only map.
+	public static String getUnfoldedKeyboardSide()
+	{
+		String s = sharedPreferences.getString(KEY_UNFOLDEDKEYBOARDSIDE, "");
+		if (SIDE_LEFT.equals(s) || SIDE_RIGHT.equals(s))
+			return s;
+		return getUnfoldedPanelSide();
+	}
+
+	public static void setUnfoldedKeyboardSide(String side)
+	{
+		sharedPreferences.edit().putString(KEY_UNFOLDEDKEYBOARDSIDE,
+				SIDE_RIGHT.equals(side) ? SIDE_RIGHT : SIDE_LEFT).apply();
+	}
+
+	private static boolean isUnfoldedPanelPermutation(String[] order)
+	{
+		for (String key : UNFOLDED_PANEL_KEYS)
+		{
+			boolean found = false;
+			for (String o : order)
+				if (key.equals(o))
+					found = true;
+			if (!found)
+				return false;
+		}
+		return true;
 	}
 
 	// Parsed KEY_GRIDLINES cache — grid taps are a hot path; invalidated by

@@ -13,6 +13,8 @@ public class NativeWrapper
 
 	private TerminalRenderer renderer = null;
 	private GameKeyListener keyListener = null;
+	// Last wrap width pushed live, to skip redundant updateMsgWrap calls.
+	private int lastMsgWrapCols = -1;
 
 	// Serializes all terminal-state access: taken by frameUpdate (game
 	// thread) and RegionRouter's UI-thread replay paths.
@@ -34,13 +36,33 @@ public class NativeWrapper
 		// gameStart runs after the first layout pass (StartGame fires from
 		// onSizeChanged), so the msg panel's font metrics are final here.
 		// wrapCols 0 = off; libandroid then keeps stock options.
-		setWordwrap(renderer.getMsgWrapCols(), renderer.getMsgRows(),
-				renderer.getProseWrapCols());
+		int wrapCols = renderer.getMsgWrapCols();
+		int msgRows = renderer.getMsgRows();
+		int proseCols = renderer.getProseWrapCols();
+		setWordwrap(wrapCols, msgRows, proseCols);
 		initGame(dataDir, settingsDir, morgueDir);
+	}
+
+	// Re-sync DCSS's msg wrap width after a fold/unfold changes the panel width
+	// (msg_max_width is otherwise fixed at boot). No-op unless a game is loaded
+	// and the width actually changed.
+	public void updateMsgWrap()
+	{
+		if (renderer == null || !gameInProgress())
+			return;
+		int wrapCols = renderer.getMsgWrapCols();
+		if (wrapCols <= 0 || wrapCols == lastMsgWrapCols)
+			return;
+		lastMsgWrapCols = wrapCols;
+		synchronized (display_lock)
+		{
+			setMsgMaxWidthLive(wrapCols);
+		}
 	}
 
 	public native void initGame(String dataDir, String settingsDir, String morgueDir);
 	private native void setWordwrap(int msgWrapCols, int msgRows, int proseWrapCols);
+	private native void setMsgMaxWidthLive(int msgWrapCols);
 	public static native void nativeSaveGame();
 	// True while a game is loaded (crawl_state.need_save) — false on the
 	// DCSS main menu / character creation. Safe from the UI thread.

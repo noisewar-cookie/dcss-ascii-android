@@ -300,9 +300,9 @@ public class RegionTermView extends View
 		this.stickyUserAway = false;
 	}
 
-	// Visible terminal columns at the current font size, or 0 before the
-	// first measure pass. Used to size the DCSS word-wrap width to what the
-	// panel can actually show.
+	// Visible terminal columns at the current font size — sizes the DCSS
+	// word-wrap width to what the panel shows. Queried at gameStart, after the
+	// tree's first measure pass, so getMeasuredWidth is valid.
 	public int computeVisibleCols()
 	{
 		int width = getMeasuredWidth();

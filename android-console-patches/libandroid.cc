@@ -378,6 +378,7 @@ extern "C"
 {
 	void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir);
 	void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, jint msgWrapCols, jint msgRows, jint proseWrapCols);
+	void Java_com_crawlmb_NativeWrapper_setMsgMaxWidthLive( JNIEnv* env, jobject object, jint msgWrapCols);
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
 	void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz);
 	jboolean Java_com_crawlmb_NativeWrapper_gameInProgress( JNIEnv* env, jclass clz);
@@ -403,6 +404,17 @@ void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, ji
 		android_layout_lines = LINES;
 	}
 	android_prose_wrap_cols = proseWrapCols > 0 ? proseWrapCols : 0;
+}
+
+// Live msg wrap-width update after a fold/unfold (width only, no re-layout).
+// out_width() reads Options.msg_max_width live, so it applies on the next wrap.
+// Called from NativeWrapper.updateMsgWrap under display_lock.
+void Java_com_crawlmb_NativeWrapper_setMsgMaxWidthLive( JNIEnv* env, jobject object, jint msgWrapCols)
+{
+	if (msgWrapCols <= 0)
+		return;
+	android_msg_wrap_cols = msgWrapCols;
+	Options.msg_max_width = msgWrapCols;
 }
 
 void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz)
@@ -445,13 +457,13 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
                       (char*)"-morgue", (char*)morgueDir,
                       (char*)"-rcdir", (char*)settingsDir,
                       (char*)"-extra-opt-first", (char*)"char_set=ascii"};
-	// Word wrap: crawl wraps messages at msg_max_width natively; the msg
-	// window gets android_msg_rows rows (extra history for the bottom-
-	// pinned Java panel). view_max_height pins the dungeon view at 17 rows
-	// — init_geometry grows the view BEFORE the msg window, so without it
-	// the extra layout lines would shift the msg window below row 17 and
-	// break the Java split-panel rows. -extra-opt-first keeps init.txt
-	// able to override.
+	// Word wrap: crawl wraps messages at msg_max_width natively. view_max_height
+	// pins the dungeon view at 17 rows — init_geometry grows the view BEFORE the
+	// msg window, so without it the extra layout lines shift the msg window below
+	// row 17 and break the Java split-panel rows. msg_max_height/view_max_height
+	// use -extra-opt-first so init.txt can override them; msg_max_width uses
+	// -extra-opt-LAST so the physical panel width always wins over a stale/user
+	// init.txt value (a msg_max_width wider than the panel clips messages).
 	char opt_msg_width[32], opt_msg_height[32];
 	if (android_msg_wrap_cols > 0)
 	{
@@ -460,11 +472,11 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
 		snprintf(opt_msg_height, sizeof(opt_msg_height),
 			"msg_max_height=%d", android_msg_rows);
 		args.push_back((char*)"-extra-opt-first");
-		args.push_back(opt_msg_width);
-		args.push_back((char*)"-extra-opt-first");
 		args.push_back(opt_msg_height);
 		args.push_back((char*)"-extra-opt-first");
 		args.push_back((char*)"view_max_height=17");
+		args.push_back((char*)"-extra-opt-last");
+		args.push_back(opt_msg_width);
 	}
 	main((int)args.size(), args.data());
 }

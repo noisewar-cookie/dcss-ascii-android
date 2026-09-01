@@ -458,18 +458,14 @@ public class RegionRouter implements TerminalRenderer
 
 	// msg_max_width for DCSS: visible columns at the msg font size, minus
 	// the '_' turn-marker column (message text starts at terminal col 1).
-	// 0 disables word wrap — either the pref is off (no view registered) or
-	// the panel hasn't been measured, in which case wrapping silently stays
-	// off for the session rather than wrapping at a wrong width.
+	// 0 disables word wrap when no view is registered (pref off).
 	@Override
 	public int getMsgWrapCols()
 	{
 		if (msgWordwrapView == null)
 			return 0;
 		int visible = msgWordwrapView.computeVisibleCols();
-		if (visible <= 1)
-			return 0;
-		return Math.min(visible - 1, TERMINAL_COLS - 1);
+		return visible <= 1 ? 0 : Math.min(visible - 1, TERMINAL_COLS - 1);
 	}
 
 	@Override

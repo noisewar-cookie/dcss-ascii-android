@@ -21,6 +21,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
@@ -81,6 +82,7 @@ import com.crawlmb.NativeWrapper;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.WindowCompatAdapter;
+import com.crawlmb.view.FoldStateController;
 import com.crawlmb.view.GridOverlayController;
 import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
@@ -177,6 +179,14 @@ public class GameActivity extends Activity
 
 	protected Handler handler = null;
 
+	// Unfolded (foldable) mode. unfoldedActive tracks the current posture-driven
+	// state used by buildPortraitLayout; foldPosture holds the latest hinge
+	// geometry (window coords) for the split. Both are updated by the
+	// FoldStateController callback, which rebuilds the view tree on transitions.
+	private boolean unfoldedActive = false;
+	private FoldStateController.Posture foldPosture = null;
+	private FoldStateController foldStateController = null;
+
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -195,6 +205,14 @@ public class GameActivity extends Activity
 		if (gameKeyListener == null) {
 			gameKeyListener = new GameKeyListener();
 		}
+
+		// Mark the device foldable up front (hinge sensor, API 30+) so the
+		// unfolded preferences are exposed even before the first unfold.
+		// FoldStateController also sets this when it observes a fold feature.
+		if (VERSION.SDK_INT >= VERSION_CODES.R
+				&& getPackageManager().hasSystemFeature(
+						PackageManager.FEATURE_SENSOR_HINGE_ANGLE))
+			Preferences.setFoldableSeen(true);
 	}
 
 	@Override
@@ -207,6 +225,44 @@ public class GameActivity extends Activity
 		handler = new GameHandler(crawlDialog);
 
 		rebuildViews();
+
+		// Start posture tracking after the first rebuild. The initial callback
+		// arrives asynchronously on the main thread; if it reports a different
+		// unfolded state than the one we just built for, onFoldStateChanged rebuilds.
+		if (foldStateController == null)
+			foldStateController = new FoldStateController(this,
+					this::onFoldStateChanged);
+		foldStateController.start();
+	}
+
+	// Posture callback (main thread). Adopts the new hinge geometry and, when
+	// the unfolded state flips, rebuilds the view tree into the matching
+	// layout. Also rebuilds when the split geometry shifts materially while
+	// staying unfolded (e.g. the hinge position changes between devices/emulator
+	// configs).
+	private void onFoldStateChanged(boolean newUnfoldedActive,
+			FoldStateController.Posture posture) {
+		boolean geometryChanged = newUnfoldedActive && unfoldedActive
+				&& !sameSplit(foldPosture, posture);
+		foldPosture = posture;
+		if (newUnfoldedActive == unfoldedActive && !geometryChanged)
+			return;
+		unfoldedActive = newUnfoldedActive;
+		rebuildViews();
+		if (gameKeyListener != null && gameKeyListener.nativew != null)
+		{
+			final NativeWrapper nw = gameKeyListener.nativew;
+			View root = findViewById(android.R.id.content);
+			if (root != null)
+				root.post(nw::redrawScreen);
+		}
+	}
+
+	private static boolean sameSplit(FoldStateController.Posture a,
+			FoldStateController.Posture b) {
+		if (a == null || b == null)
+			return a == b;
+		return a.leftWidth == b.leftWidth && a.rightStart == b.rightStart;
 	}
 
 	@Override
@@ -293,12 +349,23 @@ public class GameActivity extends Activity
 		synchronized (GameKeyListener.progress_lock) {
 			// Log.d("Crawl","rebuildViews");
 
-			// Portrait-only for now. Landscape support is retained in code
-			// (buildLandscapeLayout, Preferences.getLandscapeKeyboard, etc.)
+			// Portrait-only for single-screen. Landscape support is retained in
+			// code (buildLandscapeLayout, Preferences.getLandscapeKeyboard, etc.)
 			// for future re-enable, but the orientation picker is hidden in
-			// preferences.xml and the stored crawl.orientation pref is ignored
-			// here.
-			setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+			// preferences.xml and the stored crawl.orientation pref is ignored.
+			//
+			// In unfolded (foldable) mode we drop the portrait lock: on the unfolded
+			// landscape inner display a portrait-locked app is letterboxed to a
+			// centered ~portrait window, so each hinge half only gets half of
+			// THAT (wasting the outer thirds of each physical screen). Releasing
+			// to UNSPECIFIED lets the window fill the whole display, so each half
+			// spans a full physical screen and the split lands on the hinge. The
+			// unfolded builder still lays out portrait content in each half. If the
+			// device is rotated out of book posture the fold goes HORIZONTAL,
+			// unfoldedActive drops, and we snap back to the portrait lock below.
+			setRequestedOrientation(unfoldedActive
+					? ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+					: ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
 			if (screenLayout != null)
 				screenLayout.removeAllViews();
@@ -1275,15 +1342,29 @@ public class GameActivity extends Activity
 		statusBar.setTypeface(gameTf);
 		int screenWidth = getResources().getDisplayMetrics().widthPixels;
 		int hudCols = RegionRouter.HUD_END_COL - RegionRouter.HUD_START_COL;
+		// In unfolded mode the hud/status share one half; the hud width-fits its 43
+		// cols to the half at portraitHudFontScale (see buildUnfoldedSplitContainer),
+		// so size the status lights to the same 43-col-per-half fit at the same
+		// scale. Single-screen uses the full-window basis. statusScale keeps the
+		// config value in both.
+		int statusFitWidth = screenWidth;
+		float statusScale = fontConfig.portraitHudFontScale;
+		if (unfoldedActive && foldPosture != null)
+		{
+			boolean statusMapLeft = Preferences.getUnfoldedMapSide()
+					.equals(Preferences.SIDE_LEFT);
+			statusFitWidth = statusMapLeft
+					? Math.max(1, foldPosture.totalWidth - foldPosture.rightStart)
+					: Math.max(1, foldPosture.leftWidth);
+		}
 		// Width-fit VeraMoBd, then scale the chosen face so its line height
 		// matches VeraMoBd's — keeps status-bar height consistent regardless
 		// of which face the user picked.
 		int refBase = com.crawlmb.view.GameFontShaper.widthFitTextSize(
-				this, hudCols, screenWidth, 2, 200);
+				this, hudCols, statusFitWidth, 2, 200);
 		float matchedBase = com.crawlmb.view.GameFontShaper.matchReferenceLineHeight(
 				this, gameTf, refBase);
-		float statusFontPx = Math.round(matchedBase
-				* fontConfig.portraitHudFontScale);
+		float statusFontPx = Math.round(matchedBase * statusScale);
 		statusBar.setFontSizePx(statusFontPx);
 		Paint gamePaint = new Paint();
 		gamePaint.setTypeface(gameTf);
@@ -1293,73 +1374,91 @@ public class GameActivity extends Activity
 		statusBar.setPadding(
 				charWidthPx * fontConfig.portraitHudOffsetCols, 0, 0, 0);
 
-		// Stack the panel units (hud unit = hud + statusBar) in the persisted
-		// vertical order (crawl.panelorder). Fixed-height units above the map
-		// chain top-down, units below it chain bottom-up, and the map spans
-		// the remaining band between its neighbors (RelativeLayout sizes it
-		// between the anchors). The default order (map, hud, mlist, msg)
-		// reproduces the classic layout.
-		String[] panelOrder = Preferences.getPanelOrder();
-		int mapIdx = 0;
-		for (int i = 0; i < panelOrder.length; i++)
-			if (panelOrder[i].equals("map"))
-				mapIdx = i;
-
-		int prevBottomId = View.NO_ID;
-		for (int i = 0; i < mapIdx; i++)
-		{
-			for (View v : panelUnitViews(panelOrder[i], hudView, statusBar,
-					mlistView, msgView))
-			{
-				RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
-						LayoutParams.MATCH_PARENT, v == statusBar
-								? statusBarHeight : LayoutParams.WRAP_CONTENT);
-				if (prevBottomId == View.NO_ID)
-					lp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-				else
-					lp.addRule(RelativeLayout.BELOW, prevBottomId);
-				splitContainer.addView(v, lp);
-				prevBottomId = v.getId();
-			}
-		}
-
-		int nextTopId = View.NO_ID;
-		for (int i = panelOrder.length - 1; i > mapIdx; i--)
-		{
-			View[] unit = panelUnitViews(panelOrder[i], hudView, statusBar,
-					mlistView, msgView);
-			for (int j = unit.length - 1; j >= 0; j--)
-			{
-				View v = unit[j];
-				RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
-						LayoutParams.MATCH_PARENT, v == statusBar
-								? statusBarHeight : LayoutParams.WRAP_CONTENT);
-				if (nextTopId == View.NO_ID)
-					lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-				else
-					lp.addRule(RelativeLayout.ABOVE, nextTopId);
-				splitContainer.addView(v, lp);
-				nextTopId = v.getId();
-			}
-		}
-
-		RelativeLayout.LayoutParams mapParams = new RelativeLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-		if (mapIdx == 0)
-			mapParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-		else
-			mapParams.addRule(RelativeLayout.BELOW, prevBottomId);
-		if (mapIdx == panelOrder.length - 1)
-			mapParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-		else
-			mapParams.addRule(RelativeLayout.ABOVE, nextTopId);
-		splitContainer.addView(mapView, mapParams);
-
 		portraitHudView = hudView;
 		portraitMlistView = mlistView;
-		portraitSplitContainer = splitContainer;
 
-		gamePanel.addView(splitContainer, new FrameLayout.LayoutParams(
+		// splitRoot is the container the router toggles VISIBLE/INVISIBLE for
+		// the in-game view. In unfolded (foldable) mode it's a horizontal
+		// two-half split; otherwise the classic single-column stack.
+		final ViewGroup splitRoot;
+		if (unfoldedActive && foldPosture != null)
+		{
+			splitRoot = buildUnfoldedSplitContainer(mapView, hudView, statusBar,
+					mlistView, msgView, statusBarHeight);
+			// Single-screen reposition/applyMode forced-visibility path is not
+			// used in unfolded mode; null it so schedulePendingRepositionEntry and
+			// friends skip (unfolded reposition is a separate mode).
+			portraitSplitContainer = null;
+		}
+		else
+		{
+			// Stack the panel units (hud unit = hud + statusBar) in the
+			// persisted vertical order (crawl.panelorder). Fixed-height units
+			// above the map chain top-down, units below it chain bottom-up, and
+			// the map spans the remaining band between its neighbors
+			// (RelativeLayout sizes it between the anchors). The default order
+			// (map, hud, mlist, msg) reproduces the classic layout.
+			String[] panelOrder = Preferences.getPanelOrder();
+			int mapIdx = 0;
+			for (int i = 0; i < panelOrder.length; i++)
+				if (panelOrder[i].equals("map"))
+					mapIdx = i;
+
+			int prevBottomId = View.NO_ID;
+			for (int i = 0; i < mapIdx; i++)
+			{
+				for (View v : panelUnitViews(panelOrder[i], hudView, statusBar,
+						mlistView, msgView))
+				{
+					RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
+							LayoutParams.MATCH_PARENT, v == statusBar
+									? statusBarHeight : LayoutParams.WRAP_CONTENT);
+					if (prevBottomId == View.NO_ID)
+						lp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+					else
+						lp.addRule(RelativeLayout.BELOW, prevBottomId);
+					splitContainer.addView(v, lp);
+					prevBottomId = v.getId();
+				}
+			}
+
+			int nextTopId = View.NO_ID;
+			for (int i = panelOrder.length - 1; i > mapIdx; i--)
+			{
+				View[] unit = panelUnitViews(panelOrder[i], hudView, statusBar,
+						mlistView, msgView);
+				for (int j = unit.length - 1; j >= 0; j--)
+				{
+					View v = unit[j];
+					RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
+							LayoutParams.MATCH_PARENT, v == statusBar
+									? statusBarHeight : LayoutParams.WRAP_CONTENT);
+					if (nextTopId == View.NO_ID)
+						lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+					else
+						lp.addRule(RelativeLayout.ABOVE, nextTopId);
+					splitContainer.addView(v, lp);
+					nextTopId = v.getId();
+				}
+			}
+
+			RelativeLayout.LayoutParams mapParams = new RelativeLayout.LayoutParams(
+					LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+			if (mapIdx == 0)
+				mapParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+			else
+				mapParams.addRule(RelativeLayout.BELOW, prevBottomId);
+			if (mapIdx == panelOrder.length - 1)
+				mapParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+			else
+				mapParams.addRule(RelativeLayout.ABOVE, nextTopId);
+			splitContainer.addView(mapView, mapParams);
+
+			portraitSplitContainer = splitContainer;
+			splitRoot = splitContainer;
+		}
+
+		gamePanel.addView(splitRoot, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
 		// Newgame portrait layout: each species/background category is its
@@ -1524,7 +1623,7 @@ public class GameActivity extends Activity
 		router.setSkillsView(skillsView);
 		router.setItemsView(itemsView);
 		router.setQuickControlsView(quickControlsView);
-		router.setSplitContainer(splitContainer);
+		router.setSplitContainer(splitRoot);
 		router.setStatusBarView(statusBar);
 		router.addRegion(mapView);
 		router.addRegion(hudView);
@@ -1587,6 +1686,90 @@ public class GameActivity extends Activity
 
 		final float MIN_FONT_SCALE = 0.3f;
 		final float MIN_SCALE_DELTA = 0.01f;
+
+		if (unfoldedActive && foldPosture != null)
+		{
+			// Unfolded auto-fit: each half's whole content block fills its
+			// half, not just the glyphs. Every panel width-fits its font to the
+			// half in onMeasure — the map via 33 cols at scale 1.0, the panels
+			// via their own region cols at their config scale (hud/mlist 1.0,
+			// msg 1.5), reproducing the single-screen ratio. This listener then
+			// shrinks a half's whole group by one shared factor only when the
+			// stack overflows the half's height — so the block grows to fill and
+			// backs off on height, preserving the config ratios throughout.
+			final float mapBase = 1.0f;
+			final float hudBase = fontConfig.portraitHudFontScale;
+			final float msgBase = fontConfig.portraitMsgFontScale;
+			gamePanel.getViewTreeObserver().addOnGlobalLayoutListener(
+					new ViewTreeObserver.OnGlobalLayoutListener()
+					{
+						@Override
+						public void onGlobalLayout()
+						{
+							if (splitRoot.getVisibility() != View.VISIBLE)
+								return;
+
+							int available = gamePanel.getHeight();
+							if (available <= 0)
+								return;
+
+							// Map half: fill width (base 1.0); back off only
+							// if that makes the block taller than the half.
+							float curMap = mapView.getFontScaleMultiplier();
+							int mapHnow = mapView.getMeasuredHeight();
+							float mapTarget = mapBase;
+							if (mapHnow > 0 && curMap > 0)
+							{
+								float mapHatBase = mapHnow * (mapBase / curMap);
+								if (mapHatBase > available)
+									mapTarget = Math.max(MIN_FONT_SCALE,
+											mapBase * (available - 1f)
+													/ mapHatBase);
+							}
+							if (Math.abs(mapTarget - curMap) >= MIN_SCALE_DELTA)
+								mapView.setFontScaleMultiplier(mapTarget);
+
+							// Panel half: extrapolate the stack height to the
+							// base ratios, then one shared factor fits it to
+							// the half (statusBar is fixed-height, a constant).
+							float curHud = hudView.getFontScaleMultiplier();
+							float curMlist = mlistView.getFontScaleMultiplier();
+							float curMsg = msgView.getFontScaleMultiplier();
+							float hudHb = curHud > 0
+									? hudView.getMeasuredHeight()
+											* (hudBase / curHud)
+									: hudView.getMeasuredHeight();
+							float mlistHb = curMlist > 0
+									? mlistView.getMeasuredHeight()
+											* (hudBase / curMlist)
+									: mlistView.getMeasuredHeight();
+							float msgHb = curMsg > 0
+									? msgView.getMeasuredHeight()
+											* (msgBase / curMsg)
+									: msgView.getMeasuredHeight();
+							float stackHb = hudHb + mlistHb + msgHb
+									+ statusBar.getMeasuredHeight();
+							float hf = stackHb > 0
+									? Math.min(1f, (available - 1f) / stackHb)
+									: 1f;
+							float tHud = Math.max(MIN_FONT_SCALE, hudBase * hf);
+							float tMlist = tHud;
+							float tMsg = Math.max(MIN_FONT_SCALE, msgBase * hf);
+							if (Math.abs(tHud - curHud) >= MIN_SCALE_DELTA)
+								hudView.setFontScaleMultiplier(tHud);
+							if (Math.abs(tMlist - curMlist) >= MIN_SCALE_DELTA)
+								mlistView.setFontScaleMultiplier(tMlist);
+							if (Math.abs(tMsg - curMsg) >= MIN_SCALE_DELTA)
+								msgView.setFontScaleMultiplier(tMsg);
+
+							// Keep DCSS's wrap width synced to the settled msg
+							// panel (fold/unfold changes its width after boot).
+							// Self-gates on game-loaded + width change.
+							gameKeyListener.nativew.updateMsgWrap();
+						}
+					});
+			return router;
+		}
 
 		// Fallback map shrinker for UNSPECIFIED-height layouts.
 		gamePanel.getViewTreeObserver().addOnGlobalLayoutListener(
@@ -1662,6 +1845,77 @@ public class GameActivity extends Activity
 		default:
 			return new View[] { msgView };
 		}
+	}
+
+	// Unfolded (foldable) in-game container: a horizontal split with the
+	// map alone on one half and the other panels stacked on the other, the two
+	// separated by the physical hinge gap. Which half holds the map is the
+	// crawl.dualmapside pref; the panel order within the panel half is
+	// crawl.dualpanelorder. Half widths mirror the window's fold geometry so
+	// the split lands on the hinge. Panels width-fit their font to their half
+	// automatically (onMeasure); the auto-fit listener handles height.
+	private ViewGroup buildUnfoldedSplitContainer(RegionTermView mapView,
+			RegionTermView hudView, StatusBarView statusBar,
+			RegionTermView mlistView, RegionTermView msgView,
+			int statusBarHeight)
+	{
+		LinearLayout unfoldedRoot = new LinearLayout(this);
+		unfoldedRoot.setOrientation(LinearLayout.HORIZONTAL);
+		unfoldedRoot.setBackgroundColor(Color.BLACK);
+		unfoldedRoot.setVisibility(View.INVISIBLE);
+
+		FrameLayout mapHalf = new FrameLayout(this);
+		// Width-fit the map's font to its 33 content cols (not the padded
+		// 37-col region) so the dungeon view fills the half's width; it stays
+		// width-bound by aspect ratio and centers vertically in the tall half.
+		// Scale 1.0 = font width-fits the full half (the single-screen
+		// portraitMapFontScale shrink is not applied in unfolded mode — the panel
+		// fills its half; the auto-fit listener only shrinks on height overflow).
+		mapView.setFontReferenceCols(33);
+		mapView.setFontScaleMultiplier(1.0f);
+		mapHalf.addView(mapView, new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+
+		// Panels keep their single-screen geometry, just scoped to the half:
+		// each width-fits its OWN region cols (hud/mlist 43, msg 80) at its
+		// config scale (portraitHudFontScale / portraitMsgFontScale). That's
+		// exactly what the single-column layout does against the full window, so
+		// the half reproduces the classic ratio — the hud's stats occupy their
+		// 43 cols leaving the right gutter for the command buttons, and the msg
+		// shows its full wrapped width (getMsgWrapCols still yields ~52 cols).
+		// The set-in-rebuildViews scale multipliers already hold the config
+		// values, so no fontReferenceCols / scale override here. The auto-fit
+		// listener then shrinks the whole stack by one shared factor only if it
+		// overflows the half's height, preserving those ratios.
+
+		LinearLayout panelHalf = new LinearLayout(this);
+		panelHalf.setOrientation(LinearLayout.VERTICAL);
+		panelHalf.setGravity(android.view.Gravity.CENTER_VERTICAL);
+		for (String key : Preferences.getUnfoldedPanelOrder())
+			for (View v : panelUnitViews(key, hudView, statusBar,
+					mlistView, msgView))
+				panelHalf.addView(v, new LinearLayout.LayoutParams(
+						LayoutParams.MATCH_PARENT,
+						v == statusBar ? statusBarHeight
+								: LayoutParams.WRAP_CONTENT));
+
+		int gap = Math.max(0, foldPosture.rightStart - foldPosture.leftWidth);
+		float leftWeight = Math.max(1, foldPosture.leftWidth);
+		float rightWeight = Math.max(1,
+				foldPosture.totalWidth - foldPosture.rightStart);
+
+		boolean mapLeft = Preferences.getUnfoldedMapSide()
+				.equals(Preferences.SIDE_LEFT);
+		View leftContent = mapLeft ? mapHalf : panelHalf;
+		View rightContent = mapLeft ? panelHalf : mapHalf;
+
+		unfoldedRoot.addView(leftContent, new LinearLayout.LayoutParams(
+				0, LayoutParams.MATCH_PARENT, leftWeight));
+		unfoldedRoot.addView(new View(this), new LinearLayout.LayoutParams(
+				gap, LayoutParams.MATCH_PARENT));
+		unfoldedRoot.addView(rightContent, new LinearLayout.LayoutParams(
+				0, LayoutParams.MATCH_PARENT, rightWeight));
+		return unfoldedRoot;
 	}
 
 	// Deferred entry into the reposition mode requested from Preferences:
@@ -2011,6 +2265,8 @@ public class GameActivity extends Activity
 	@Override
 	protected void onStop() {
 		super.onStop();
+		if (foldStateController != null)
+			foldStateController.stop();
 		// Discard an in-progress reposition session — its overlay would not
 		// survive the rebuildViews of the next onStart anyway. No IME restore
 		// here (the activity is going background); the next rebuild resets it.

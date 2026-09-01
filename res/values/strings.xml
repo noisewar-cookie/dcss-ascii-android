@@ -75,6 +75,11 @@
     <string name="preferences_reposition_ui_title">Reposition In-Game UI</string>
     <string name="preferences_reposition_ui_summary">Reorder the game panels by dragging them.</string>
     <string name="preferences_reposition_ui_disabled_summary">Only available while a game is in progress.</string>
+    <string name="unfolded_category">Unfolded (Foldable)</string>
+    <string name="preferences_unfolded_title">Unfolded mode</string>
+    <string name="preferences_unfolded_summary">When your foldable is open, show the map on one half and the other panels on the other. Folding back returns to your single-screen layout.</string>
+    <string name="preferences_unfoldedkeyboardside_title">Keyboard side</string>
+    <string name="preferences_unfoldedkeyboardside_summary">Which half the on-screen keyboard sits on in unfolded mode.</string>
     <string name="reposition_save">Save</string>
     <string name="reposition_reset">Reset</string>
     <string name="reposition_cancel">Exit</string>
@@ -190,6 +195,14 @@
     </string-array>
     <string name="portraitkb.default">1</string>
     <string name="landscapekb.default">1</string>
+    <string-array name="unfoldedKeyboardSideDescriptions">
+        <item>Left half</item>
+        <item>Right half</item>
+    </string-array>
+    <string-array name="unfoldedKeyboardSideValues">
+        <item>left</item>
+        <item>right</item>
+    </string-array>
     
     <!-- Config editor -->
     <string name="file_not_found">File not found</string>

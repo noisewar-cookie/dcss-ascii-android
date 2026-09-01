@@ -71,7 +71,9 @@
 
 ##### Android-specific options ######################################
 show_newturn_mark = false
-msg_max_width = 64
+# msg_max_width is set automatically to the message panel's width (word
+# wrap). Don't set it here — a static value overrides the auto-fit and
+# clips messages when it exceeds what the panel can show.
 
 
 ##### Optional Helper Scripts #######################################
