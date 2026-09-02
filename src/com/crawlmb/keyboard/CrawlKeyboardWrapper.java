@@ -71,16 +71,44 @@ public class CrawlKeyboardWrapper implements CrawlKeyboardView.OnKeyboardActionL
 
 	public CrawlKeyboardWrapper(Context context, KeyListener keyListener)
 	{
+		this(context, keyListener, 0, false);
+	}
+
+	// targetWidth > 0 confines the keyboard to that pixel width (a foldable
+	// half): keys are sized to it via the width-taking Keyboard constructor and
+	// the view is pinned to alignLeft ? left : right. 0 = full display width.
+	public CrawlKeyboardWrapper(Context context, KeyListener keyListener,
+			int targetWidth, boolean alignLeft)
+	{
 		this.keyListener = keyListener;
 
-		virtualKeyboardQwerty = new Keyboard(context, R.xml.keyboard_qwerty);
-		virtualKeyboardSymbols = new Keyboard(context, R.xml.keyboard_sym);
-		virtualKeyboardSymbolsShift = new Keyboard(context, R.xml.keyboard_symshift);
+		if (targetWidth > 0)
+		{
+			int h = context.getResources().getDisplayMetrics().heightPixels;
+			virtualKeyboardQwerty = new Keyboard(context,
+					R.xml.keyboard_qwerty, 0, targetWidth, h);
+			virtualKeyboardSymbols = new Keyboard(context,
+					R.xml.keyboard_sym, 0, targetWidth, h);
+			virtualKeyboardSymbolsShift = new Keyboard(context,
+					R.xml.keyboard_symshift, 0, targetWidth, h);
+		}
+		else
+		{
+			virtualKeyboardQwerty = new Keyboard(context, R.xml.keyboard_qwerty);
+			virtualKeyboardSymbols = new Keyboard(context, R.xml.keyboard_sym);
+			virtualKeyboardSymbolsShift = new Keyboard(context, R.xml.keyboard_symshift);
+		}
 		LayoutInflater inflater = LayoutInflater.from(context);
 		virtualKeyboardView = (CrawlKeyboardView)inflater.inflate(
 				R.layout.input, null);
-		LayoutParams layoutParams = new LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.WRAP_CONTENT);
+		LayoutParams layoutParams = new LayoutParams(
+				targetWidth > 0 ? targetWidth : LayoutParams.FILL_PARENT,
+				LayoutParams.WRAP_CONTENT);
 		layoutParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+		if (targetWidth > 0)
+			layoutParams.addRule(alignLeft
+					? RelativeLayout.ALIGN_PARENT_LEFT
+					: RelativeLayout.ALIGN_PARENT_RIGHT);
 		virtualKeyboardView.setLayoutParams(layoutParams);
 		virtualKeyboardView.setKeyboard(virtualKeyboardQwerty, KeyboardType.QWERTY);
 		virtualKeyboardView.setOnKeyboardActionListener(this);

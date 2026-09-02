@@ -2,16 +2,22 @@ package com.crawlmb.activity;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
+import com.crawlmb.view.FoldStateController;
 
 public class ControlsInfoActivity extends Activity {
 
@@ -29,6 +35,10 @@ public class ControlsInfoActivity extends Activity {
 	};
 	private int screenIndex = 0;
 	private boolean finished = false;
+	// Both help screens shown side-by-side on an open foldable; a single tap
+	// (or one longer dwell) then proceeds straight to the splash.
+	private boolean twoUp = false;
+	private FoldStateController foldStateController = null;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -58,10 +68,86 @@ public class ControlsInfoActivity extends Activity {
 		handler.postDelayed(advanceRunnable, 5000);
 	}
 
+	@Override
+	protected void onStart() {
+		super.onStart();
+		if (finished || twoUp || Preferences.getSkipControlsInfo())
+			return;
+		if (foldStateController == null)
+			foldStateController = new FoldStateController(this,
+					this::onFoldStateChanged);
+		foldStateController.start();
+	}
+
+	@Override
+	protected void onStop() {
+		super.onStop();
+		if (foldStateController != null)
+			foldStateController.stop();
+	}
+
+	// Posture callback (main thread). Once, when the device is open with unfolded
+	// mode enabled, switch to the side-by-side help layout and single-tap advance.
+	private void onFoldStateChanged(boolean unfoldedActive,
+			FoldStateController.Posture posture) {
+		if (twoUp || finished || posture == null || !unfoldedActive)
+			return;
+		twoUp = true;
+		showSideBySide(posture);
+		// Both screens are visible now — one tap proceeds; extend the auto-advance
+		// dwell since there is twice as much to read.
+		handler.removeCallbacks(advanceRunnable);
+		handler.postDelayed(advanceRunnable, 10000);
+	}
+
+	// Fill the open display with screen 1 on the left half and screen 2 on the
+	// right, split at the hinge (weights mirror the fold geometry).
+	private void showSideBySide(FoldStateController.Posture posture) {
+		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+		FrameLayout root = findViewById(R.id.controls_info_root);
+		findViewById(R.id.controls_info_image).setVisibility(View.GONE);
+
+		LinearLayout split = new LinearLayout(this);
+		split.setOrientation(LinearLayout.HORIZONTAL);
+		split.setBackgroundColor(Color.BLACK);
+
+		int gap = Math.max(0, posture.rightStart - posture.leftWidth);
+		float leftWeight = Math.max(1, posture.leftWidth);
+		float rightWeight = Math.max(1, posture.totalWidth - posture.rightStart);
+
+		split.addView(makeHelpImage(SCREENS[0]),
+				new LinearLayout.LayoutParams(0,
+						ViewGroup.LayoutParams.MATCH_PARENT, leftWeight));
+		split.addView(new View(this),
+				new LinearLayout.LayoutParams(gap,
+						ViewGroup.LayoutParams.MATCH_PARENT));
+		split.addView(makeHelpImage(SCREENS[1]),
+				new LinearLayout.LayoutParams(0,
+						ViewGroup.LayoutParams.MATCH_PARENT, rightWeight));
+
+		root.addView(split, new FrameLayout.LayoutParams(
+				ViewGroup.LayoutParams.MATCH_PARENT,
+				ViewGroup.LayoutParams.MATCH_PARENT));
+	}
+
+	private ImageView makeHelpImage(int resId) {
+		ImageView iv = new ImageView(this);
+		iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+		iv.setImageResource(resId);
+		return iv;
+	}
+
 	private void advance() {
 		if (finished)
 			return;
 		handler.removeCallbacks(advanceRunnable);
+		// Two-up shows both screens at once, so any advance proceeds.
+		if (twoUp) {
+			finished = true;
+			startActivity(new Intent(this, SplashActivity.class));
+			finish();
+			return;
+		}
 		screenIndex++;
 		if (screenIndex >= SCREENS.length) {
 			finished = true;

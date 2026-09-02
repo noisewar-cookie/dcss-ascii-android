@@ -20,6 +20,7 @@ import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.AssetManager;
@@ -27,6 +28,8 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.Toast;
 
@@ -34,6 +37,7 @@ import com.crawlmb.CustomFolderSync;
 import com.crawlmb.Paths;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
+import com.crawlmb.view.FoldStateController;
 
 public class SplashActivity extends Activity {
     public static final String TAG = SplashActivity.class.getName();
@@ -51,6 +55,8 @@ public class SplashActivity extends Activity {
     private String versionName;
     private boolean updating = false;
     private boolean assetsFreshlyInstalled = false;
+    private boolean splashEnlarged = false;
+    private FoldStateController foldStateController = null;
 
     /**
      * Called when the activity is first created.
@@ -64,6 +70,40 @@ public class SplashActivity extends Activity {
         setBackground();
 
         installIfRequired();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (foldStateController == null)
+            foldStateController = new FoldStateController(this,
+                    this::onFoldStateChanged);
+        foldStateController.start();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (foldStateController != null)
+            foldStateController.stop();
+    }
+
+    // Posture callback (main thread). On an open foldable with unfolded mode on,
+    // fill the display and grow the title art to ~80% of its width.
+    private void onFoldStateChanged(boolean unfoldedActive,
+            FoldStateController.Posture posture) {
+        if (splashEnlarged || posture == null || !unfoldedActive)
+            return;
+        splashEnlarged = true;
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        ImageView background = (ImageView) findViewById(R.id.background);
+        ViewGroup.LayoutParams lp = background.getLayoutParams();
+        lp.width = Math.round(posture.totalWidth * 0.8f);
+        if (lp instanceof FrameLayout.LayoutParams)
+            ((FrameLayout.LayoutParams) lp).gravity =
+                    android.view.Gravity.CENTER;
+        background.setLayoutParams(lp);
+        background.setScaleType(ImageView.ScaleType.FIT_CENTER);
     }
 
     // Install a new version if we need to.

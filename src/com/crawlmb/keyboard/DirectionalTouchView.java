@@ -35,6 +35,15 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	private float downX, downY;
 	private int touchSlop;
 
+	// UNFOLDED/HALF: the display is split into halves and each half gets its own
+	// 9-grid column mapping so a tap maps within the half the user is looking at
+	// (a full-width fraction would put a half's center under a side column). One
+	// full-width view (not one per half) so two-finger gestures — app-menu long
+	// press, map pinch — still see both pointers. Null = ungapped full width.
+	// Coords are this view's local x (== window x; the view is full-bleed).
+	private int[] foldHalfStarts = null;
+	private int[] foldHalfWidths = null;
+
 	// Map pinch-zoom (portrait): stepped levels [horizontal-fit, 1.0, step1,
 	// step2], one step per pinch gesture. Session-only — resets on rewire.
 	// The stepOut factor is computed at zoom time from the mapView's rendered
@@ -183,6 +192,28 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		this.extraScrollTargets = targets;
 	}
 
+	// Split the 9-grid column mapping into per-half bands (UNFOLDED = both
+	// halves; HALF = the single content half). starts/widths are in this view's
+	// local x. Pass null to restore full-width mapping (non-fold phones).
+	public void setFoldHalves(int[] starts, int[] widths)
+	{
+		this.foldHalfStarts = starts;
+		this.foldHalfWidths = widths;
+	}
+
+	// Which fold half local-x falls in, or -1 for the hinge gap / outside any
+	// half (those taps are ignored — there's no reachable content there).
+	private int halfIndexForX(float x)
+	{
+		if (foldHalfStarts == null)
+			return -1;
+		for (int i = 0; i < foldHalfStarts.length; i++)
+			if (x >= foldHalfStarts[i]
+					&& x < foldHalfStarts[i] + foldHalfWidths[i])
+				return i;
+		return -1;
+	}
+
 	// Applied as a content-scale transform in RegionTermView.onDraw —
 	// no DCSS redraw needed, just invalidate.
 	public void setMapZoom(RegionTermView mapView, float stepOutBase,
@@ -232,8 +263,13 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 				continue;
 			int[] loc = new int[2];
 			v.getLocationOnScreen(loc);
+			float ex = e.getRawX();
 			float ey = e.getRawY();
-			if (ey >= loc[1] && ey < loc[1] + v.getHeight())
+			// X check keeps a per-half overlay (UNFOLDED) from forwarding a drag
+			// to a target sitting on the other half at an overlapping Y. On a
+			// full-width overlay all targets span the width, so this is a no-op.
+			if (ex >= loc[0] && ex < loc[0] + v.getWidth()
+					&& ey >= loc[1] && ey < loc[1] + v.getHeight())
 				return v;
 		}
 		return null;
@@ -293,6 +329,9 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		int c = gridColumn(event.getX());
 		int r = gridRow(event.getY());
 
+		if (c < 0)
+			return true; // tap in the hinge gap / dead half
+
 		// On the newgame species/background screens the upstream menu is
 		// a 3-col grid but we render it as a stacked single-column list,
 		// so a horizontal tap maps to a column the user can't see and
@@ -315,7 +354,16 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	private int gridColumn(float x)
 	{
 		float[] lines = Preferences.getGridLines();
-		float fx = x / getWidth();
+		float fx;
+		if (foldHalfStarts == null)
+			fx = x / getWidth();
+		else
+		{
+			int i = halfIndexForX(x);
+			if (i < 0)
+				return -1; // hinge gap / dead half — ignore
+			fx = (x - foldHalfStarts[i]) / (float) foldHalfWidths[i];
+		}
 		return fx < lines[0] ? 0 : fx < lines[1] ? 1 : 2;
 	}
 
@@ -381,7 +429,7 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			return;
 		int c = gridColumn(event.getX());
 		int r = gridRow(event.getY());
-		if (isNewgameColumnIgnored(c))
+		if (c < 0 || isNewgameColumnIgnored(c))
 			return;
 		int cell = (2 - r) * 3 + c + 1;
 		touchRepeatInterval = Preferences.getTouchDirectionRepeat();

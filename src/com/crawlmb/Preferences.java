@@ -70,6 +70,8 @@ final public class Preferences
 	public static final String[] UNFOLDED_PANEL_KEYS = { "hud", "mlist", "msg" };
 	public static final String SIDE_LEFT = "left";
 	public static final String SIDE_RIGHT = "right";
+	// Keyboard side only: spans the whole display (today's behavior).
+	public static final String SIDE_BOTH = "both";
 
 	// 9-grid touch zone dividers as "v1,v2,h1,h2" — fractions of the touch
 	// area (v = vertical line x, h = horizontal line y from top). Lines may
@@ -309,15 +311,16 @@ final public class Preferences
 	public static String getUnfoldedKeyboardSide()
 	{
 		String s = sharedPreferences.getString(KEY_UNFOLDEDKEYBOARDSIDE, "");
-		if (SIDE_LEFT.equals(s) || SIDE_RIGHT.equals(s))
+		if (SIDE_LEFT.equals(s) || SIDE_RIGHT.equals(s) || SIDE_BOTH.equals(s))
 			return s;
 		return getUnfoldedPanelSide();
 	}
 
 	public static void setUnfoldedKeyboardSide(String side)
 	{
-		sharedPreferences.edit().putString(KEY_UNFOLDEDKEYBOARDSIDE,
-				SIDE_RIGHT.equals(side) ? SIDE_RIGHT : SIDE_LEFT).apply();
+		String v = SIDE_BOTH.equals(side) ? SIDE_BOTH
+				: SIDE_RIGHT.equals(side) ? SIDE_RIGHT : SIDE_LEFT;
+		sharedPreferences.edit().putString(KEY_UNFOLDEDKEYBOARDSIDE, v).apply();
 	}
 
 	private static boolean isUnfoldedPanelPermutation(String[] order)

@@ -184,8 +184,31 @@ public class GameActivity extends Activity
 	// geometry (window coords) for the split. Both are updated by the
 	// FoldStateController callback, which rebuilds the view tree on transitions.
 	private boolean unfoldedActive = false;
+	// HALF mode: device open with a usable hinge but unfolded mode OFF — the
+	// normal single-screen layout is confined to one half (keyboard side; Both
+	// => right), the other half black. Derived from posture + !unfoldedActive.
+	private boolean halfActive = false;
 	private FoldStateController.Posture foldPosture = null;
 	private FoldStateController foldStateController = null;
+
+	// Keyboard/half geometry for the current fold mode, recomputed at the top of
+	// rebuildViews. kbConfine => keyboard pinned to one half (kbHalfWidth px,
+	// kbHalfLeft side). In HALF mode the whole single-screen UI shares this half;
+	// in UNFOLDED it is only the keyboard's half (Both => no confine).
+	private boolean kbConfine = false;
+	private int kbHalfWidth = 0;
+	private boolean kbHalfLeft = false;
+	// UNFOLDED menu confinement: half-type menus (main menu, lists, char
+	// creation) render on the keyboard-side half (Both => right); wide-text
+	// menus span both halves. Independent of kbConfine (Both keyboard is full
+	// width but its menus still confine to the right half).
+	private boolean menuConfine = false;
+	private int menuHalfWidth = 0;
+	private boolean menuHalfLeft = false;
+	// Half containers of the unfolded split, so the auto-fit listener can fit
+	// each half to its own height (the keyboard-side half is shortened).
+	private View unfoldedMapHalf = null;
+	private View unfoldedPanelHalf = null;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -242,12 +265,17 @@ public class GameActivity extends Activity
 	// configs).
 	private void onFoldStateChanged(boolean newUnfoldedActive,
 			FoldStateController.Posture posture) {
-		boolean geometryChanged = newUnfoldedActive && unfoldedActive
+		// HALF mode: open with a usable hinge but the mode gate is off.
+		boolean newHalfActive = posture != null && !newUnfoldedActive;
+		boolean geometryChanged = (newUnfoldedActive || newHalfActive)
+				&& (unfoldedActive || halfActive)
 				&& !sameSplit(foldPosture, posture);
 		foldPosture = posture;
-		if (newUnfoldedActive == unfoldedActive && !geometryChanged)
+		if (newUnfoldedActive == unfoldedActive && newHalfActive == halfActive
+				&& !geometryChanged)
 			return;
 		unfoldedActive = newUnfoldedActive;
+		halfActive = newHalfActive;
 		rebuildViews();
 		if (gameKeyListener != null && gameKeyListener.nativew != null)
 		{
@@ -256,6 +284,69 @@ public class GameActivity extends Activity
 			if (root != null)
 				root.post(nw::redrawScreen);
 		}
+	}
+
+	// Resolve the keyboard/half geometry for the current fold mode. In HALF mode
+	// the whole single-screen UI shares the keyboard-side half (Both => right);
+	// in UNFOLDED only the keyboard is confined (Both => full width, no confine).
+	private void computeKbHalf() {
+		kbConfine = false;
+		kbHalfWidth = 0;
+		kbHalfLeft = false;
+		menuConfine = false;
+		menuHalfWidth = 0;
+		menuHalfLeft = false;
+		if (foldPosture == null || !(unfoldedActive || halfActive))
+			return;
+		String side = Preferences.getUnfoldedKeyboardSide();
+		boolean both = Preferences.SIDE_BOTH.equals(side);
+		if (both)
+			side = Preferences.SIDE_RIGHT; // Both => right half
+		kbHalfLeft = Preferences.SIDE_LEFT.equals(side);
+		kbHalfWidth = kbHalfLeft ? foldPosture.leftWidth
+				: foldPosture.totalWidth - foldPosture.rightStart;
+		// UNFOLDED Both keeps the keyboard full width (no keyboard confine), but
+		// its half-type menus still confine to the right half.
+		kbConfine = kbHalfWidth > 0 && !(unfoldedActive && both);
+		// Per-menu confinement only applies in UNFOLDED (HALF mode already
+		// confines the whole single-screen UI via gamePanel's half width).
+		menuConfine = unfoldedActive && kbHalfWidth > 0;
+		menuHalfWidth = kbHalfWidth;
+		menuHalfLeft = kbHalfLeft;
+	}
+
+	// UNFOLDED Left/Right: shorten the keyboard-side split half by the keyboard's
+	// height so its panels reflow above the keyboard while the other half stays
+	// full height. Runs once the keyboard view has a measured height.
+	private void reserveKeyboardHalf(final View keyboardView) {
+		boolean mapLeft = Preferences.SIDE_LEFT.equals(
+				Preferences.getUnfoldedMapSide());
+		final View half = (mapLeft == kbHalfLeft)
+				? unfoldedMapHalf : unfoldedPanelHalf;
+		if (half == null)
+			return;
+		keyboardView.getViewTreeObserver().addOnGlobalLayoutListener(
+				new ViewTreeObserver.OnGlobalLayoutListener() {
+			@Override
+			public void onGlobalLayout() {
+				int kbHeight = keyboardView.getHeight();
+				if (kbHeight <= 0)
+					return;
+				keyboardView.getViewTreeObserver()
+						.removeOnGlobalLayoutListener(this);
+				ViewGroup.MarginLayoutParams lp =
+						(ViewGroup.MarginLayoutParams) half.getLayoutParams();
+				if (lp.bottomMargin != kbHeight)
+				{
+					lp.bottomMargin = kbHeight;
+					half.setLayoutParams(lp);
+				}
+				// Confined menus on the keyboard-side half must clear the
+				// keyboard too (the panel is full height here).
+				if (portraitRouter != null)
+					portraitRouter.setUnfoldedMenuKbReserve(kbHeight);
+			}
+		});
 	}
 
 	private static boolean sameSplit(FoldStateController.Posture a,
@@ -349,6 +440,8 @@ public class GameActivity extends Activity
 		synchronized (GameKeyListener.progress_lock) {
 			// Log.d("Crawl","rebuildViews");
 
+			computeKbHalf();
+
 			// Portrait-only for single-screen. Landscape support is retained in
 			// code (buildLandscapeLayout, Preferences.getLandscapeKeyboard, etc.)
 			// for future re-enable, but the orientation picker is hidden in
@@ -363,7 +456,9 @@ public class GameActivity extends Activity
 			// unfolded builder still lays out portrait content in each half. If the
 			// device is rotated out of book posture the fold goes HORIZONTAL,
 			// unfoldedActive drops, and we snap back to the portrait lock below.
-			setRequestedOrientation(unfoldedActive
+			// HALF mode also fills the open display (single-screen content on one
+			// half); only true single-screen keeps the portrait lock.
+			setRequestedOrientation((unfoldedActive || halfActive)
 					? ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 					: ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
@@ -473,7 +568,10 @@ public class GameActivity extends Activity
 
 			if (keyboardType.equals(keyboards[1])) // Crawl Keyboard
 			{
-				CrawlKeyboardWrapper virtualKeyboard = new CrawlKeyboardWrapper(this, gameKeyListener);
+				CrawlKeyboardWrapper virtualKeyboard = kbConfine
+						? new CrawlKeyboardWrapper(this, gameKeyListener,
+								kbHalfWidth, kbHalfLeft)
+						: new CrawlKeyboardWrapper(this, gameKeyListener);
 				virtualKeyboard.virtualKeyboardView
 						.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 				screenLayout.addView(virtualKeyboard.virtualKeyboardView);
@@ -482,8 +580,12 @@ public class GameActivity extends Activity
 					portraitRouter.setKeyboardView(
 							virtualKeyboard.virtualKeyboardView);
 
-				// Constrain game panel to sit above keyboard
-				if (gamePanelId != View.NO_ID)
+				// Anchor the game panel above the keyboard EXCEPT in UNFOLDED
+				// Left/Right: there the keyboard covers only its half, so the
+				// panel keeps full height and only the keyboard-side half is
+				// shortened (see reserveKeyboardHalf below).
+				boolean anchorAbove = !(unfoldedActive && kbConfine);
+				if (anchorAbove && gamePanelId != View.NO_ID)
 				{
 					View gamePanel = screenLayout.findViewById(gamePanelId);
 					if (gamePanel != null)
@@ -493,6 +595,8 @@ public class GameActivity extends Activity
 						gamePanel.setLayoutParams(gp);
 					}
 				}
+				else if (unfoldedActive && kbConfine)
+					reserveKeyboardHalf(virtualKeyboard.virtualKeyboardView);
 
 				addDirectionalKeyView(
 						virtualKeyboard.virtualKeyboardView.getId(),
@@ -1201,6 +1305,8 @@ public class GameActivity extends Activity
 
 	private TerminalRenderer buildPortraitLayout(boolean hapticFeedbackEnabled) {
 		term = null;
+		unfoldedMapHalf = null;
+		unfoldedPanelHalf = null;
 		FontConfig fontConfig = FontConfig.load(getAssets());
 		portraitFontConfig = fontConfig;
 
@@ -1360,6 +1466,10 @@ public class GameActivity extends Activity
 		// Width-fit VeraMoBd, then scale the chosen face so its line height
 		// matches VeraMoBd's — keeps status-bar height consistent regardless
 		// of which face the user picked.
+		// HALF mode: the whole single-screen UI is confined to one half, so
+		// fit the status lights to that half width.
+		if (halfActive && kbConfine)
+			statusFitWidth = Math.max(1, kbHalfWidth);
 		int refBase = com.crawlmb.view.GameFontShaper.widthFitTextSize(
 				this, hudCols, statusFitWidth, 2, 200);
 		float matchedBase = com.crawlmb.view.GameFontShaper.matchReferenceLineHeight(
@@ -1607,9 +1717,17 @@ public class GameActivity extends Activity
 		gamePanel.addView(ngwScroll, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
+		// HALF mode confines the whole single-screen UI to the keyboard-side half
+		// (Both => right); the unused half shows the black screenLayout. Other
+		// modes keep the panel full width.
 		RelativeLayout.LayoutParams gamePanelParams = new RelativeLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+				(halfActive && kbConfine) ? kbHalfWidth : LayoutParams.MATCH_PARENT,
+				LayoutParams.MATCH_PARENT);
 		gamePanelParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+		if (halfActive && kbConfine)
+			gamePanelParams.addRule(kbHalfLeft
+					? RelativeLayout.ALIGN_PARENT_LEFT
+					: RelativeLayout.ALIGN_PARENT_RIGHT);
 		gamePanel.setLayoutParams(gamePanelParams);
 
 		registerForContextMenu(gamePanel);
@@ -1623,6 +1741,8 @@ public class GameActivity extends Activity
 		router.setSkillsView(skillsView);
 		router.setItemsView(itemsView);
 		router.setQuickControlsView(quickControlsView);
+		router.setMenuStack(menuStack);
+		router.setUnfoldedMenuGeometry(menuConfine, menuHalfWidth, menuHalfLeft);
 		router.setSplitContainer(splitRoot);
 		router.setStatusBarView(statusBar);
 		router.addRegion(mapView);
@@ -1713,6 +1833,17 @@ public class GameActivity extends Activity
 							if (available <= 0)
 								return;
 
+							// Each half fits to its OWN height: with a Left/Right
+							// keyboard the keyboard-side half is shortened by a
+							// bottom margin, the other stays full. Falls back to
+							// the panel height when a half ref is missing.
+							int availMap = unfoldedMapHalf != null
+									&& unfoldedMapHalf.getHeight() > 0
+									? unfoldedMapHalf.getHeight() : available;
+							int availPanel = unfoldedPanelHalf != null
+									&& unfoldedPanelHalf.getHeight() > 0
+									? unfoldedPanelHalf.getHeight() : available;
+
 							// Map half: fill width (base 1.0); back off only
 							// if that makes the block taller than the half.
 							float curMap = mapView.getFontScaleMultiplier();
@@ -1721,9 +1852,9 @@ public class GameActivity extends Activity
 							if (mapHnow > 0 && curMap > 0)
 							{
 								float mapHatBase = mapHnow * (mapBase / curMap);
-								if (mapHatBase > available)
+								if (mapHatBase > availMap)
 									mapTarget = Math.max(MIN_FONT_SCALE,
-											mapBase * (available - 1f)
+											mapBase * (availMap - 1f)
 													/ mapHatBase);
 							}
 							if (Math.abs(mapTarget - curMap) >= MIN_SCALE_DELTA)
@@ -1750,7 +1881,7 @@ public class GameActivity extends Activity
 							float stackHb = hudHb + mlistHb + msgHb
 									+ statusBar.getMeasuredHeight();
 							float hf = stackHb > 0
-									? Math.min(1f, (available - 1f) / stackHb)
+									? Math.min(1f, (availPanel - 1f) / stackHb)
 									: 1f;
 							float tHud = Math.max(MIN_FONT_SCALE, hudBase * hf);
 							float tMlist = tHud;
@@ -1915,6 +2046,10 @@ public class GameActivity extends Activity
 				gap, LayoutParams.MATCH_PARENT));
 		unfoldedRoot.addView(rightContent, new LinearLayout.LayoutParams(
 				0, LayoutParams.MATCH_PARENT, rightWeight));
+		// Kept so the auto-fit listener and reserveKeyboardHalf can address each
+		// half individually (a Left/Right keyboard shortens only its own half).
+		unfoldedMapHalf = mapHalf;
+		unfoldedPanelHalf = panelHalf;
 		return unfoldedRoot;
 	}
 
@@ -2163,7 +2298,28 @@ public class GameActivity extends Activity
 			directionalLayoutParams
 					.addRule(RelativeLayout.ABOVE, virtualKeyboardId);
 		view.setLayoutParams(directionalLayoutParams);
+		// Fold: keep ONE full-width overlay (so two-finger app-menu / pinch see
+		// both pointers) but split its 9-grid columns per half, so a tap maps
+		// within the half it lands in. UNFOLDED = both halves; HALF = the single
+		// content half (taps on the black half fall in no band and are ignored).
+		if (foldPosture != null && unfoldedActive)
+			view.setFoldHalves(
+					new int[] { 0, foldPosture.rightStart },
+					new int[] { foldPosture.leftWidth,
+							foldPosture.totalWidth - foldPosture.rightStart });
+		else if (foldPosture != null && halfActive && kbConfine)
+			view.setFoldHalves(
+					new int[] { kbHalfLeft ? 0 : foldPosture.rightStart },
+					new int[] { kbHalfWidth });
+		configureDirectionalView(view, hapticFeedbackEnabled);
+		screenLayout.addView(view);
+		portraitDirectionalView = view;
+	}
 
+	// Wire a touch overlay's pass-through, scroll/menu targets, router, map
+	// zoom and haptics.
+	private void configureDirectionalView(DirectionalTouchView view,
+			boolean hapticFeedbackEnabled) {
 		if (term != null)
 		{
 			view.setPassThroughListener(term);
@@ -2217,8 +2373,6 @@ public class GameActivity extends Activity
 					portraitFontConfig.portraitMapZoomStep2);
 
 		view.setHapticFeedbackEnabled(hapticFeedbackEnabled);
-		screenLayout.addView(view);
-		portraitDirectionalView = view;
 	}
 
 	public void toggleKeyboard() {

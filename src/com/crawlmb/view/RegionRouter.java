@@ -5,9 +5,11 @@ import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.widget.FrameLayout;
 
 import com.crawlmb.FontConfig;
 import com.crawlmb.NativeWrapper;
@@ -320,6 +322,23 @@ public class RegionRouter implements TerminalRenderer
 	// Visibility is toggled here from applyMode; content is preloaded by
 	// GameActivity from assets/quick_controls.txt.
 	private View quickControlsView;
+	// Menu layer (fullView + quickControlsView) as a single gamePanel child, so
+	// fullView-hosted menus can be confined to one half in UNFOLDED mode.
+	private View menuStackView;
+	// UNFOLDED menu-half geometry (set by GameActivity). When active, half-type
+	// menus (main menu, lists, char creation) are confined to the keyboard-side
+	// half; wide-text menus (descriptions, overview, hiscores, morgue, message
+	// history, level map, in-game help) span both halves. menuKbReserve is the
+	// keyboard height reserved below a confined overlay in UNFOLDED Left/Right
+	// (0 for Both, where the whole panel already sits above the keyboard).
+	private boolean unfoldedMenuConfine = false;
+	private int unfoldedMenuHalfWidth = 0;
+	private boolean unfoldedMenuHalfLeft = false;
+	private int unfoldedMenuKbReserve = 0;
+	// Last mode/menuType applied, so the async keyboard-height callback can
+	// re-confine the currently visible overlay once the reserve is known.
+	private LayoutMode lastAppliedMode = null;
+	private MenuType lastAppliedMenuType = MenuType.DEFAULT;
 	private ViewGroup splitContainer;
 	private StatusBarView statusBarView;
 	// Newgame panel containers. Each holds a vertical stack of
@@ -688,6 +707,33 @@ public class RegionRouter implements TerminalRenderer
 	public void setQuickControlsView(View view)
 	{
 		this.quickControlsView = view;
+	}
+
+	public void setMenuStack(View view)
+	{
+		this.menuStackView = view;
+	}
+
+	// UNFOLDED menu-half geometry. confine == unfoldedActive; halfLeft/halfWidth
+	// pick the keyboard-side half (Both => right). Called each rebuild.
+	public void setUnfoldedMenuGeometry(boolean confine, int halfWidth,
+			boolean halfLeft)
+	{
+		this.unfoldedMenuConfine = confine;
+		this.unfoldedMenuHalfWidth = halfWidth;
+		this.unfoldedMenuHalfLeft = halfLeft;
+	}
+
+	// Keyboard height to reserve below confined overlays (UNFOLDED Left/Right,
+	// where the panel is full height and the keyboard overlays its half). Set
+	// from the keyboard's post-layout callback; re-confines the live overlay.
+	public void setUnfoldedMenuKbReserve(int reserve)
+	{
+		if (this.unfoldedMenuKbReserve == reserve)
+			return;
+		this.unfoldedMenuKbReserve = reserve;
+		if (lastAppliedMode != null)
+			configureMenuBounds(lastAppliedMode, lastAppliedMenuType);
 	}
 
 	public void setStatusBarView(StatusBarView view)
@@ -1273,6 +1319,81 @@ public class RegionRouter implements TerminalRenderer
 			newgameWeaponContainer.setVisibility(View.INVISIBLE);
 	}
 
+	// Wide-text menus that use the full open display in UNFOLDED mode instead of
+	// being confined to the keyboard-side half. Everything else (main menu,
+	// spell/ability/inventory lists, religion, travel, char creation) confines.
+	private static boolean menuSpansBoth(MenuType menuType)
+	{
+		switch (menuType)
+		{
+		case DESCRIBE:
+		case OVERVIEW:
+		case HISCORES:
+		case MORGUE:
+		case MESSAGES:
+		case LEVELMAP:
+		case HELP:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	// Size/position a menu overlay for the current fold mode. Confined overlays
+	// take the keyboard-side half width and align to that side; both-halves
+	// wide-text overlays keep full width. Either way, in UNFOLDED Left/Right the
+	// keyboard height is reserved below so nothing underlaps the keyboard.
+	// Single-screen / HALF mode (gamePanel already a half) leaves them full.
+	private void applyMenuHalfBounds(View overlay, MenuType menuType)
+	{
+		if (overlay == null)
+			return;
+		ViewGroup.LayoutParams raw = overlay.getLayoutParams();
+		if (!(raw instanceof FrameLayout.LayoutParams))
+			return;
+		FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) raw;
+		boolean confine = unfoldedMenuConfine && !menuSpansBoth(menuType);
+		int width = confine ? unfoldedMenuHalfWidth
+				: ViewGroup.LayoutParams.MATCH_PARENT;
+		int gravity = Gravity.TOP | (confine
+				? (unfoldedMenuHalfLeft ? Gravity.LEFT : Gravity.RIGHT)
+				: Gravity.LEFT);
+		// Reserve the keyboard height below in UNFOLDED Left/Right for confined
+		// AND both-halves menus: a both-halves screen is full width but must
+		// still stop at the keyboard top (empty space on the non-keyboard half
+		// is accepted). Both keyboard => reserve 0 (panel already ABOVE it).
+		int bottom = unfoldedMenuConfine ? unfoldedMenuKbReserve : 0;
+		if (lp.width == width && lp.gravity == gravity
+				&& lp.bottomMargin == bottom)
+			return;
+		lp.width = width;
+		lp.gravity = gravity;
+		lp.bottomMargin = bottom;
+		overlay.setLayoutParams(lp);
+	}
+
+	// Route the overlay hosting menuType to applyMenuHalfBounds (mirrors the
+	// visibility selection below). menuStack hosts every fullView menu.
+	private void configureMenuBounds(LayoutMode mode, MenuType menuType)
+	{
+		if (mode == LayoutMode.GAMEPLAY)
+			return;
+		View overlay;
+		if (menuType == MenuType.SKILLS)
+			overlay = skillsView;
+		else if (menuType == MenuType.ITEMS || menuType == MenuType.HELP)
+			overlay = itemsView;
+		else if (menuType == MenuType.NEWGAME_SPECIES)
+			overlay = newgameSpeciesContainer;
+		else if (menuType == MenuType.NEWGAME_BACKGROUND)
+			overlay = newgameBackgroundContainer;
+		else if (menuType == MenuType.NEWGAME_WEAPON)
+			overlay = newgameWeaponContainer;
+		else
+			overlay = menuStackView;
+		applyMenuHalfBounds(overlay, menuType);
+	}
+
 	private void applyMode(LayoutMode mode, MenuType menuType)
 	{
 		if (repositionFrozen)
@@ -1283,6 +1404,8 @@ public class RegionRouter implements TerminalRenderer
 				frozenGameplayCallback.run();
 			return;
 		}
+		lastAppliedMode = mode;
+		lastAppliedMenuType = menuType;
 		resetAllScroll();
 		boolean splitVisible = (mode == LayoutMode.GAMEPLAY);
 		boolean skillsVisible = !splitVisible
@@ -1411,6 +1534,10 @@ public class RegionRouter implements TerminalRenderer
 			if (qcVisible)
 				quickControlsView.invalidate();
 		}
+
+		// Confine the now-active overlay to the keyboard-side half (or let a
+		// wide-text menu span both halves) in UNFOLDED mode. No-op otherwise.
+		configureMenuBounds(mode, menuType);
 
 		// Re-aim newgame panels at the actual terminal columns rendered by
 		// the upstream Grid widget (stretch_h means we can't pin them

@@ -198,10 +198,12 @@
     <string-array name="unfoldedKeyboardSideDescriptions">
         <item>Left half</item>
         <item>Right half</item>
+        <item>Both halves</item>
     </string-array>
     <string-array name="unfoldedKeyboardSideValues">
         <item>left</item>
         <item>right</item>
+        <item>both</item>
     </string-array>
     
     <!-- Config editor -->
