@@ -73,6 +73,11 @@ final public class Preferences
 	// Keyboard side only: spans the whole display (today's behavior).
 	public static final String SIDE_BOTH = "both";
 
+	// Global bevel margin (dp): a uniform inset applied to the game area and
+	// all overlays on every edge, in every mode (single-screen too). Keeps
+	// content clear of rounded display corners / curved edges. 0 = off.
+	public static final String KEY_BEVELMARGIN = "crawl.bevelmargin";
+
 	// 9-grid touch zone dividers as "v1,v2,h1,h2" — fractions of the touch
 	// area (v = vertical line x, h = horizontal line y from top). Lines may
 	// coincide (collapses the grid toward 2x2) but never cross, and stay
@@ -437,6 +442,17 @@ final public class Preferences
 
 	public static int getKeyboardTransparency(){
 		return sharedPreferences.getInt(Preferences.KEY_KEYBOARDTRANSPARENCY, 140);
+	}
+
+	// Global bevel margin in dp (0 = off). Stored as a ListPreference string.
+	// Clamped to a sane range so a bad value can't swallow the screen.
+	public static int getBevelMarginDp()
+	{
+		String v = sharedPreferences.getString(Preferences.KEY_BEVELMARGIN, "0");
+		int dp;
+		try { dp = Integer.parseInt(v); }
+		catch (NumberFormatException e) { dp = 0; }
+		return Math.max(0, Math.min(dp, 64));
 	}
 
 	public static void setKeyboardTransparency(int transparency) {

@@ -15,6 +15,7 @@ public class NativeWrapper
 	private GameKeyListener keyListener = null;
 	// Last wrap width pushed live, to skip redundant updateMsgWrap calls.
 	private int lastMsgWrapCols = -1;
+	private int lastProseWrapCols = -1;
 
 	// Serializes all terminal-state access: taken by frameUpdate (game
 	// thread) and RegionRouter's UI-thread replay paths.
@@ -51,18 +52,30 @@ public class NativeWrapper
 		if (renderer == null || !gameInProgress())
 			return;
 		int wrapCols = renderer.getMsgWrapCols();
-		if (wrapCols <= 0 || wrapCols == lastMsgWrapCols)
+		int proseCols = renderer.getProseWrapCols();
+		boolean msgChanged = wrapCols > 0 && wrapCols != lastMsgWrapCols;
+		boolean proseChanged = proseCols > 0 && proseCols != lastProseWrapCols;
+		if (!msgChanged && !proseChanged)
 			return;
-		lastMsgWrapCols = wrapCols;
 		synchronized (display_lock)
 		{
-			setMsgMaxWidthLive(wrapCols);
+			if (msgChanged)
+			{
+				lastMsgWrapCols = wrapCols;
+				setMsgMaxWidthLive(wrapCols);
+			}
+			if (proseChanged)
+			{
+				lastProseWrapCols = proseCols;
+				setProseWrapColsLive(proseCols);
+			}
 		}
 	}
 
 	public native void initGame(String dataDir, String settingsDir, String morgueDir);
 	private native void setWordwrap(int msgWrapCols, int msgRows, int proseWrapCols);
 	private native void setMsgMaxWidthLive(int msgWrapCols);
+	private native void setProseWrapColsLive(int proseWrapCols);
 	public static native void nativeSaveGame();
 	// True while a game is loaded (crawl_state.need_save) — false on the
 	// DCSS main menu / character creation. Safe from the UI thread.

@@ -68,6 +68,8 @@
     <string name="preferences_skipcontrolsinfo_summary">Automatically skip the controls info screens on startup.</string>
     <string name="preferences_wordwrap_title">Word wrap</string>
     <string name="preferences_wordwrap_summary">Wrap most texts at screen edge. Changing this restarts the app.</string>
+    <string name="preferences_bevelmargin_title">Edge margin</string>
+    <string name="preferences_bevelmargin_summary">Inset the game and menus from the screen edges. Reopen the game to apply.</string>
     <string name="preferences_orientation_title">Orientation</string>
     <string name="preferences_orientation_summary">Select screen orientation.</string>
     <string name="preferences_fontface_title">Font</string>
@@ -75,11 +77,11 @@
     <string name="preferences_reposition_ui_title">Reposition In-Game UI</string>
     <string name="preferences_reposition_ui_summary">Reorder the game panels by dragging them.</string>
     <string name="preferences_reposition_ui_disabled_summary">Only available while a game is in progress.</string>
-    <string name="unfolded_category">Unfolded (Foldable)</string>
+    <string name="unfolded_category">Folding Devices</string>
     <string name="preferences_unfolded_title">Unfolded mode</string>
-    <string name="preferences_unfolded_summary">When your foldable is open, show the map on one half and the other panels on the other. Folding back returns to your single-screen layout.</string>
+    <string name="preferences_unfolded_summary">Use unfolded screen instead of single-screen.</string>
     <string name="preferences_unfoldedkeyboardside_title">Keyboard side</string>
-    <string name="preferences_unfoldedkeyboardside_summary">Which half the on-screen keyboard sits on in unfolded mode.</string>
+    <string name="preferences_unfoldedkeyboardside_summary">On-screen keyboard placement.</string>
     <string name="reposition_save">Save</string>
     <string name="reposition_reset">Reset</string>
     <string name="reposition_cancel">Exit</string>
@@ -204,6 +206,20 @@
         <item>left</item>
         <item>right</item>
         <item>both</item>
+    </string-array>
+    <string-array name="bevelMarginDescriptions">
+        <item>Off</item>
+        <item>Small (8dp)</item>
+        <item>Medium (16dp)</item>
+        <item>Large (24dp)</item>
+        <item>Extra large (32dp)</item>
+    </string-array>
+    <string-array name="bevelMarginValues">
+        <item>0</item>
+        <item>8</item>
+        <item>16</item>
+        <item>24</item>
+        <item>32</item>
     </string-array>
     
     <!-- Config editor -->

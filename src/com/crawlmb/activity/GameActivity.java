@@ -524,6 +524,16 @@ public class GameActivity extends Activity
 
 				lastBottomInset = bottom;
 
+				// Global edge margin (user pref), folded into the safe-area insets
+				// so the game area and its overlays inset from the display edges.
+				// Not added to the keyboard width (keys can't reflow — see below);
+				// narrowing gamePanel also recomputes the wrap caps at re-layout.
+				int bevelPx = Math.round(Preferences.getBevelMarginDp()
+						* getResources().getDisplayMetrics().density);
+				left += bevelPx;
+				top += bevelPx;
+				right += bevelPx;
+
 				// Distribute the safe-area insets per-child instead of padding
 				// screenLayout as a whole. The crawl keyboard is a fixed-size
 				// KeyboardView whose key grid can't reflow to a narrower width
@@ -547,9 +557,9 @@ public class GameActivity extends Activity
 				else
 				{
 					if (gameArea != null)
-						gameArea.setPadding(left, top, right, bottom);
+						gameArea.setPadding(left, top, right, bottom + bevelPx);
 					if (portraitDirectionalView != null)
-						portraitDirectionalView.setPadding(left, top, right, bottom);
+						portraitDirectionalView.setPadding(left, top, right, bottom + bevelPx);
 				}
 				return WindowInsetsCompat.CONSUMED;
 			});

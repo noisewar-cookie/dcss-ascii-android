@@ -379,6 +379,7 @@ extern "C"
 	void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir);
 	void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, jint msgWrapCols, jint msgRows, jint proseWrapCols);
 	void Java_com_crawlmb_NativeWrapper_setMsgMaxWidthLive( JNIEnv* env, jobject object, jint msgWrapCols);
+	void Java_com_crawlmb_NativeWrapper_setProseWrapColsLive( JNIEnv* env, jobject object, jint proseWrapCols);
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
 	void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz);
 	jboolean Java_com_crawlmb_NativeWrapper_gameInProgress( JNIEnv* env, jclass clz);
@@ -415,6 +416,16 @@ void Java_com_crawlmb_NativeWrapper_setMsgMaxWidthLive( JNIEnv* env, jobject obj
 		return;
 	android_msg_wrap_cols = msgWrapCols;
 	Options.msg_max_width = msgWrapCols;
+}
+
+// Live prose wrap-cap update after a fold/unfold (describe/god/hints span a
+// different width). ui.cc.patch reads android_prose_wrap_cols live, so it
+// applies on the next wrap. Called from NativeWrapper.updateMsgWrap.
+void Java_com_crawlmb_NativeWrapper_setProseWrapColsLive( JNIEnv* env, jobject object, jint proseWrapCols)
+{
+	if (proseWrapCols <= 0)
+		return;
+	android_prose_wrap_cols = proseWrapCols;
 }
 
 void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz)

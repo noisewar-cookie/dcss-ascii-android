@@ -90,6 +90,12 @@ public class FontConfig
     // its base text size. Distinct from portraitHelp* above, which sizes the
     // native full-screen help viewer.
     public final float helpModalFontScale;
+    // UNFOLDED both-halves screens (describe/overview/hiscores/morgue/messages/
+    // levelmap/help) width-fit to the full display (~2x a single half), so their
+    // per-menu scales (tuned for a half/portrait width) render ~2x too large.
+    // This extra multiplier (~0.5) brings the text back near single-half size so
+    // more rows fit above the keyboard line. Only applied in UNFOLDED.
+    public final float portraitUnfoldedBothHalvesScale;
     public final float portraitMessagesFontScale;
     public final boolean portraitMessagesScrollable;
     public final boolean portraitMessagesVScrollable;
@@ -197,6 +203,7 @@ public class FontConfig
         this.portraitHelpScrollable    = getBool (props, "portrait_help_scrollable", this.portraitDefaultScrollable);
         this.portraitHelpVScrollable   = getBool (props, "portrait_help_vscrollable", true);
         this.helpModalFontScale        = getFloat(props, "help_modal_font_scale", 0.8f);
+        this.portraitUnfoldedBothHalvesScale = getFloat(props, "portrait_unfolded_both_halves_scale", 0.5f);
         this.portraitMessagesFontScale = getFloat(props, "portrait_messages_font_scale", this.portraitDefaultFontScale);
         this.portraitMessagesScrollable= getBool (props, "portrait_messages_scrollable", this.portraitDefaultScrollable);
         this.portraitMessagesVScrollable=getBool (props, "portrait_messages_vscrollable", true);

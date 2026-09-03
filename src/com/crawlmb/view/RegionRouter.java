@@ -1339,6 +1339,16 @@ public class RegionRouter implements TerminalRenderer
 		}
 	}
 
+	// UNFOLDED both-halves screens width-fit to the full display (~2x a single
+	// half), so their per-menu font scales render ~2x too large. Return the
+	// compensating multiplier (portrait_unfolded_both_halves_scale, ~0.5) for
+	// those; 1.0 for confined menus and every non-UNFOLDED layout.
+	private float bothHalvesScaleFactor(MenuType menuType)
+	{
+		return (unfoldedMenuConfine && menuSpansBoth(menuType))
+				? fontConfig.portraitUnfoldedBothHalvesScale : 1.0f;
+	}
+
 	// Size/position a menu overlay for the current fold mode. Confined overlays
 	// take the keyboard-side half width and align to that side; both-halves
 	// wide-text overlays keep full width. Either way, in UNFOLDED Left/Right the
@@ -1819,6 +1829,7 @@ public class RegionRouter implements TerminalRenderer
 		// between two menus that share a font scale (e.g. spells 1.75 <->
 		// describe 1.75) leaves the surface blank/corrupt because scaleChanged
 		// alone stays false.
+		scale *= bothHalvesScaleFactor(type);
 		int prevEndRow = fullView.getEndRow();
 		fullView.setRegionRows(0, endRow);
 		fullView.setAnchorToContent(type == MenuType.MAINMENU);
@@ -1868,7 +1879,8 @@ public class RegionRouter implements TerminalRenderer
 
 	private boolean applyHelpConfig()
 	{
-		float scale = fontConfig.portraitHelpFontScale;
+		float scale = fontConfig.portraitHelpFontScale
+				* bothHalvesScaleFactor(MenuType.HELP);
 		float prevScale = itemsView.getFontScaleMultiplier();
 		itemsView.setFontScaleMultiplier(scale);
 		itemsView.setHorizontalScrollEnabled(fontConfig.portraitHelpScrollable);
