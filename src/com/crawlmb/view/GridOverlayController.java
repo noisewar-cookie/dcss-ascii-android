@@ -20,18 +20,32 @@ import android.widget.RelativeLayout;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 // "Reposition Grid Overlay" mode: a blank full-screen editor for the 9-grid
 // touch zone dividers (see Preferences.getGridLines). Edits a working copy;
 // SAVE hands it to the activity to persist — nothing layout-visible changes,
 // so no view rebuild is needed.
+//
+// UNFOLDED (foldable): the display shows two halves and the 9-grid is applied
+// per half, so the editor draws TWO independent grids — one per physical half,
+// each editing its own crawl.gridlines.<side> config (setUnfolded). Each grid
+// is laid out over its half's real touch region: the keyboard-side half is
+// shortened by the keyboard reserve, so its dividers line up with where taps
+// actually map, and swapping keyboard side re-fits automatically.
 public class GridOverlayController
 {
 	public interface Callbacks
 	{
-		// Invoked after teardown with the chosen {v1, v2, h1, h2}.
+		// Invoked after teardown with the chosen {v1, v2, h1, h2}
+		// (single-screen / HALF).
 		void onSave(float[] lines);
+
+		// Invoked after teardown with each physical half's chosen config
+		// (UNFOLDED). Default no-op so single-screen callers need not implement.
+		default void onSaveUnfolded(float[] left, float[] right) {}
 
 		// Invoked after teardown on any non-save exit (EXIT button, BACK,
 		// activity stop). restoreIme = false when the activity is stopping.
@@ -55,20 +69,17 @@ public class GridOverlayController
 	private final Callbacks callbacks;
 	private final float density;
 
-	// Working divider fractions {v1, v2, h1, h2} being edited.
-	private final float[] lines = Preferences.getGridLines().clone();
+	// UNFOLDED config (null => single-screen / HALF, one full-screen grid).
+	// Per physical half [left, right]: window-x start, width, bottom reserve
+	// (keyboard-side half shortened), and the pref side key it edits.
+	private int[] unfoldedStarts = null;
+	private int[] unfoldedWidths = null;
+	private int[] unfoldedReserves = null;
+	private String[] unfoldedSides = null;
 
 	private FrameLayout gridRoot;
-	private EditorView editorView;
+	private final List<EditorView> editors = new ArrayList<>();
 	private boolean active = false;
-
-	// Drag state: indices into lines[], -1 = not dragging that axis. An
-	// intersection grab sets both.
-	private int dragV = -1;
-	private int dragH = -1;
-	private int trackedPointerId = -1;
-	private float grabOffsetX = 0;
-	private float grabOffsetY = 0;
 
 	public GridOverlayController(Activity activity,
 			RelativeLayout screenLayout, View keyboardView, int bottomInset,
@@ -81,6 +92,18 @@ public class GridOverlayController
 		this.highlightColor = highlightColor;
 		this.callbacks = callbacks;
 		this.density = activity.getResources().getDisplayMetrics().density;
+	}
+
+	// Switch to the two-grid UNFOLDED editor. Call before enter(). Arrays are
+	// parallel per physical half; reserves already account for the keyboard
+	// (keyboard-side half = keyboard height, others 0; Both keyboard = both).
+	public void setUnfolded(int[] starts, int[] widths, int[] reserves,
+			String[] sides)
+	{
+		this.unfoldedStarts = starts;
+		this.unfoldedWidths = widths;
+		this.unfoldedReserves = reserves;
+		this.unfoldedSides = sides;
 	}
 
 	public boolean isActive()
@@ -107,18 +130,38 @@ public class GridOverlayController
 
 	private void save()
 	{
-		float[] result = lines.clone();
-		teardown();
-		callbacks.onSave(result);
+		if (unfoldedStarts != null)
+		{
+			float[] left = linesForSide(Preferences.SIDE_LEFT);
+			float[] right = linesForSide(Preferences.SIDE_RIGHT);
+			teardown();
+			callbacks.onSaveUnfolded(left, right);
+		}
+		else
+		{
+			float[] result = editors.get(0).lines.clone();
+			teardown();
+			callbacks.onSave(result);
+		}
+	}
+
+	private float[] linesForSide(String side)
+	{
+		for (int i = 0; i < editors.size(); i++)
+			if (unfoldedSides != null && side.equals(unfoldedSides[i]))
+				return editors.get(i).lines.clone();
+		return Preferences.GRID_LINE_DEFAULTS.clone();
 	}
 
 	private void reset()
 	{
-		System.arraycopy(Preferences.GRID_LINE_DEFAULTS, 0, lines, 0,
-				lines.length);
-		dragV = -1;
-		dragH = -1;
-		editorView.invalidate();
+		for (EditorView ev : editors)
+		{
+			System.arraycopy(Preferences.GRID_LINE_DEFAULTS, 0, ev.lines, 0,
+					ev.lines.length);
+			ev.resetDrag();
+			ev.invalidate();
+		}
 	}
 
 	private void teardown()
@@ -130,7 +173,7 @@ public class GridOverlayController
 
 	private void buildUi()
 	{
-		// Opaque blank screen; clickable + focusable so anything the editor
+		// Opaque blank screen; clickable + focusable so anything the editors
 		// and bar don't handle is still swallowed (reposition precedent).
 		gridRoot = new FrameLayout(activity);
 		gridRoot.setBackgroundColor(BACKGROUND_COLOR);
@@ -152,25 +195,67 @@ public class GridOverlayController
 			barHeight = (int) (BAR_HEIGHT_DP * density) + barBottomPad;
 		}
 
-		// The editor fills the area above the bar — the same region the
-		// 9-grid touch view covers in-game — so line fractions map 1:1.
-		editorView = new EditorView(activity);
-		editorView.setHapticFeedbackEnabled(
-				Preferences.getHapticFeedbackEnabled());
-		FrameLayout.LayoutParams editorParams = new FrameLayout.LayoutParams(
+		if (unfoldedStarts != null)
+			addUnfoldedEditors();
+		else
+			addSingleEditor(barHeight);
+
+		addBar(barHeight, barBottomPad);
+
+		screenLayout.addView(gridRoot, new RelativeLayout.LayoutParams(
+				ViewGroup.LayoutParams.MATCH_PARENT,
+				ViewGroup.LayoutParams.MATCH_PARENT));
+	}
+
+	// Single full-screen editor above the bar — line fractions map 1:1 to the
+	// in-game 9-grid touch region.
+	private void addSingleEditor(int barHeight)
+	{
+		EditorView ev = new EditorView(activity,
+				Preferences.getGridLines().clone());
+		ev.setHapticFeedbackEnabled(Preferences.getHapticFeedbackEnabled());
+		FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
 				ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.MATCH_PARENT);
-		editorParams.bottomMargin = barHeight;
-		gridRoot.addView(editorView, editorParams);
+		p.bottomMargin = barHeight;
+		gridRoot.addView(ev, p);
+		editors.add(ev);
+	}
 
+	// One editor per physical half, positioned over that half's real touch
+	// region: window-x band × (full height − keyboard reserve). The dividers
+	// therefore correspond to where taps map on each half.
+	private void addUnfoldedEditors()
+	{
+		boolean haptic = Preferences.getHapticFeedbackEnabled();
+		for (int i = 0; i < unfoldedStarts.length; i++)
+		{
+			EditorView ev = new EditorView(activity,
+					Preferences.getGridLines(unfoldedSides[i]).clone());
+			ev.setHapticFeedbackEnabled(haptic);
+			FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
+					unfoldedWidths[i], ViewGroup.LayoutParams.MATCH_PARENT);
+			p.leftMargin = unfoldedStarts[i];
+			p.bottomMargin = unfoldedReserves[i];
+			gridRoot.addView(ev, p);
+			editors.add(ev);
+		}
+	}
+
+	private void addBar(int barHeight, int barBottomPad)
+	{
 		View bar = activity.getLayoutInflater().inflate(
 				R.layout.reposition_buttons, gridRoot, false);
 		bar.setPadding(bar.getPaddingLeft(), bar.getPaddingTop(),
 				bar.getPaddingRight(), barBottomPad);
 		bar.setClickable(true);
-		gridRoot.addView(bar, new FrameLayout.LayoutParams(
-				ViewGroup.LayoutParams.MATCH_PARENT, barHeight,
-				Gravity.BOTTOM));
+		int[] span = barHorizontalSpan();
+		FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
+				span == null ? ViewGroup.LayoutParams.MATCH_PARENT : span[1],
+				barHeight, Gravity.BOTTOM);
+		if (span != null)
+			p.leftMargin = span[0];
+		gridRoot.addView(bar, p);
 
 		bar.findViewById(R.id.reposition_save)
 				.setOnClickListener(v -> save());
@@ -178,10 +263,27 @@ public class GridOverlayController
 				.setOnClickListener(v -> reset());
 		bar.findViewById(R.id.reposition_cancel)
 				.setOnClickListener(v -> exit(true));
+	}
 
-		screenLayout.addView(gridRoot, new RelativeLayout.LayoutParams(
-				ViewGroup.LayoutParams.MATCH_PARENT,
-				ViewGroup.LayoutParams.MATCH_PARENT));
+	// Bar horizontal extent: null = full width. UNFOLDED Left/Right (exactly
+	// one half reserved) puts the bar over the keyboard footprint (that half)
+	// so the other half's grid stays full height; Both / no-keyboard = full.
+	private int[] barHorizontalSpan()
+	{
+		if (unfoldedReserves == null)
+			return null;
+		int reservedCount = 0;
+		int reservedIdx = -1;
+		for (int i = 0; i < unfoldedReserves.length; i++)
+			if (unfoldedReserves[i] > 0)
+			{
+				reservedCount++;
+				reservedIdx = i;
+			}
+		if (reservedCount == 1)
+			return new int[] { unfoldedStarts[reservedIdx],
+					unfoldedWidths[reservedIdx] };
+		return null;
 	}
 
 	// The overlay can't cover the system soft keyboard (separate window), so
@@ -196,73 +298,6 @@ public class GridOverlayController
 			imm.hideSoftInputFromWindow(screenLayout.getWindowToken(), 0);
 	}
 
-	private void onTouchDown(MotionEvent event)
-	{
-		if (dragV >= 0 || dragH >= 0)
-			return;
-		float x = event.getX();
-		float y = event.getY();
-		float w = editorView.getWidth();
-		float h = editorView.getHeight();
-		if (w <= 0 || h <= 0)
-			return;
-		float grabRadius = GRAB_RADIUS_DP * density;
-
-		// Within the grab radius on both axes = intersection grab; both
-		// lines follow the finger.
-		int nearV = nearestLine(x / w, 0);
-		int nearH = nearestLine(y / h, 2);
-		boolean vHit = Math.abs(lines[nearV] * w - x) <= grabRadius;
-		boolean hHit = Math.abs(lines[nearH] * h - y) <= grabRadius;
-		if (!vHit && !hHit)
-			return;
-		dragV = vHit ? nearV : -1;
-		dragH = hHit ? nearH : -1;
-		grabOffsetX = vHit ? x - lines[nearV] * w : 0;
-		grabOffsetY = hHit ? y - lines[nearH] * h : 0;
-		trackedPointerId = event.getPointerId(0);
-		editorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-	}
-
-	// Index into lines[] of the line nearest frac on one axis; base = 0 for
-	// the vertical pair, 2 for the horizontal.
-	private int nearestLine(float frac, int base)
-	{
-		float d0 = Math.abs(frac - lines[base]);
-		float d1 = Math.abs(frac - lines[base + 1]);
-		if (d0 != d1)
-			return d0 < d1 ? base : base + 1;
-		// Equidistant — typically a collapsed (overlapping) pair. Pick by
-		// side so the pair can be pulled apart in either direction: grabbing
-		// from the left/top takes the lower line, right/bottom the upper.
-		return frac < lines[base] ? base : base + 1;
-	}
-
-	private void onTouchMove(MotionEvent event)
-	{
-		if (dragV < 0 && dragH < 0)
-			return;
-		int idx = event.findPointerIndex(trackedPointerId);
-		if (idx < 0)
-			return;
-		if (dragV >= 0)
-			lines[dragV] = constrain(
-					snap((event.getX(idx) - grabOffsetX)
-							/ editorView.getWidth()), dragV);
-		if (dragH >= 0)
-			lines[dragH] = constrain(
-					snap((event.getY(idx) - grabOffsetY)
-							/ editorView.getHeight()), dragH);
-		editorView.invalidate();
-	}
-
-	private void onTouchEnd()
-	{
-		dragV = -1;
-		dragH = -1;
-		trackedPointerId = -1;
-	}
-
 	private static float snap(float frac)
 	{
 		float step = Preferences.GRID_LINE_SNAP_STEP;
@@ -270,33 +305,32 @@ public class GridOverlayController
 		return Math.abs(frac - nearest) < SNAP_THRESHOLD ? nearest : frac;
 	}
 
-	// Clamp to the edge padding and to the partner line on the same axis —
-	// lines may meet (equality collapses the middle band) but never cross.
-	private float constrain(float frac, int index)
-	{
-		float lo = Preferences.GRID_LINE_PADDING;
-		float hi = 1f - Preferences.GRID_LINE_PADDING;
-		// Even indices (v1/h1) are bounded above by their partner; odd
-		// (v2/h2) below.
-		if ((index & 1) == 0)
-			hi = Math.min(hi, lines[index + 1]);
-		else
-			lo = Math.max(lo, lines[index - 1]);
-		return Math.max(lo, Math.min(hi, frac));
-	}
-
-	// Draws the four divider lines and owns the mode's touch handling (the
-	// button bar sits on top of it).
+	// Draws one half's four divider lines and owns that grid's touch handling.
+	// Each instance holds its own working {v1,v2,h1,h2} and drag state, so the
+	// two UNFOLDED grids edit independently.
 	private class EditorView extends View
 	{
 		private static final float LABEL_MARGIN_DP = 4;
 
+		// Working divider fractions {v1, v2, h1, h2} being edited (mutated in
+		// place; reset() overwrites, save() reads).
+		final float[] lines;
+
+		// Drag state: indices into lines[], -1 = not dragging that axis. An
+		// intersection grab sets both.
+		private int dragV = -1;
+		private int dragH = -1;
+		private int trackedPointerId = -1;
+		private float grabOffsetX = 0;
+		private float grabOffsetY = 0;
+
 		private final Paint linePaint = new Paint();
 		private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-		EditorView(Context context)
+		EditorView(Context context, float[] lines)
 		{
 			super(context);
+			this.lines = lines;
 			linePaint.setStyle(Paint.Style.STROKE);
 			linePaint.setStrokeWidth(Math.max(4, Math.round(2 * density)));
 			linePaint.setColor(
@@ -310,6 +344,13 @@ public class GridOverlayController
 			labelPaint.setTextSize(TypedValue.applyDimension(
 					TypedValue.COMPLEX_UNIT_SP, 12,
 					context.getResources().getDisplayMetrics()));
+		}
+
+		void resetDrag()
+		{
+			dragV = -1;
+			dragH = -1;
+			trackedPointerId = -1;
 		}
 
 		@Override
@@ -371,6 +412,88 @@ public class GridOverlayController
 			else if (baseline + labelPaint.descent() > h - margin)
 				baseline = above;
 			canvas.drawText(text, margin, baseline, labelPaint);
+		}
+
+		private void onTouchDown(MotionEvent event)
+		{
+			if (dragV >= 0 || dragH >= 0)
+				return;
+			float x = event.getX();
+			float y = event.getY();
+			float w = getWidth();
+			float h = getHeight();
+			if (w <= 0 || h <= 0)
+				return;
+			float grabRadius = GRAB_RADIUS_DP * density;
+
+			// Within the grab radius on both axes = intersection grab; both
+			// lines follow the finger.
+			int nearV = nearestLine(x / w, 0);
+			int nearH = nearestLine(y / h, 2);
+			boolean vHit = Math.abs(lines[nearV] * w - x) <= grabRadius;
+			boolean hHit = Math.abs(lines[nearH] * h - y) <= grabRadius;
+			if (!vHit && !hHit)
+				return;
+			dragV = vHit ? nearV : -1;
+			dragH = hHit ? nearH : -1;
+			grabOffsetX = vHit ? x - lines[nearV] * w : 0;
+			grabOffsetY = hHit ? y - lines[nearH] * h : 0;
+			trackedPointerId = event.getPointerId(0);
+			performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+		}
+
+		// Index into lines[] of the line nearest frac on one axis; base = 0 for
+		// the vertical pair, 2 for the horizontal.
+		private int nearestLine(float frac, int base)
+		{
+			float d0 = Math.abs(frac - lines[base]);
+			float d1 = Math.abs(frac - lines[base + 1]);
+			if (d0 != d1)
+				return d0 < d1 ? base : base + 1;
+			// Equidistant — typically a collapsed (overlapping) pair. Pick by
+			// side so the pair can be pulled apart in either direction: grabbing
+			// from the left/top takes the lower line, right/bottom the upper.
+			return frac < lines[base] ? base : base + 1;
+		}
+
+		private void onTouchMove(MotionEvent event)
+		{
+			if (dragV < 0 && dragH < 0)
+				return;
+			int idx = event.findPointerIndex(trackedPointerId);
+			if (idx < 0)
+				return;
+			if (dragV >= 0)
+				lines[dragV] = constrain(
+						snap((event.getX(idx) - grabOffsetX) / getWidth()),
+						dragV);
+			if (dragH >= 0)
+				lines[dragH] = constrain(
+						snap((event.getY(idx) - grabOffsetY) / getHeight()),
+						dragH);
+			invalidate();
+		}
+
+		private void onTouchEnd()
+		{
+			dragV = -1;
+			dragH = -1;
+			trackedPointerId = -1;
+		}
+
+		// Clamp to the edge padding and to the partner line on the same axis —
+		// lines may meet (equality collapses the middle band) but never cross.
+		private float constrain(float frac, int index)
+		{
+			float lo = Preferences.GRID_LINE_PADDING;
+			float hi = 1f - Preferences.GRID_LINE_PADDING;
+			// Even indices (v1/h1) are bounded above by their partner; odd
+			// (v2/h2) below.
+			if ((index & 1) == 0)
+				hi = Math.min(hi, lines[index + 1]);
+			else
+				lo = Math.max(lo, lines[index - 1]);
+			return Math.max(lo, Math.min(hi, frac));
 		}
 
 		@Override

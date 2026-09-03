@@ -345,6 +345,11 @@ public class GameActivity extends Activity
 				// keyboard too (the panel is full height here).
 				if (portraitRouter != null)
 					portraitRouter.setUnfoldedMenuKbReserve(kbHeight);
+				// Shorten the keyboard-side half's 9-grid so its rows divide the
+				// content above the keyboard (index 0 = left, 1 = right half).
+				if (portraitDirectionalView instanceof DirectionalTouchView)
+					((DirectionalTouchView) portraitDirectionalView)
+							.setFoldHalfReserve(kbHalfLeft ? 0 : 1, kbHeight);
 			}
 		});
 	}
@@ -2173,6 +2178,15 @@ public class GameActivity extends Activity
 					}
 
 					@Override
+					public void onSaveUnfolded(float[] left, float[] right)
+					{
+						gridOverlayController = null;
+						Preferences.setGridLines(Preferences.SIDE_LEFT, left);
+						Preferences.setGridLines(Preferences.SIDE_RIGHT, right);
+						restoreKeyboardAfterReload();
+					}
+
+					@Override
 					public void onExit(boolean restoreIme)
 					{
 						gridOverlayController = null;
@@ -2180,6 +2194,34 @@ public class GameActivity extends Activity
 							restoreKeyboardAfterReload();
 					}
 				});
+		if (unfoldedActive && foldPosture != null)
+		{
+			// UNFOLDED: two independent per-half grids over each half's real
+			// touch region. Reserve = keyboard height on the shortened half so
+			// the editor's dividers land where taps actually map in-game (see
+			// reserveKeyboardHalf / addDirectionalKeyView): Left/Right shortens
+			// the keyboard-side half, Both shortens both, no keyboard neither.
+			int kb = (portraitKeyboardView != null)
+					? portraitKeyboardView.getHeight() : 0;
+			int leftReserve;
+			int rightReserve;
+			if (kb <= 0)
+				leftReserve = rightReserve = 0;
+			else if (kbConfine)
+			{
+				leftReserve = kbHalfLeft ? kb : 0;
+				rightReserve = kbHalfLeft ? 0 : kb;
+			}
+			else
+				leftReserve = rightReserve = kb; // Both: keyboard full width
+			gridOverlayController.setUnfolded(
+					new int[] { 0, foldPosture.rightStart },
+					new int[] { foldPosture.leftWidth,
+							foldPosture.totalWidth - foldPosture.rightStart },
+					new int[] { leftReserve, rightReserve },
+					new String[] { Preferences.SIDE_LEFT,
+							Preferences.SIDE_RIGHT });
+		}
 		gridOverlayController.enter();
 	}
 
@@ -2303,27 +2345,43 @@ public class GameActivity extends Activity
 		RelativeLayout.LayoutParams directionalLayoutParams = new RelativeLayout.LayoutParams(
 				LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT);
 		directionalLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-		// No keyboard (NO_ID): fill the screen instead of anchoring above one.
-		if (virtualKeyboardId != View.NO_ID)
+		// UNFOLDED Left/Right: span the full window height (not just above the
+		// keyboard) so the non-keyboard half gets a full-height 9-grid; the
+		// keyboard (confined to its half) is raised above the overlay below to
+		// keep its own taps, and the keyboard-side half's grid is shortened via
+		// its per-half reserve (set in reserveKeyboardHalf). Other modes keep
+		// the above-keyboard anchor. No keyboard (NO_ID): fill the screen.
+		boolean unfoldedKbHalf = unfoldedActive && kbConfine;
+		if (virtualKeyboardId != View.NO_ID && !unfoldedKbHalf)
 			directionalLayoutParams
 					.addRule(RelativeLayout.ABOVE, virtualKeyboardId);
 		view.setLayoutParams(directionalLayoutParams);
 		// Fold: keep ONE full-width overlay (so two-finger app-menu / pinch see
-		// both pointers) but split its 9-grid columns per half, so a tap maps
-		// within the half it lands in. UNFOLDED = both halves; HALF = the single
-		// content half (taps on the black half fall in no band and are ignored).
+		// both pointers) but split its 9-grid per half. UNFOLDED = both halves,
+		// each reading its own per-side config; HALF = the single content half on
+		// the global config (taps on the black half fall in no band and ignored).
 		if (foldPosture != null && unfoldedActive)
 			view.setFoldHalves(
 					new int[] { 0, foldPosture.rightStart },
 					new int[] { foldPosture.leftWidth,
-							foldPosture.totalWidth - foldPosture.rightStart });
+							foldPosture.totalWidth - foldPosture.rightStart },
+					new int[] { 0, 0 },
+					new String[] { Preferences.SIDE_LEFT,
+							Preferences.SIDE_RIGHT });
 		else if (foldPosture != null && halfActive && kbConfine)
 			view.setFoldHalves(
 					new int[] { kbHalfLeft ? 0 : foldPosture.rightStart },
-					new int[] { kbHalfWidth });
+					new int[] { kbHalfWidth },
+					new int[] { 0 },
+					new String[] { null });
 		configureDirectionalView(view, hapticFeedbackEnabled);
 		screenLayout.addView(view);
 		portraitDirectionalView = view;
+		// Raise the keyboard above the now full-height overlay so its half keeps
+		// its taps; the transparency slider and HUD buttons added afterwards
+		// still layer above the keyboard.
+		if (unfoldedKbHalf && portraitKeyboardView != null)
+			portraitKeyboardView.bringToFront();
 	}
 
 	// Wire a touch overlay's pass-through, scroll/menu targets, router, map

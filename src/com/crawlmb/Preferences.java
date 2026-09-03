@@ -83,6 +83,11 @@ final public class Preferences
 	// coincide (collapses the grid toward 2x2) but never cross, and stay
 	// GRID_LINE_PADDING away from the edges.
 	public static final String KEY_GRIDLINES = "crawl.gridlines";
+	// Unfolded (foldable) mode keeps a separate divider config per physical
+	// half so each half's 9-grid can be tuned independently (see
+	// getGridLines(side)). Single-screen and HALF still use KEY_GRIDLINES.
+	public static final String KEY_GRIDLINES_LEFT = "crawl.gridlines.left";
+	public static final String KEY_GRIDLINES_RIGHT = "crawl.gridlines.right";
 	// Snap step 1/36 lies on the default thirds (12/36, 24/36); padding is
 	// one snap step so the drag bounds align with the snap grid.
 	public static final float GRID_LINE_SNAP_STEP = 1f / 36f;
@@ -342,12 +347,14 @@ final public class Preferences
 		return true;
 	}
 
-	// Parsed KEY_GRIDLINES cache — grid taps are a hot path; invalidated by
-	// setGridLines. Callers must not mutate the returned array.
+	// Parsed grid-line caches — grid taps are a hot path; invalidated by the
+	// matching setGridLines. Callers must not mutate the returned array.
 	private static float[] gridLinesCache = null;
+	private static float[] gridLinesCacheLeft = null;
+	private static float[] gridLinesCacheRight = null;
 
 	// Validated grid line fractions {v1, v2, h1, h2}: ordered, within the
-	// padding bounds, else the default thirds.
+	// padding bounds, else the default thirds. Single-screen / HALF config.
 	public static float[] getGridLines()
 	{
 		if (gridLinesCache != null)
@@ -357,8 +364,36 @@ final public class Preferences
 		return gridLinesCache;
 	}
 
+	// Per-physical-half config for unfolded mode. SIDE_LEFT / SIDE_RIGHT pick
+	// the half's own config; anything else falls back to the single-screen one.
+	public static float[] getGridLines(String side)
+	{
+		if (SIDE_LEFT.equals(side))
+		{
+			if (gridLinesCacheLeft == null)
+				gridLinesCacheLeft = parseGridLines(
+						sharedPreferences.getString(KEY_GRIDLINES_LEFT, ""));
+			return gridLinesCacheLeft;
+		}
+		if (SIDE_RIGHT.equals(side))
+		{
+			if (gridLinesCacheRight == null)
+				gridLinesCacheRight = parseGridLines(
+						sharedPreferences.getString(KEY_GRIDLINES_RIGHT, ""));
+			return gridLinesCacheRight;
+		}
+		return getGridLines();
+	}
+
 	public static void setGridLines(float[] lines)
 	{
+		setGridLines(null, lines);
+	}
+
+	public static void setGridLines(String side, float[] lines)
+	{
+		String key = SIDE_LEFT.equals(side) ? KEY_GRIDLINES_LEFT
+				: SIDE_RIGHT.equals(side) ? KEY_GRIDLINES_RIGHT : KEY_GRIDLINES;
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < lines.length; i++)
 		{
@@ -366,9 +401,13 @@ final public class Preferences
 				sb.append(',');
 			sb.append(lines[i]);
 		}
-		sharedPreferences.edit()
-				.putString(KEY_GRIDLINES, sb.toString()).apply();
-		gridLinesCache = lines.clone();
+		sharedPreferences.edit().putString(key, sb.toString()).apply();
+		if (SIDE_LEFT.equals(side))
+			gridLinesCacheLeft = lines.clone();
+		else if (SIDE_RIGHT.equals(side))
+			gridLinesCacheRight = lines.clone();
+		else
+			gridLinesCache = lines.clone();
 	}
 
 	private static float[] parseGridLines(String stored)
