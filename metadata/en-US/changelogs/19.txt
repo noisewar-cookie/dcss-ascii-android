@@ -1,0 +1,5 @@
+Release 19 (0.34.1)
+
+New Features:
+• Support for folding devices, many UI options.
+• Screen edge margin is now customizable.
