@@ -10,9 +10,9 @@
     "semantic_hash": "19a74e19b07e7f78e67dabca37b333ba"
   },
   "build.gradle": {
-    "mtime": 1788134828.5402963,
-    "ast_hash": "7b7b686b572599d67eddc1c1bcaa1b38",
-    "semantic_hash": "7b7b686b572599d67eddc1c1bcaa1b38"
+    "mtime": 1788504129.657931,
+    "ast_hash": "2729663981f037abb58ea72f65e9d398",
+    "semantic_hash": "2729663981f037abb58ea72f65e9d398"
   },
   "gradlew": {
     "mtime": 1776494228.7899022,
@@ -95,9 +95,9 @@
     "semantic_hash": "daff9d197d7d2ea7c55b2ac9cf419622"
   },
   "src/com/crawlmb/Preferences.java": {
-    "mtime": 1788493153.319446,
-    "ast_hash": "0527e8eab0796dc2c6f38b3ed406a11d",
-    "semantic_hash": "0527e8eab0796dc2c6f38b3ed406a11d"
+    "mtime": 1788503628.0335515,
+    "ast_hash": "b9acdd50ea0232a9cf8c6b3e97e2383f",
+    "semantic_hash": "b9acdd50ea0232a9cf8c6b3e97e2383f"
   },
   "src/com/crawlmb/TouchDirectionRepeatPreference.java": {
     "mtime": 1783818906.831584,
@@ -125,9 +125,9 @@
     "semantic_hash": "cc79c34b25313a0eefdcaaab815a5b18"
   },
   "src/com/crawlmb/activity/GameActivity.java": {
-    "mtime": 1788493422.9683564,
-    "ast_hash": "5e8b1c3f64017422b58f6997857bcfcd",
-    "semantic_hash": "5e8b1c3f64017422b58f6997857bcfcd"
+    "mtime": 1788503429.1162117,
+    "ast_hash": "d74003522378500771047af733383356",
+    "semantic_hash": "d74003522378500771047af733383356"
   },
   "src/com/crawlmb/activity/HelpActivity.java": {
     "mtime": 1778744960.008869,
@@ -135,9 +135,9 @@
     "semantic_hash": "d8a453c0c1f165b572f9f956520f6b7c"
   },
   "src/com/crawlmb/activity/PreferencesActivity.java": {
-    "mtime": 1788493254.6897645,
-    "ast_hash": "01bfee2be55d0bd535881ae27dc8c21f",
-    "semantic_hash": "01bfee2be55d0bd535881ae27dc8c21f"
+    "mtime": 1788497124.069424,
+    "ast_hash": "444df737ddd36157dab43e0455316a12",
+    "semantic_hash": "444df737ddd36157dab43e0455316a12"
   },
   "src/com/crawlmb/activity/SplashActivity.java": {
     "mtime": 1788243139.006795,
@@ -385,13 +385,18 @@
     "semantic_hash": "520789dbeea530f3c3d101c7739fc096"
   },
   "src/com/crawlmb/view/CenterlineController.java": {
-    "mtime": 1788493805.4837153,
-    "ast_hash": "c4e96d8090a9ed7836c7cb1190c7d223",
-    "semantic_hash": "c4e96d8090a9ed7836c7cb1190c7d223"
+    "mtime": 1788494764.8812666,
+    "ast_hash": "fba96a12dfa5a6605868d287b55f4479",
+    "semantic_hash": "fba96a12dfa5a6605868d287b55f4479"
   },
   "src/com/crawlmb/view/UnfoldedRepositionController.java": {
     "mtime": 1788493917.9629226,
     "ast_hash": "4b45ee0550796a15d52e35c9d9d93938",
     "semantic_hash": "4b45ee0550796a15d52e35c9d9d93938"
+  },
+  "src/com/crawlmb/BevelMarginPreference.java": {
+    "mtime": 1788502825.5300338,
+    "ast_hash": "22d302ae05da75ebe7e9a07cd9caab82",
+    "semantic_hash": "22d302ae05da75ebe7e9a07cd9caab82"
   }
 }
