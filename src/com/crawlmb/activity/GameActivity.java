@@ -521,15 +521,14 @@ public class GameActivity extends Activity
 							bottom = Math.max(bottom, wf.bottom);
 						}
 					}
+				}
 
+				if (platform != null)
+				{
 					// Rounded-corner safe area, API 35+ only. API 35 forces
 					// edge-to-edge, so content draws into the physical display
-					// corners and the corner arc clips the outermost glyphs
-					// (e.g. the top of the "H" in the menu). Gated to 35+
-					// deliberately: applying it on API 33 — where the adapter
-					// opts into edge-to-edge but the platform reports corners
-					// differently — shifted every screen ~1 column, and API 33
-					// and below already render correctly without it.
+					// corners and the corner arc clips the outermost glyphs.
+					// Gated to 35+: API 33 and below render correctly without it.
 					if (VERSION.SDK_INT >= VERSION_CODES.VANILLA_ICE_CREAM)
 					{
 						int tl = cornerRadius(platform,
@@ -552,10 +551,11 @@ public class GameActivity extends Activity
 
 				lastBottomInset = bottom;
 
-				// Global edge margin (user pref), folded into the safe-area insets
-				// so the game area and its overlays inset from the display edges.
-				// Not added to the keyboard width (keys can't reflow — see below);
-				// narrowing gamePanel also recomputes the wrap caps at re-layout.
+				// Edge margin (user pref): a relative offset on the
+				// device-adaptive baseline (system bars + corners).
+				// Positive = extra padding; negative = content overflows
+				// past corners / system bars and the display clips it.
+				// Not added to the keyboard width (keys can't reflow).
 				int bevelPx = Math.round(Preferences.getBevelMarginDp()
 						* getResources().getDisplayMetrics().density);
 				left += bevelPx;
@@ -585,9 +585,11 @@ public class GameActivity extends Activity
 				else
 				{
 					if (gameArea != null)
-						gameArea.setPadding(left, top, right, bottom + bevelPx);
+						gameArea.setPadding(left, top, right,
+								bottom + bevelPx);
 					if (portraitDirectionalView != null)
-						portraitDirectionalView.setPadding(left, top, right, bottom + bevelPx);
+						portraitDirectionalView.setPadding(left, top, right,
+								bottom + bevelPx);
 				}
 				return WindowInsetsCompat.CONSUMED;
 			});

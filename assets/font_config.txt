@@ -104,8 +104,8 @@ portrait_map_zoom_step2=1.54
 portrait_hud_font_scale=0.85
 
 # Portrait: HUD horizontal shift in terminal columns (positive = right)
-# 0 = left-aligned, 1 aligns with the underscore at col 0 of the message panel
-portrait_hud_offset_cols=1
+# 0 = left-aligned (Edge Margin pref handles global inset now)
+portrait_hud_offset_cols=0
 
 # Portrait: message panel
 # Shown during: gameplay — bottom strip, game messages

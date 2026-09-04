@@ -503,15 +503,14 @@ final public class Preferences
 		return sharedPreferences.getInt(Preferences.KEY_KEYBOARDTRANSPARENCY, 140);
 	}
 
-	// Global bevel margin in dp (0 = off). Stored as a ListPreference string.
-	// Clamped to a sane range so a bad value can't swallow the screen.
+	// Edge margin in dp, relative to device-adaptive baseline. Range: -16..64.
 	public static int getBevelMarginDp()
 	{
 		String v = sharedPreferences.getString(Preferences.KEY_BEVELMARGIN, "0");
 		int dp;
 		try { dp = Integer.parseInt(v); }
 		catch (NumberFormatException e) { dp = 0; }
-		return Math.max(0, Math.min(dp, 64));
+		return Math.max(-16, Math.min(dp, 64));
 	}
 
 	public static void setKeyboardTransparency(int transparency) {

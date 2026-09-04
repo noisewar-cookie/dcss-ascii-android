@@ -39,13 +39,13 @@
 	   android:defaultValue="false"
 	   android:title="@string/preferences_wordwrap_title"
 	   android:summary="@string/preferences_wordwrap_summary" />
-	<ListPreference
+	<com.crawlmb.BevelMarginPreference
 	   android:key="crawl.bevelmargin"
 	   android:defaultValue="0"
 	   android:title="@string/preferences_bevelmargin_title"
-	   android:summary="@string/preferences_bevelmargin_summary"
-	   android:entries="@array/bevelMarginDescriptions"
-	   android:entryValues="@array/bevelMarginValues" />
+	   android:dialogTitle="@string/preferences_bevelmargin_title"
+	   android:positiveButtonText="@android:string/ok"
+	   android:negativeButtonText="@android:string/cancel" />
 	  <ListPreference
 		  android:key="crawl.fontface"
 		  android:defaultValue="VeraMoBd.ttf"

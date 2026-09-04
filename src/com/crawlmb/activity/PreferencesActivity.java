@@ -778,7 +778,9 @@ public class PreferencesActivity extends PreferenceActivity implements
         if (key == null)
             key = "";
 
-        if (pref instanceof KeyMapPreference) {
+        if (pref instanceof com.crawlmb.BevelMarginPreference) {
+            pref.setSummary(pref.getSummary());
+        } else if (pref instanceof KeyMapPreference) {
             KeyMapPreference kbPref = (KeyMapPreference) pref;
             String desc = kbPref.getDescription();
             pref.setSummary(desc);

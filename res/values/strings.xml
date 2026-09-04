@@ -69,7 +69,7 @@
     <string name="preferences_wordwrap_title">Word wrap</string>
     <string name="preferences_wordwrap_summary">Wrap most texts at screen edge. Changing this restarts the app.</string>
     <string name="preferences_bevelmargin_title">Edge margin</string>
-    <string name="preferences_bevelmargin_summary">Inset the game and menus from the screen edges. Reopen the game to apply.</string>
+    <string name="preferences_bevelmargin_summary">Inset the game from the screen edges (−4 to 32 dp). Reopen the game to apply.</string>
     <string name="preferences_orientation_title">Orientation</string>
     <string name="preferences_orientation_summary">Select screen orientation.</string>
     <string name="preferences_fontface_title">Font</string>
@@ -210,19 +210,36 @@
         <item>both</item>
     </string-array>
     <string-array name="bevelMarginDescriptions">
-        <item>Off</item>
-        <item>Small (8dp)</item>
-        <item>Medium (16dp)</item>
-        <item>Large (24dp)</item>
-        <item>Extra large (32dp)</item>
+        <item>−16 dp</item>
+        <item>−12 dp</item>
+        <item>−8 dp</item>
+        <item>−4 dp</item>
+        <item>Device default</item>
+        <item>4 dp</item>
+        <item>8 dp</item>
+        <item>12 dp</item>
+        <item>16 dp</item>
+        <item>20 dp</item>
+        <item>24 dp</item>
+        <item>28 dp</item>
+        <item>32 dp</item>
     </string-array>
     <string-array name="bevelMarginValues">
+        <item>-16</item>
+        <item>-12</item>
+        <item>-8</item>
+        <item>-4</item>
         <item>0</item>
+        <item>4</item>
         <item>8</item>
+        <item>12</item>
         <item>16</item>
+        <item>20</item>
         <item>24</item>
+        <item>28</item>
         <item>32</item>
     </string-array>
+    <string name="bevel_margin_slider_format">%d dp</string>
     
     <!-- Config editor -->
     <string name="file_not_found">File not found</string>
