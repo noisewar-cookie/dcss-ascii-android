@@ -74,6 +74,11 @@
 	   android:summary="@string/preferences_unfoldedkeyboardside_summary"
 	   android:entries="@array/unfoldedKeyboardSideDescriptions"
 	   android:entryValues="@array/unfoldedKeyboardSideValues" />
+	<Preference
+	   android:key="reposition_centerline"
+	   android:dependency="crawl.dualscreen"
+	   android:title="@string/preferences_reposition_centerline_title"
+	   android:summary="@string/preferences_reposition_centerline_summary" />
   </PreferenceCategory>
   <PreferenceCategory android:title="@string/control_category">
 	<CheckBoxPreference

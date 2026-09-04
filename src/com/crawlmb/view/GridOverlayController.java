@@ -24,54 +24,34 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// "Reposition Grid Overlay" mode: a blank full-screen editor for the 9-grid
-// touch zone dividers (see Preferences.getGridLines). Edits a working copy;
-// SAVE hands it to the activity to persist — nothing layout-visible changes,
-// so no view rebuild is needed.
-//
-// UNFOLDED (foldable): the display shows two halves and the 9-grid is applied
-// per half, so the editor draws TWO independent grids — one per physical half,
-// each editing its own crawl.gridlines.<side> config (setUnfolded). Each grid
-// is laid out over its half's real touch region: the keyboard-side half is
-// shortened by the keyboard reserve, so its dividers line up with where taps
-// actually map, and swapping keyboard side re-fits automatically.
+// "Reposition Grid Overlay": edit the 9-grid touch zone dividers. Single-
+// screen shows one editor; UNFOLDED (setUnfolded) shows two, each editing
+// its own per-half config, sized to that half's real touch region.
 public class GridOverlayController
 {
 	public interface Callbacks
 	{
-		// Invoked after teardown with the chosen {v1, v2, h1, h2}
-		// (single-screen / HALF).
 		void onSave(float[] lines);
-
-		// Invoked after teardown with each physical half's chosen config
-		// (UNFOLDED). Default no-op so single-screen callers need not implement.
 		default void onSaveUnfolded(float[] left, float[] right) {}
-
-		// Invoked after teardown on any non-save exit (EXIT button, BACK,
-		// activity stop). restoreIme = false when the activity is stopping.
 		void onExit(boolean restoreIme);
 	}
 
 	private static final int BAR_HEIGHT_DP = 56;
 	private static final int GRAB_RADIUS_DP = 24;
 	private static final int BACKGROUND_COLOR = 0xFF000000;
-	private static final int LINE_ALPHA = 0x80; // 50%
-	// Magnetic snap: pull onto a snap-grid multiple when within this
-	// fraction of a step — light enough that free positions stay reachable.
+	private static final int LINE_ALPHA = 0x80;
 	private static final float SNAP_THRESHOLD =
 			Preferences.GRID_LINE_SNAP_STEP * 0.35f;
 
 	private final Activity activity;
 	private final RelativeLayout screenLayout;
-	private final View keyboardView; // null unless the Crawl keyboard is shown
+	private final View keyboardView;
 	private final int bottomInset;
 	private final int highlightColor;
 	private final Callbacks callbacks;
 	private final float density;
 
-	// UNFOLDED config (null => single-screen / HALF, one full-screen grid).
-	// Per physical half [left, right]: window-x start, width, bottom reserve
-	// (keyboard-side half shortened), and the pref side key it edits.
+	// UNFOLDED: per-half [left, right] geometry. null = single grid.
 	private int[] unfoldedStarts = null;
 	private int[] unfoldedWidths = null;
 	private int[] unfoldedReserves = null;
@@ -173,15 +153,11 @@ public class GridOverlayController
 
 	private void buildUi()
 	{
-		// Opaque blank screen; clickable + focusable so anything the editors
-		// and bar don't handle is still swallowed (reposition precedent).
 		gridRoot = new FrameLayout(activity);
 		gridRoot.setBackgroundColor(BACKGROUND_COLOR);
 		gridRoot.setClickable(true);
 		gridRoot.setFocusable(true);
 
-		// Bar sizing mirrors RepositionController.buildUi: cover the Crawl
-		// keyboard exactly, or a compact strip when no keyboard is shown.
 		int barHeight;
 		int barBottomPad;
 		if (keyboardView != null && keyboardView.getHeight() > 0)
@@ -207,8 +183,6 @@ public class GridOverlayController
 				ViewGroup.LayoutParams.MATCH_PARENT));
 	}
 
-	// Single full-screen editor above the bar — line fractions map 1:1 to the
-	// in-game 9-grid touch region.
 	private void addSingleEditor(int barHeight)
 	{
 		EditorView ev = new EditorView(activity,
@@ -222,9 +196,6 @@ public class GridOverlayController
 		editors.add(ev);
 	}
 
-	// One editor per physical half, positioned over that half's real touch
-	// region: window-x band × (full height − keyboard reserve). The dividers
-	// therefore correspond to where taps map on each half.
 	private void addUnfoldedEditors()
 	{
 		boolean haptic = Preferences.getHapticFeedbackEnabled();
@@ -265,9 +236,7 @@ public class GridOverlayController
 				.setOnClickListener(v -> exit(true));
 	}
 
-	// Bar horizontal extent: null = full width. UNFOLDED Left/Right (exactly
-	// one half reserved) puts the bar over the keyboard footprint (that half)
-	// so the other half's grid stays full height; Both / no-keyboard = full.
+	// null = full width; one reserved half = bar over that half only.
 	private int[] barHorizontalSpan()
 	{
 		if (unfoldedReserves == null)
@@ -286,8 +255,6 @@ public class GridOverlayController
 		return null;
 	}
 
-	// The overlay can't cover the system soft keyboard (separate window), so
-	// suppress it explicitly — same calls as RepositionController.
 	private void hideSystemIme()
 	{
 		activity.getWindow().setSoftInputMode(
@@ -305,19 +272,12 @@ public class GridOverlayController
 		return Math.abs(frac - nearest) < SNAP_THRESHOLD ? nearest : frac;
 	}
 
-	// Draws one half's four divider lines and owns that grid's touch handling.
-	// Each instance holds its own working {v1,v2,h1,h2} and drag state, so the
-	// two UNFOLDED grids edit independently.
+	// One half's grid editor. Each instance has its own {v1,v2,h1,h2} and drag
+	// state, so the two UNFOLDED grids edit independently.
 	private class EditorView extends View
 	{
 		private static final float LABEL_MARGIN_DP = 4;
-
-		// Working divider fractions {v1, v2, h1, h2} being edited (mutated in
-		// place; reset() overwrites, save() reads).
-		final float[] lines;
-
-		// Drag state: indices into lines[], -1 = not dragging that axis. An
-		// intersection grab sets both.
+		final float[] lines; // working {v1, v2, h1, h2}
 		private int dragV = -1;
 		private int dragH = -1;
 		private int trackedPointerId = -1;
@@ -335,9 +295,7 @@ public class GridOverlayController
 			linePaint.setStrokeWidth(Math.max(4, Math.round(2 * density)));
 			linePaint.setColor(
 					(highlightColor & 0x00FFFFFF) | (LINE_ALPHA << 24));
-			// Additive blend over the black background: each line adds its
-			// 50%, so coincident lines stack to full opacity instead of the
-			// 75% that normal alpha compositing would give.
+			// Additive: coincident lines stack to full opacity.
 			linePaint.setXfermode(
 					new PorterDuffXfermode(PorterDuff.Mode.ADD));
 			labelPaint.setColor(highlightColor);
@@ -363,10 +321,7 @@ public class GridOverlayController
 			canvas.drawLine(lines[1] * w, 0, lines[1] * w, h, linePaint);
 			canvas.drawLine(0, lines[2] * h, w, lines[2] * h, linePaint);
 			canvas.drawLine(0, lines[3] * h, w, lines[3] * h, linePaint);
-			// Position-% labels. Each pair takes opposite sides (v1 left /
-			// v2 right, h1 above / h2 below) so coincident lines stay
-			// readable, and the second of each pair shows its distance from
-			// the far edge — equal numbers mean a symmetric layout.
+			// Pair on opposite sides; second shows distance from far edge.
 			drawVLabel(canvas, lines[0], true, w);
 			drawVLabel(canvas, lines[1], false, w);
 			drawHLabel(canvas, lines[2], true, h);

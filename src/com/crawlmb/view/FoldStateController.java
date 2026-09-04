@@ -51,6 +51,23 @@ public class FoldStateController
 			this.rightStart = hinge.right;
 			this.totalWidth = totalWidth;
 		}
+
+		// Synthetic posture: place the centerline at fraction of totalWidth,
+		// preserving the physical hinge gap (gap = rightStart - leftWidth).
+		// The gap stays centered on the new centerline.
+		public Posture withCenterline(float fraction)
+		{
+			int gap = rightStart - leftWidth;
+			int center = Math.round(fraction * totalWidth);
+			int newLeft = center - gap / 2;
+			int newRight = newLeft + gap;
+			// Clamp so neither half collapses below 1 px.
+			newLeft = Math.max(1, Math.min(newLeft, totalWidth - gap - 1));
+			newRight = newLeft + gap;
+			Rect syntheticHinge = new Rect(newLeft, hinge.top,
+					newRight, hinge.bottom);
+			return new Posture(syntheticHinge, totalWidth);
+		}
 	}
 
 	private final Activity activity;

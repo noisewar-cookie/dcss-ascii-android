@@ -93,6 +93,8 @@ public class PreferencesActivity extends PreferenceActivity implements
 
         setRepositionGridClickListener();
 
+        setRepositionCenterlineClickListener();
+
         gateUnfoldedPrefs();
 
         addBackupRestorePreferences();
@@ -707,6 +709,20 @@ public class PreferencesActivity extends PreferenceActivity implements
                     public boolean onPreferenceClick(Preference pref) {
                         Intent result = new Intent();
                         result.putExtra("repositionGrid", true);
+                        setResult(RESULT_OK, result);
+                        finish();
+                        return true;
+                    }
+                });
+    }
+
+    private void setRepositionCenterlineClickListener() {
+        findPreference("reposition_centerline").setOnPreferenceClickListener(
+                new Preference.OnPreferenceClickListener() {
+                    @Override
+                    public boolean onPreferenceClick(Preference pref) {
+                        Intent result = new Intent();
+                        result.putExtra("repositionCenterline", true);
                         setResult(RESULT_OK, result);
                         finish();
                         return true;

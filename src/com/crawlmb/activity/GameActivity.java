@@ -83,6 +83,7 @@ import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.view.FoldStateController;
+import com.crawlmb.view.CenterlineController;
 import com.crawlmb.view.GridOverlayController;
 import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
@@ -90,6 +91,7 @@ import com.crawlmb.view.RegionTermView;
 import com.crawlmb.view.HudButtonController;
 import com.crawlmb.view.ModalOverlayController;
 import com.crawlmb.view.RepositionController;
+import com.crawlmb.view.UnfoldedRepositionController;
 import com.crawlmb.view.StatusBarView;
 import com.crawlmb.view.TerminalRenderer;
 import com.crawlmb.view.TermView;
@@ -153,11 +155,16 @@ public class GameActivity extends Activity
 	// the post-return rebuildViews' first layout pass has sized the panels.
 	private boolean pendingRepositionEntry = false;
 	private RepositionController repositionController = null;
+	private UnfoldedRepositionController unfoldedRepositionController = null;
 	// Reposition Grid Overlay mode (see GridOverlayController). Requested
 	// from PreferencesActivity via the "repositionGrid" result extra;
 	// entered after a layout pass has sized the keyboard for the button bar.
 	private boolean pendingGridOverlayEntry = false;
 	private GridOverlayController gridOverlayController = null;
+	// Fold centerline editor (see CenterlineController). Requested from
+	// PreferencesActivity via the "repositionCenterline" result extra.
+	private boolean pendingCenterlineEntry = false;
+	private CenterlineController centerlineController = null;
 	// On-screen HUD shortcut buttons (help / wiki). Recreated each
 	// rebuildViews() so they re-anchor to the HUD's current slot.
 	private HudButtonController hudButtonController = null;
@@ -189,6 +196,10 @@ public class GameActivity extends Activity
 	// => right), the other half black. Derived from posture + !unfoldedActive.
 	private boolean halfActive = false;
 	private FoldStateController.Posture foldPosture = null;
+	// The raw physical posture from the fold sensor, before any centerline
+	// override. Kept so withCenterline always derives from the hardware
+	// geometry (avoids compounding).
+	private FoldStateController.Posture physicalPosture = null;
 	private FoldStateController foldStateController = null;
 
 	// Keyboard/half geometry for the current fold mode, recomputed at the top of
@@ -265,6 +276,16 @@ public class GameActivity extends Activity
 	// configs).
 	private void onFoldStateChanged(boolean newUnfoldedActive,
 			FoldStateController.Posture posture) {
+		physicalPosture = posture;
+		// Apply the user's custom fold centerline when unfolded. The
+		// synthetic posture shifts leftWidth/rightStart while preserving
+		// the physical hinge gap. HALF mode keeps the physical posture.
+		if (posture != null && newUnfoldedActive)
+		{
+			float cl = Preferences.getFoldCenterline();
+			if (Math.abs(cl - Preferences.FOLD_CENTERLINE_DEFAULT) > 0.001f)
+				posture = posture.withCenterline(cl);
+		}
 		// HALF mode: open with a usable hinge but the mode gate is off.
 		boolean newHalfActive = posture != null && !newUnfoldedActive;
 		boolean geometryChanged = (newUnfoldedActive || newHalfActive)
@@ -428,6 +449,8 @@ public class GameActivity extends Activity
             		pendingRepositionEntry = true;
             	if (data.getBooleanExtra("repositionGrid", false))
             		pendingGridOverlayEntry = true;
+            	if (data.getBooleanExtra("repositionCenterline", false))
+            		pendingCenterlineEntry = true;
             }
         }
     }
@@ -677,8 +700,12 @@ public class GameActivity extends Activity
 							public boolean isOverlayActive() {
 								return (repositionController != null
 										&& repositionController.isActive())
+									|| (unfoldedRepositionController != null
+										&& unfoldedRepositionController.isActive())
 									|| (gridOverlayController != null
 										&& gridOverlayController.isActive())
+									|| (centerlineController != null
+										&& centerlineController.isActive())
 									|| (modalController != null
 										&& modalController.isActive());
 							}
@@ -709,6 +736,9 @@ public class GameActivity extends Activity
 
 			if (pendingGridOverlayEntry)
 				schedulePendingGridOverlayEntry();
+
+			if (pendingCenterlineEntry)
+				schedulePendingCenterlineEntry();
 		}
 	}
 
@@ -2075,6 +2105,30 @@ public class GameActivity extends Activity
 	// panels.
 	private void schedulePendingRepositionEntry() {
 		pendingRepositionEntry = false;
+		// UNFOLDED: the schematic overlay doesn't decorate live panel views,
+		// so no router freeze or panel sizing needed — just wait for layout.
+		if (unfoldedActive && foldPosture != null)
+		{
+			if (screenLayout.getHeight() > 0)
+			{
+				enterRepositionMode();
+				return;
+			}
+			screenLayout.getViewTreeObserver().addOnGlobalLayoutListener(
+					new ViewTreeObserver.OnGlobalLayoutListener()
+					{
+						@Override
+						public void onGlobalLayout()
+						{
+							if (screenLayout.getHeight() <= 0)
+								return;
+							screenLayout.getViewTreeObserver()
+									.removeOnGlobalLayoutListener(this);
+							enterRepositionMode();
+						}
+					});
+			return;
+		}
 		if (portraitRouter == null || portraitSplitContainer == null)
 			return;
 		portraitRouter.setRepositionFrozen(true);
@@ -2099,6 +2153,14 @@ public class GameActivity extends Activity
 	private void enterRepositionMode() {
 		if (repositionController != null && repositionController.isActive())
 			return;
+		if (unfoldedRepositionController != null
+				&& unfoldedRepositionController.isActive())
+			return;
+		if (unfoldedActive && foldPosture != null)
+		{
+			enterUnfoldedRepositionMode();
+			return;
+		}
 		repositionController = new RepositionController(this, screenLayout,
 				portraitRouter, portraitSplitContainer, portraitMapView,
 				portraitHudView, portraitStatusBar, portraitMlistView,
@@ -2132,6 +2194,42 @@ public class GameActivity extends Activity
 					}
 				});
 		repositionController.enter();
+	}
+
+	private void enterUnfoldedRepositionMode() {
+		unfoldedRepositionController = new UnfoldedRepositionController(
+				this, screenLayout, portraitKeyboardView, lastBottomInset,
+				portraitFontConfig.repositionHighlightColor,
+				0, foldPosture.leftWidth, foldPosture.rightStart,
+				foldPosture.totalWidth - foldPosture.rightStart,
+				new UnfoldedRepositionController.Callbacks()
+				{
+					@Override
+					public void onSave(String mapSide, String[] panelOrder)
+					{
+						unfoldedRepositionController = null;
+						Preferences.setUnfoldedMapSide(mapSide);
+						Preferences.setUnfoldedPanelOrder(panelOrder);
+						rebuildViews();
+						if (gameKeyListener != null
+								&& gameKeyListener.nativew != null)
+						{
+							final NativeWrapper nw = gameKeyListener.nativew;
+							View root = findViewById(android.R.id.content);
+							if (root != null)
+								root.post(nw::redrawScreen);
+						}
+					}
+
+					@Override
+					public void onCancel(boolean restoreIme)
+					{
+						unfoldedRepositionController = null;
+						if (restoreIme)
+							restoreKeyboardAfterReload();
+					}
+				});
+		unfoldedRepositionController.enter();
 	}
 
 	// Deferred entry into the grid overlay editor requested from
@@ -2223,6 +2321,67 @@ public class GameActivity extends Activity
 							Preferences.SIDE_RIGHT });
 		}
 		gridOverlayController.enter();
+	}
+
+	private void schedulePendingCenterlineEntry() {
+		pendingCenterlineEntry = false;
+		if (screenLayout.getHeight() > 0)
+		{
+			enterCenterlineMode();
+			return;
+		}
+		screenLayout.getViewTreeObserver().addOnGlobalLayoutListener(
+				new ViewTreeObserver.OnGlobalLayoutListener()
+				{
+					@Override
+					public void onGlobalLayout()
+					{
+						if (screenLayout.getHeight() <= 0)
+							return;
+						screenLayout.getViewTreeObserver()
+								.removeOnGlobalLayoutListener(this);
+						enterCenterlineMode();
+					}
+				});
+	}
+
+	private void enterCenterlineMode() {
+		if (centerlineController != null && centerlineController.isActive())
+			return;
+		centerlineController = new CenterlineController(this, screenLayout,
+				portraitKeyboardView, lastBottomInset,
+				portraitFontConfig.repositionHighlightColor,
+				new CenterlineController.Callbacks()
+				{
+					@Override
+					public void onSave(float fraction)
+					{
+						centerlineController = null;
+						Preferences.setFoldCenterline(fraction);
+						// Derive from the raw physical posture (not the
+						// already-modified foldPosture) to avoid compounding.
+						if (unfoldedActive && physicalPosture != null)
+							foldPosture = physicalPosture.withCenterline(fraction);
+						rebuildViews();
+						if (gameKeyListener != null
+								&& gameKeyListener.nativew != null)
+						{
+							final NativeWrapper nw = gameKeyListener.nativew;
+							View root = findViewById(android.R.id.content);
+							if (root != null)
+								root.post(nw::redrawScreen);
+						}
+					}
+
+					@Override
+					public void onExit(boolean restoreIme)
+					{
+						centerlineController = null;
+						if (restoreIme)
+							restoreKeyboardAfterReload();
+					}
+				});
+		centerlineController.enter();
 	}
 
 	private RegionTermView makeNewgameCategoryView(int row0, int col0, int row1, int col1)
@@ -2494,8 +2653,13 @@ public class GameActivity extends Activity
 		// here (the activity is going background); the next rebuild resets it.
 		if (repositionController != null && repositionController.isActive())
 			repositionController.cancel(false);
+		if (unfoldedRepositionController != null
+				&& unfoldedRepositionController.isActive())
+			unfoldedRepositionController.cancel(false);
 		if (gridOverlayController != null && gridOverlayController.isActive())
 			gridOverlayController.exit(false);
+		if (centerlineController != null && centerlineController.isActive())
+			centerlineController.exit(false);
 		// Drain pushes before the process can be cached and frozen
 		// (MIUI freezes within seconds; queued work would be lost).
 		// onStop runs after the next screen is visible, so the wait is
@@ -2519,6 +2683,9 @@ public class GameActivity extends Activity
 
 		if (pendingGridOverlayEntry)
 			schedulePendingGridOverlayEntry();
+
+		if (pendingCenterlineEntry)
+			schedulePendingCenterlineEntry();
 
 		// When Android resumes the activity from the recents/task switcher,
 		// our view-tree state survives but DCSS only repaints on its own
@@ -2570,11 +2737,26 @@ public class GameActivity extends Activity
 				repositionController.cancel(true);
 			return true;
 		}
+		if (unfoldedRepositionController != null
+				&& unfoldedRepositionController.isActive()) {
+			if (isSystemKey(keyCode))
+				return super.onKeyDown(keyCode, event);
+			if (keyCode == KeyEvent.KEYCODE_BACK)
+				unfoldedRepositionController.cancel(true);
+			return true;
+		}
 		if (gridOverlayController != null && gridOverlayController.isActive()) {
 			if (isSystemKey(keyCode))
 				return super.onKeyDown(keyCode, event);
 			if (keyCode == KeyEvent.KEYCODE_BACK)
 				gridOverlayController.exit(true);
+			return true;
+		}
+		if (centerlineController != null && centerlineController.isActive()) {
+			if (isSystemKey(keyCode))
+				return super.onKeyDown(keyCode, event);
+			if (keyCode == KeyEvent.KEYCODE_BACK)
+				centerlineController.exit(true);
 			return true;
 		}
 		if (keyCode == KeyEvent.KEYCODE_BACK){
@@ -2596,7 +2778,12 @@ public class GameActivity extends Activity
 			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
 		if (repositionController != null && repositionController.isActive())
 			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
+		if (unfoldedRepositionController != null
+				&& unfoldedRepositionController.isActive())
+			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
 		if (gridOverlayController != null && gridOverlayController.isActive())
+			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
+		if (centerlineController != null && centerlineController.isActive())
 			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
 		return gameKeyListener.onKeyUp(keyCode, event) || super.onKeyUp(keyCode, event);
 	}

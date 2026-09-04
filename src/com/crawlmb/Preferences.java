@@ -67,6 +67,12 @@ final public class Preferences
 	public static final String KEY_UNFOLDEDMAPSIDE = "crawl.dualmapside";
 	public static final String KEY_UNFOLDEDPANELORDER = "crawl.dualpanelorder";
 	public static final String KEY_UNFOLDEDKEYBOARDSIDE = "crawl.dualkeyboardside";
+	// Custom fold centerline: fraction of screen width where the split falls.
+	// 0.50 = physical hinge (default). Range [0.25, 0.75].
+	public static final String KEY_FOLD_CENTERLINE = "crawl.dualcenterline";
+	public static final float FOLD_CENTERLINE_DEFAULT = 0.50f;
+	public static final float FOLD_CENTERLINE_MIN = 0.25f;
+	public static final float FOLD_CENTERLINE_MAX = 0.75f;
 	public static final String[] UNFOLDED_PANEL_KEYS = { "hud", "mlist", "msg" };
 	public static final String SIDE_LEFT = "left";
 	public static final String SIDE_RIGHT = "right";
@@ -331,6 +337,20 @@ final public class Preferences
 		String v = SIDE_BOTH.equals(side) ? SIDE_BOTH
 				: SIDE_RIGHT.equals(side) ? SIDE_RIGHT : SIDE_LEFT;
 		sharedPreferences.edit().putString(KEY_UNFOLDEDKEYBOARDSIDE, v).apply();
+	}
+
+	public static float getFoldCenterline()
+	{
+		float v = sharedPreferences.getFloat(KEY_FOLD_CENTERLINE,
+				FOLD_CENTERLINE_DEFAULT);
+		return Math.max(FOLD_CENTERLINE_MIN, Math.min(FOLD_CENTERLINE_MAX, v));
+	}
+
+	public static void setFoldCenterline(float fraction)
+	{
+		float v = Math.max(FOLD_CENTERLINE_MIN,
+				Math.min(FOLD_CENTERLINE_MAX, fraction));
+		sharedPreferences.edit().putFloat(KEY_FOLD_CENTERLINE, v).apply();
 	}
 
 	private static boolean isUnfoldedPanelPermutation(String[] order)

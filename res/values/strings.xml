@@ -82,6 +82,8 @@
     <string name="preferences_unfolded_summary">Use unfolded screen instead of single-screen.</string>
     <string name="preferences_unfoldedkeyboardside_title">Keyboard side</string>
     <string name="preferences_unfoldedkeyboardside_summary">On-screen keyboard placement.</string>
+    <string name="preferences_reposition_centerline_title">Reposition Fold Centerline</string>
+    <string name="preferences_reposition_centerline_summary">Drag the split line to resize the two halves.</string>
     <string name="reposition_save">Save</string>
     <string name="reposition_reset">Reset</string>
     <string name="reposition_cancel">Exit</string>
