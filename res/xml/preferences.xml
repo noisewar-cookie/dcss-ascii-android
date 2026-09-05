@@ -39,6 +39,11 @@
 	   android:defaultValue="false"
 	   android:title="@string/preferences_wordwrap_title"
 	   android:summary="@string/preferences_wordwrap_summary" />
+	<CheckBoxPreference
+	   android:key="crawl.newturnmark"
+	   android:defaultValue="true"
+	   android:title="@string/preferences_newturnmark_title"
+	   android:summary="@string/preferences_newturnmark_summary" />
 	<com.crawlmb.BevelMarginPreference
 	   android:key="crawl.bevelmargin"
 	   android:defaultValue="0"

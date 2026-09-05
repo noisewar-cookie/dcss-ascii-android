@@ -77,6 +77,7 @@ public class RegionTermView extends View
 
 	private int char_height = 0;
 	private int char_width = 0;
+	private float char_width_precise = 0f;
 	private int font_text_size = 0;
 
 	private Handler handler = null;
@@ -301,14 +302,14 @@ public class RegionTermView extends View
 	}
 
 	// Visible terminal columns at the current font size — sizes the DCSS
-	// word-wrap width to what the panel shows. Queried at gameStart, after the
-	// tree's first measure pass, so getMeasuredWidth is valid.
+	// word-wrap width to what the panel shows. Uses the precise float char
+	// width so sub-pixel accumulation over many columns doesn't overcount.
 	public int computeVisibleCols()
 	{
 		int width = getMeasuredWidth();
-		if (width <= 0 || char_width <= 0)
+		if (width <= 0 || char_width_precise <= 0f)
 			return 0;
-		return width / char_width;
+		return (int)(width / char_width_precise);
 	}
 
 	// Zero the drag-scroll offsets and repaint. Called by RegionRouter on
@@ -990,7 +991,8 @@ public class RegionTermView extends View
 		fore.setTextSize(font_text_size);
 
 		char_height = (int) Math.ceil(fore.getFontSpacing());
-		char_width = (int) fore.measureText("X", 0, 1);
+		char_width_precise = fore.measureText("X", 0, 1);
+		char_width = (int) char_width_precise;
 	}
 
 	private void setFontSizeLegacy()
@@ -998,6 +1000,7 @@ public class RegionTermView extends View
 		font_text_size = 12;
 		char_height = 12;
 		char_width = 6;
+		char_width_precise = 6f;
 		setFontSize(font_text_size, false);
 	}
 

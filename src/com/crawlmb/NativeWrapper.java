@@ -41,6 +41,7 @@ public class NativeWrapper
 		int msgRows = renderer.getMsgRows();
 		int proseCols = renderer.getProseWrapCols();
 		setWordwrap(wrapCols, msgRows, proseCols);
+		setNewturnMark(renderer.getNewturnMark());
 		initGame(dataDir, settingsDir, morgueDir);
 	}
 
@@ -74,6 +75,7 @@ public class NativeWrapper
 
 	public native void initGame(String dataDir, String settingsDir, String morgueDir);
 	private native void setWordwrap(int msgWrapCols, int msgRows, int proseWrapCols);
+	private native void setNewturnMark(boolean enabled);
 	private native void setMsgMaxWidthLive(int msgWrapCols);
 	private native void setProseWrapColsLive(int proseWrapCols);
 	public static native void nativeSaveGame();

@@ -68,6 +68,8 @@
     <string name="preferences_skipcontrolsinfo_summary">Automatically skip the controls info screens on startup.</string>
     <string name="preferences_wordwrap_title">Word wrap</string>
     <string name="preferences_wordwrap_summary">Wrap most texts at screen edge. Changing this restarts the app.</string>
+    <string name="preferences_newturnmark_title">New turn indicator</string>
+    <string name="preferences_newturnmark_summary">Show turn markers in the message log. Changing this restarts the app.</string>
     <string name="preferences_bevelmargin_title">Edge margin</string>
     <string name="preferences_bevelmargin_summary">Inset the game from the screen edges (−4 to 32 dp). Reopen the game to apply.</string>
     <string name="preferences_orientation_title">Orientation</string>

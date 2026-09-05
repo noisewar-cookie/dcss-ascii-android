@@ -385,6 +385,9 @@ public class RegionRouter implements TerminalRenderer
 	// DCSS boots. null msgWordwrapView = word wrap off.
 	private RegionTermView msgWordwrapView;
 	private int msgWordwrapRows = 7;
+	// New turn indicator pref: when false the msg panel skips the mark
+	// column (starts at col 1) so getMsgWrapCols doesn't subtract 1.
+	private boolean newturnMark = true;
 	private final Context context;
 
 	private final char[][] terminalShadow = new char[TERMINAL_ROWS][TERMINAL_COLS];
@@ -475,8 +478,21 @@ public class RegionRouter implements TerminalRenderer
 		this.msgWordwrapRows = msgRows;
 	}
 
-	// msg_max_width for DCSS: visible columns at the msg font size, minus
-	// the '_' turn-marker column (message text starts at terminal col 1).
+	public void setNewturnMark(boolean enabled)
+	{
+		this.newturnMark = enabled;
+	}
+
+	@Override
+	public boolean getNewturnMark()
+	{
+		return newturnMark;
+	}
+
+	// msg_max_width for DCSS: visible columns at the msg font size. When
+	// the turn mark is on, subtract 1 for the mark column (text starts at
+	// terminal col 1). When the mark is off, the msg panel starts at col 1
+	// (skipping the phantom space) so all visible columns are text columns.
 	// 0 disables word wrap when no view is registered (pref off).
 	@Override
 	public int getMsgWrapCols()
@@ -484,7 +500,8 @@ public class RegionRouter implements TerminalRenderer
 		if (msgWordwrapView == null)
 			return 0;
 		int visible = msgWordwrapView.computeVisibleCols();
-		return visible <= 1 ? 0 : Math.min(visible - 1, TERMINAL_COLS - 1);
+		int usable = newturnMark ? visible - 1 : visible;
+		return usable <= 0 ? 0 : Math.min(usable, TERMINAL_COLS - 1);
 	}
 
 	@Override

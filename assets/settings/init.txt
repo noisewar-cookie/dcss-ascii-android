@@ -70,7 +70,9 @@
 # include = safe_move_shift.txt
 
 ##### Android-specific options ######################################
-show_newturn_mark = false
+# show_newturn_mark is controlled by the "New turn indicator" preference
+# in DISPLAY settings. The app passes it as -extra-opt-last so the pref
+# always wins; setting it here has no effect.
 # msg_max_width is set automatically to the message panel's width (word
 # wrap). Don't set it here — a static value overrides the auto-fit and
 # clips messages when it exceeds what the panel can show.

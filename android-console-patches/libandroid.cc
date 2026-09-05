@@ -75,6 +75,12 @@ int android_msg_wrap_cols = 0;
 int android_prose_wrap_cols = 0;
 static int android_msg_rows = 0;
 
+// New turn indicator (Android preference). Set by
+// NativeWrapper.setNewturnMark before initGame. When true, overrides
+// show_newturn_mark=true; when false, show_newturn_mark=false.
+// Uses -extra-opt-last so the pref always wins over init.txt.
+static bool android_newturn_mark = true;
+
 // Table-reflow toggles: padded 80-col table sections that get restacked to
 // fit the wrap width when word wrap is active (each only takes effect while
 // android_prose_wrap_cols / android_msg_wrap_cols > 0). One flag per
@@ -378,6 +384,7 @@ extern "C"
 {
 	void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir);
 	void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, jint msgWrapCols, jint msgRows, jint proseWrapCols);
+	void Java_com_crawlmb_NativeWrapper_setNewturnMark( JNIEnv* env, jobject object, jboolean enabled);
 	void Java_com_crawlmb_NativeWrapper_setMsgMaxWidthLive( JNIEnv* env, jobject object, jint msgWrapCols);
 	void Java_com_crawlmb_NativeWrapper_setProseWrapColsLive( JNIEnv* env, jobject object, jint proseWrapCols);
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
@@ -405,6 +412,11 @@ void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, ji
 		android_layout_lines = LINES;
 	}
 	android_prose_wrap_cols = proseWrapCols > 0 ? proseWrapCols : 0;
+}
+
+void Java_com_crawlmb_NativeWrapper_setNewturnMark( JNIEnv* env, jobject object, jboolean enabled)
+{
+	android_newturn_mark = enabled;
 }
 
 // Live msg wrap-width update after a fold/unfold (width only, no re-layout).
@@ -489,6 +501,13 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
 		args.push_back((char*)"-extra-opt-last");
 		args.push_back(opt_msg_width);
 	}
+	// New turn indicator: override show_newturn_mark from the Android pref.
+	// -extra-opt-last so the pref always wins over init.txt.
+	args.push_back((char*)"-extra-opt-last");
+	args.push_back(android_newturn_mark
+		? (char*)"show_newturn_mark=true"
+		: (char*)"show_newturn_mark=false");
+
 	main((int)args.size(), args.data());
 }
 

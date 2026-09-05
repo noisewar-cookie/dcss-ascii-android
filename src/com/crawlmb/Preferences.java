@@ -27,6 +27,7 @@ final public class Preferences
 	public static final String KEY_SKIPSPLASH = "crawl.skipsplash";
 	public static final String KEY_SKIPCONTROLSINFO = "crawl.skipcontrolsinfo";
 	public static final String KEY_WORDWRAP = "crawl.wordwrap";
+	public static final String KEY_NEWTURNMARK = "crawl.newturnmark";
 	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
 
 	public static final String KEY_FONTFACE = "crawl.fontface";
@@ -180,6 +181,14 @@ final public class Preferences
 	public static boolean getWordwrap()
 	{
 		return sharedPreferences.getBoolean(Preferences.KEY_WORDWRAP, false);
+	}
+
+	// New turn indicator (_/- marks in the message log). When off, DCSS
+	// hides the marks and the msg panel skips the mark column so messages
+	// align flush with the HUD. Read once at layout/game start.
+	public static boolean getNewturnMark()
+	{
+		return sharedPreferences.getBoolean(Preferences.KEY_NEWTURNMARK, true);
 	}
 
 	// One-shot flag marking that the next launch follows a save-restore

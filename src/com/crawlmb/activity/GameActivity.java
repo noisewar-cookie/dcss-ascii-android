@@ -1467,11 +1467,17 @@ public class GameActivity extends Activity
 		// keeps its classic visual slot (portraitMsgVisibleRows) and pins to
 		// the newest line; dragging up reveals the extra history rows.
 		boolean wordwrap = Preferences.getWordwrap();
+		boolean newturnMark = Preferences.getNewturnMark();
+		// When the turn mark is off, start the msg region at col 1 to skip
+		// the phantom space column DCSS puts at col 0 — this aligns message
+		// text flush with the HUD panel's first column.
+		int msgStartCol = newturnMark
+				? RegionRouter.MSG_START_COL : RegionRouter.MSG_START_COL + 1;
 		int msgEndRow = wordwrap
 				? RegionRouter.MSG_START_ROW + fontConfig.msgHistoryRows
 				: RegionRouter.MSG_END_ROW;
 		RegionTermView msgView = new RegionTermView(this,
-				RegionRouter.MSG_START_ROW, RegionRouter.MSG_START_COL,
+				RegionRouter.MSG_START_ROW, msgStartCol,
 				msgEndRow, RegionRouter.MSG_END_COL);
 		msgView.setId(View.generateViewId());
 		msgView.setFontScaleMultiplier(fontConfig.portraitMsgFontScale);
@@ -1827,6 +1833,7 @@ public class GameActivity extends Activity
 		router.setNewgameWeaponPanels(ngwContent, ngwSubLeft, ngwSubRight);
 		if (wordwrap)
 			router.setMsgWordwrap(msgView, fontConfig.msgHistoryRows);
+		router.setNewturnMark(newturnMark);
 		router.setFontConfig(fontConfig);
 		router.setShowLoadingMessage(getIntent().getBooleanExtra(
 				SplashActivity.EXTRA_ASSETS_FRESHLY_INSTALLED, false));
