@@ -17,6 +17,7 @@ import android.view.View;
 import android.view.WindowManager;
 
 import com.crawlmb.CrawlDialog;
+import com.crawlmb.CustomFontManager;
 import com.crawlmb.Preferences;
 
 import java.util.Hashtable;
@@ -1021,24 +1022,35 @@ public class RegionTermView extends View
 
 	private static final Hashtable<String, Typeface> cache = new Hashtable<String, Typeface>();
 
-	public Typeface getTypeface(String assetPath)
+	public Typeface getTypeface(String fontKey)
 	{
 		synchronized (cache)
 		{
-			if (!cache.containsKey(assetPath))
+			if (!cache.containsKey(fontKey))
 			{
 				try
 				{
-					Typeface t = Typeface.createFromAsset(getContext().getAssets(), assetPath);
-					cache.put(assetPath, t);
+					Typeface t;
+					if (CustomFontManager.isCustomFont(fontKey))
+					{
+						String filename = CustomFontManager.customFontFilename(fontKey);
+						java.io.File f = CustomFontManager.getCustomFontFile(
+								getContext(), filename);
+						t = Typeface.createFromFile(f);
+					}
+					else
+					{
+						t = Typeface.createFromAsset(getContext().getAssets(), fontKey);
+					}
+					cache.put(fontKey, t);
 				}
 				catch (Exception e)
 				{
-					Log.e(TAG, "Could not get typeface '" + assetPath + "' because " + e.getMessage());
+					Log.e(TAG, "Could not get typeface '" + fontKey + "' because " + e.getMessage());
 					return null;
 				}
 			}
-			return cache.get(assetPath);
+			return cache.get(fontKey);
 		}
 	}
 

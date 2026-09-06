@@ -51,13 +51,10 @@
 	   android:dialogTitle="@string/preferences_bevelmargin_title"
 	   android:positiveButtonText="@android:string/ok"
 	   android:negativeButtonText="@android:string/cancel" />
-	  <ListPreference
+	  <Preference
 		  android:key="crawl.fontface"
-		  android:defaultValue="VeraMoBd.ttf"
 		  android:title="@string/preferences_fontface_title"
-		  android:summary="@string/preferences_fontface_summary"
-		  android:entries="@array/fontsDescriptions"
-		  android:entryValues="@array/fonts" />
+		  android:summary="@string/preferences_fontface_summary" />
 	<Preference
 	   android:key="reposition_ui"
 	   android:title="@string/preferences_reposition_ui_title"

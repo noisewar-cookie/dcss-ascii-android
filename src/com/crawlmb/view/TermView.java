@@ -276,20 +276,30 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 
 	private static final Hashtable<String, Typeface> cache = new Hashtable<String, Typeface>();
 
-	public Typeface getTypeface(String assetPath) {
+	public Typeface getTypeface(String fontKey) {
 		synchronized (cache) {
-			if (!cache.containsKey(assetPath)) {
+			if (!cache.containsKey(fontKey)) {
 				try {
-					Typeface t = Typeface.createFromAsset(getContext().getAssets(),
-							assetPath);
-					cache.put(assetPath, t);
+					Typeface t;
+					if (com.crawlmb.CustomFontManager.isCustomFont(fontKey))
+					{
+						String filename = com.crawlmb.CustomFontManager.customFontFilename(fontKey);
+						java.io.File f = com.crawlmb.CustomFontManager.getCustomFontFile(
+								getContext(), filename);
+						t = Typeface.createFromFile(f);
+					}
+					else
+					{
+						t = Typeface.createFromAsset(getContext().getAssets(), fontKey);
+					}
+					cache.put(fontKey, t);
 				} catch (Exception e) {
-					Log.e("Crawl", "Could not get typeface '" + assetPath
+					Log.e("Crawl", "Could not get typeface '" + fontKey
 							+ "' because " + e.getMessage());
 					return null;
 				}
 			}
-			return cache.get(assetPath);
+			return cache.get(fontKey);
 		}
 	}
 

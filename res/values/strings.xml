@@ -285,5 +285,20 @@
     <string name="dialog_change_character_message">Choose A New Key</string>
     <string name="transparency_slider_title">Drag to set transparency</string>
 
+    <!-- Font picker -->
+    <string name="font_picker_title">Font</string>
+    <string name="font_import">Import…</string>
+    <string name="font_import_failed">Could not open font picker.</string>
+    <string name="font_imported">Imported %s</string>
+    <string name="font_delete">Delete font</string>
+    <string name="font_delete_confirm_title">Remove font?</string>
+    <string name="font_delete_confirm_msg">Delete "%s"? This cannot be undone.</string>
+    <string name="font_delete_yes">Delete</string>
+    <string name="font_mono_warning_title">Font may not be monospace</string>
+    <string name="font_mono_warning_msg">"%s" doesn\'t appear to be a fixed-width font. It may cause misaligned text in-game. Keep it anyway?</string>
+    <string name="font_mono_warning_keep">Keep</string>
+    <string name="font_mono_warning_discard">Discard</string>
+    <string name="font_exit">Exit</string>
+    <string name="font_apply">Apply</string>
 
 </resources>

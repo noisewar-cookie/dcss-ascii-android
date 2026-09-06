@@ -86,6 +86,10 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <activity android:name=".activity.FontPickerActivity"
+            android:screenOrientation="portrait"
+            android:exported="false">
+        </activity>
         <activity android:name=".activity.CustomKeyboardActivity"
             android:theme="@style/Theme.Crawl.CustomKeyboard"
             android:screenOrientation="portrait"

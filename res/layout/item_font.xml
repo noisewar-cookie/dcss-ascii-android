@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Single font row: name + check + optional delete button. No per-row
+     preview — the shared preview at the top of the picker shows the
+     selected font's sample. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:descendantFocusability="blocksDescendants"
+    android:paddingStart="12dp"
+    android:paddingEnd="8dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp"
+    android:minHeight="36dp">
+
+    <TextView
+        android:id="@+id/font_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+    <!-- Selected indicator -->
+    <TextView
+        android:id="@+id/font_selected"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="✓"
+        android:textColor="#FF4CAF50"
+        android:textSize="16sp"
+        android:paddingStart="8dp"
+        android:paddingEnd="4dp"
+        android:visibility="gone" />
+
+    <!-- Delete button (custom fonts only) -->
+    <ImageButton
+        android:id="@+id/btn_delete_font"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:scaleType="centerInside"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/font_delete"
+        android:visibility="gone" />
+
+</LinearLayout>

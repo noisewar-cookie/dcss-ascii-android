@@ -89,6 +89,8 @@ public class PreferencesActivity extends PreferenceActivity implements
 
         setCustomizeKeyboardIntent();
 
+        setFontPickerIntent();
+
         setRepositionUiClickListener();
 
         setRepositionGridClickListener();
@@ -672,6 +674,13 @@ public class PreferencesActivity extends PreferenceActivity implements
         Intent characterFilesIntent = new Intent(this,
                 CustomKeyboardActivity.class);
         characterFilesPreference.setIntent(characterFilesIntent);
+    }
+
+    private void setFontPickerIntent() {
+        Preference fontPref = findPreference(Preferences.KEY_FONTFACE);
+        if (fontPref != null) {
+            fontPref.setIntent(new Intent(this, FontPickerActivity.class));
+        }
     }
 
     // Returns to GameActivity, which enters the panel-repositioning mode on

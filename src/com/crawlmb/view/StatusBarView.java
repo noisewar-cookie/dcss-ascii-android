@@ -35,11 +35,17 @@ public class StatusBarView extends View
 		requestLayout();
 	}
 
-	public static Typeface loadGameTypeface(Context ctx, String assetPath)
+	public static Typeface loadGameTypeface(Context ctx, String fontKey)
 	{
 		try
 		{
-			return Typeface.createFromAsset(ctx.getAssets(), assetPath);
+			if (com.crawlmb.CustomFontManager.isCustomFont(fontKey))
+			{
+				String filename = com.crawlmb.CustomFontManager.customFontFilename(fontKey);
+				java.io.File f = com.crawlmb.CustomFontManager.getCustomFontFile(ctx, filename);
+				return android.graphics.Typeface.createFromFile(f);
+			}
+			return Typeface.createFromAsset(ctx.getAssets(), fontKey);
 		}
 		catch (Exception e)
 		{
