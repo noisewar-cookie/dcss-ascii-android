@@ -112,6 +112,27 @@ public class PreferencesActivity extends PreferenceActivity implements
         // Must run after every add* call above so the walk sees all rows,
         // and before views are bound (still in onCreate).
         applyCompactLayout(getPreferenceScreen());
+
+        tunePreferenceListScrolling();
+    }
+
+    // Smooth out fast scrolling on the legacy PreferenceActivity ListView.
+    // Scoped entirely to this screen's list; the game view is a separate
+    // View tree and is unaffected.
+    private void tunePreferenceListScrolling() {
+        android.widget.ListView list = getListView();
+        if (list == null)
+            return;
+        // Deprecated bitmap scroll/animation caches fight hardware
+        // acceleration on modern GPUs and add jank; disable them.
+        list.setScrollingCacheEnabled(false);
+        list.setAnimationCacheEnabled(false);
+        // API 35+ VRR panels (e.g. 144Hz) idle-ramp their refresh rate and
+        // stutter mid-fling; hint high refresh while the list actually draws.
+        if (android.os.Build.VERSION.SDK_INT
+                >= android.os.Build.VERSION_CODES.VANILLA_ICE_CREAM)
+            list.setRequestedFrameRate(
+                    android.view.View.REQUESTED_FRAME_RATE_CATEGORY_HIGH);
     }
 
     // Swap every row (including nested PreferenceScreen rows, but NOT

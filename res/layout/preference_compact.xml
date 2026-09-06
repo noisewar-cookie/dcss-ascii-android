@@ -41,8 +41,7 @@
             android:textAppearance="?android:attr/textAppearanceLarge"
             android:textSize="16sp"
             android:textColor="@color/preference_title"
-            android:ellipsize="marquee"
-            android:fadingEdge="horizontal" />
+            android:ellipsize="end" />
 
         <TextView
             android:id="@android:id/summary"
