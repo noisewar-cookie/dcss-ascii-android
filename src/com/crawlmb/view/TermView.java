@@ -78,6 +78,7 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 	private int char_width = 0;
 	private int font_text_size = 0;
 	private float fontScaleMultiplier = 1.0f;
+	private float fontScaleX = 1.0f;
 
 	private Handler handler = null;
 	private KeyListener keyListener = null;
@@ -231,6 +232,13 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 			float matched = GameFontShaper.matchReferenceLineHeight(
 					getContext(), fore.getTypeface(), refSize);
 			font_text_size = Math.round(matched);
+
+			GameFontShaper.WidthClampResult clamp =
+					GameFontShaper.widthClamp(fore.getTypeface(),
+							font_text_size, Preferences.cols, maxWidth);
+			font_text_size = clamp.textSize;
+			fontScaleX = clamp.scaleX;
+
 			int scaledSize = Math.round(font_text_size * fontScaleMultiplier);
 			scaledSize = Math.max(MIN_FONT_SIZE, Math.min(scaledSize, MAX_FONT_SIZE));
 			setFontSize(scaledSize, false);
@@ -336,6 +344,7 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 		font_text_size = size;
 
 		fore.setTextSize(font_text_size);
+		fore.setTextScaleX(fontScaleX);
 
 		if (persist)
 		{
@@ -347,7 +356,6 @@ public class TermView extends View implements GestureDetector.OnGestureListener,
 
 		char_height = (int) Math.ceil(fore.getFontSpacing());
 		char_width = (int) fore.measureText("X", 0, 1);
-		// Log.d("Crawl","setSizeFont "+fore.measureText("X", 0, 1));
 	}
 
 	@Override

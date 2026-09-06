@@ -85,6 +85,7 @@ public class RegionTermView extends View
 	private boolean triggerGameStart = false;
 
 	private float fontScaleMultiplier = 1.0f;
+	private float fontScaleX = 1.0f;
 	// Content zoom applied at draw time only — scales the rendered bitmap
 	// around the panel center without changing the panel's measured size, so
 	// content beyond the panel's bounds is clipped by the view rather than
@@ -963,6 +964,12 @@ public class RegionTermView extends View
 					getContext(), fore.getTypeface(), refSize);
 			font_text_size = Math.round(matched);
 
+			GameFontShaper.WidthClampResult clamp =
+					GameFontShaper.widthClamp(fore.getTypeface(),
+							font_text_size, fitCols, maxWidth);
+			font_text_size = clamp.textSize;
+			fontScaleX = clamp.scaleX;
+
 			int scaledSize = Math.round(font_text_size * fontScaleMultiplier);
 			scaledSize = Math.max(MIN_FONT_SIZE, Math.min(scaledSize, MAX_FONT_SIZE));
 			setFontSize(scaledSize, false);
@@ -990,6 +997,7 @@ public class RegionTermView extends View
 
 		font_text_size = size;
 		fore.setTextSize(font_text_size);
+		fore.setTextScaleX(fontScaleX);
 
 		char_height = (int) Math.ceil(fore.getFontSpacing());
 		char_width_precise = fore.measureText("X", 0, 1);

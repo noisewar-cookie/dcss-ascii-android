@@ -12,12 +12,26 @@ import android.graphics.Typeface;
 //   2. matchReferenceLineHeight(face, T) scales that textSize so the chosen
 //      face's fontSpacing equals VeraMoBd's at T (fills the same vertical
 //      height, since rowCount * fontSpacing == panel height).
-// Widths vary with each font's natural aspect: wider faces overflow past the
-// panel edges (centered symmetrically), narrower faces leave slack. No
-// horizontal scaleX is ever applied.
+//   3. widthClamp(face, matchedSize, cols, maxWidth) checks whether the
+//      chosen face overflows at that size. If so, it splits the needed
+//      reduction evenly across font-size shrink and horizontal scaleX,
+//      each clamped at MIN_FACTOR (85%).
 public final class GameFontShaper
 {
 	public static final String REFERENCE_ASSET = "VeraMoBd.ttf";
+	private static final float MIN_FACTOR = 0.85f;
+
+	public static final class WidthClampResult
+	{
+		public final int textSize;
+		public final float scaleX;
+
+		WidthClampResult(int textSize, float scaleX)
+		{
+			this.textSize = textSize;
+			this.scaleX = scaleX;
+		}
+	}
 
 	private static Typeface referenceTypeface = null;
 
@@ -74,5 +88,31 @@ public final class GameFontShaper
 		if (actual <= 0f)
 			return referenceTextSize;
 		return referenceTextSize * (target / actual);
+	}
+
+	// If the chosen face at matchedSize overflows cols * maxWidth, split
+	// the reduction across font-size shrink and horizontal scaleX (each
+	// clamped at MIN_FACTOR = 85%). Returns the adjusted size and scaleX.
+	public static WidthClampResult widthClamp(Typeface face,
+			int matchedSize, int cols, int maxWidth)
+	{
+		Paint probe = new Paint();
+		probe.setTypeface(face);
+		probe.setTextSize(matchedSize);
+		float charW = probe.measureText("X");
+		float needed = charW * cols;
+
+		if (needed <= maxWidth)
+			return new WidthClampResult(matchedSize, 1.0f);
+
+		float ratio = maxWidth / needed;
+		// Split evenly: sizeFactor * scaleXFactor = ratio
+		float half = (float) Math.sqrt(ratio);
+
+		float sizeFactor = Math.max(half, MIN_FACTOR);
+		float scaleXFactor = Math.max(ratio / sizeFactor, MIN_FACTOR);
+
+		int adjusted = Math.round(matchedSize * sizeFactor);
+		return new WidthClampResult(adjusted, scaleXFactor);
 	}
 }
