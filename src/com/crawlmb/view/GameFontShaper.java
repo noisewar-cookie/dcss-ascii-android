@@ -4,22 +4,16 @@ import android.content.Context;
 import android.graphics.Paint;
 import android.graphics.Typeface;
 
-// VeraMoBd is the sizing reference for all user-selectable fonts. Panels are
-// tuned against it — VeraMoBd fills the full vertical height of the map panel
-// at the auto-fit width. For any other face:
-//   1. widthFitTextSize(cols, maxWidth) picks the textSize where VeraMoBd's
-//      advance width * cols == maxWidth (fills width).
-//   2. matchReferenceLineHeight(face, T) scales that textSize so the chosen
-//      face's fontSpacing equals VeraMoBd's at T (fills the same vertical
-//      height, since rowCount * fontSpacing == panel height).
-//   3. widthClamp(face, matchedSize, cols, maxWidth) checks whether the
-//      chosen face overflows at that size. If so, it splits the needed
-//      reduction evenly across font-size shrink and horizontal scaleX,
-//      each clamped at MIN_FACTOR (85%).
+// Sizes fonts against VeraMoBd as the reference.
+//   1. widthFitTextSize — largest textSize where VeraMoBd fits cols in maxWidth.
+//   2. matchReferenceLineHeight — scale textSize so face's line height = VeraMoBd's.
+//   3. widthClamp — if the face is too wide or narrow after (2), adjust via
+//      textSize↓ + scaleX↓ (wide) or scaleX↑ only (narrow), each ≥/≤ 85%.
 public final class GameFontShaper
 {
 	public static final String REFERENCE_ASSET = "VeraMoBd.ttf";
 	private static final float MIN_FACTOR = 0.85f;
+	private static final float MAX_FACTOR = 1.0f / MIN_FACTOR; // ~1.176
 
 	public static final class WidthClampResult
 	{
@@ -47,9 +41,7 @@ public final class GameFontShaper
 		return referenceTypeface;
 	}
 
-	// Grow textSize on a VeraMoBd probe until refCharWidth * cols would
-	// exceed maxWidth, then back off one step. Returns the last size that
-	// still fit. Bounded by [minSize, maxSize].
+	// Largest textSize where VeraMoBd fits cols in maxWidth.
 	public static int widthFitTextSize(Context ctx, int cols, int maxWidth,
 			int minSize, int maxSize)
 	{
@@ -65,10 +57,7 @@ public final class GameFontShaper
 		return Math.max(minSize, size - 1);
 	}
 
-	// Scale the reference textSize so `face` renders at VeraMoBd's line
-	// height (fontSpacing). Different faces have different vertical metrics
-	// per em; without this a face with a shorter metric would leave
-	// vertical slack in a panel tuned for VeraMoBd.
+	// Scale textSize so face's fontSpacing matches VeraMoBd's.
 	public static float matchReferenceLineHeight(Context ctx, Typeface face,
 			float referenceTextSize)
 	{
@@ -90,9 +79,8 @@ public final class GameFontShaper
 		return referenceTextSize * (target / actual);
 	}
 
-	// If the chosen face at matchedSize overflows cols * maxWidth, split
-	// the reduction across font-size shrink and horizontal scaleX (each
-	// clamped at MIN_FACTOR = 85%). Returns the adjusted size and scaleX.
+	// Fit face to cols in maxWidth. Wide: textSize↓ + scaleX↓ (≥ 85%).
+	// Narrow: scaleX↑ only (textSize↑ would overflow vertically).
 	public static WidthClampResult widthClamp(Typeface face,
 			int matchedSize, int cols, int maxWidth)
 	{
@@ -102,13 +90,19 @@ public final class GameFontShaper
 		float charW = probe.measureText("X");
 		float needed = charW * cols;
 
-		if (needed <= maxWidth)
+		float ratio = maxWidth / needed;
+
+		if (ratio >= 1.0f && ratio <= 1.03f)
 			return new WidthClampResult(matchedSize, 1.0f);
 
-		float ratio = maxWidth / needed;
-		// Split evenly: sizeFactor * scaleXFactor = ratio
-		float half = (float) Math.sqrt(ratio);
+		if (ratio > 1.03f)
+		{
+			float scaleXFactor = Math.min(ratio, MAX_FACTOR);
+			return new WidthClampResult(matchedSize, scaleXFactor);
+		}
 
+		// Wide: split evenly across size and scaleX
+		float half = (float) Math.sqrt(ratio);
 		float sizeFactor = Math.max(half, MIN_FACTOR);
 		float scaleXFactor = Math.max(ratio / sizeFactor, MIN_FACTOR);
 
