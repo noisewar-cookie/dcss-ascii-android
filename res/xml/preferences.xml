@@ -40,6 +40,11 @@
 	   android:title="@string/preferences_wordwrap_title"
 	   android:summary="@string/preferences_wordwrap_summary" />
 	<CheckBoxPreference
+	   android:key="crawl.compacthud"
+	   android:defaultValue="false"
+	   android:title="@string/preferences_compacthud_title"
+	   android:summary="@string/preferences_compacthud_summary" />
+	<CheckBoxPreference
 	   android:key="crawl.newturnmark"
 	   android:defaultValue="true"
 	   android:title="@string/preferences_newturnmark_title"

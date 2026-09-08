@@ -16,6 +16,9 @@ public class StatusBarView extends View
 	private float scrollX = 0f;
 	private float lastTouchX;
 	private float contentWidth;
+	// Status lights want a space between segments; the compact title/vitals
+	// rows bake their own spacing into the caption text, so they set false.
+	private boolean segmentSpacing = true;
 
 	public StatusBarView(Context context)
 	{
@@ -33,6 +36,11 @@ public class StatusBarView extends View
 		fontSizePx = px;
 		paint.setTextSize(px);
 		requestLayout();
+	}
+
+	public void setSegmentSpacing(boolean on)
+	{
+		segmentSpacing = on;
 	}
 
 	public static Typeface loadGameTypeface(Context ctx, String fontKey)
@@ -95,7 +103,7 @@ public class StatusBarView extends View
 			if (i < colours.length)
 				paint.setColor(colours[i] | 0xFF000000);
 			canvas.drawText(texts[i], x, y, paint);
-			x += paint.measureText(texts[i]) + spaceW;
+			x += paint.measureText(texts[i]) + (segmentSpacing ? spaceW : 0);
 		}
 		contentWidth = x + scrollX - getPaddingLeft();
 	}

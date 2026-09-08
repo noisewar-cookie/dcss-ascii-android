@@ -104,6 +104,10 @@ public class RegionTermView extends View
 	// gap between map and HUD when a wide-cell font makes the width-bound
 	// canvas_height shorter than the parent's allocation.
 	private boolean centerVertically = false;
+	// Fraction of the vertical slack placed above the content (0.5 = centered).
+	// >0.5 docks content lower, shrinking the gap below it (compact map: the
+	// aspect-bound slack pools at the top, where the bevel is, not at the HUD).
+	private float verticalContentBias = 0.5f;
 	private int drawOffsetY = 0;
 
 	private boolean horizontalScrollEnabled = false;
@@ -201,6 +205,21 @@ public class RegionTermView extends View
 	// last column. Lets an overlay anchor to where the text ends rather than to
 	// the view's full (often MATCH_PARENT) width. Valid after measure.
 	public int getContentRightX() { return drawOffsetX + canvas_width; }
+
+	// Top edge (view-local px) of the drawn glyph block, and its pixel height.
+	// Lets an overlay (compact vertical bars) match the map's actual glyph
+	// extent rather than the view's full padded height. Valid after measure.
+	public int getContentTopY() { return drawOffsetY; }
+	public int getContentBlockHeight() { return canvas_height; }
+
+	public void setVerticalContentBias(float bias)
+	{
+		if (this.verticalContentBias == bias)
+			return;
+		this.verticalContentBias = bias;
+		if (canvas != null)
+			requestLayout();
+	}
 
 	// When true, onMeasure reports height based on maxContentRow (the lowest
 	// row with non-space content) + 1 spacer row, instead of the full
@@ -1179,7 +1198,8 @@ public class RegionTermView extends View
 			int limit = MeasureSpec.getSize(heightMeasureSpec);
 			if (mode != MeasureSpec.UNSPECIFIED && limit > canvas_height)
 			{
-				drawOffsetY = (limit - canvas_height) / 2;
+				drawOffsetY = (int) ((limit - canvas_height)
+						* verticalContentBias);
 				reportedHeight = limit;
 			}
 		}

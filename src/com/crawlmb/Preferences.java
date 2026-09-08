@@ -28,6 +28,7 @@ final public class Preferences
 	public static final String KEY_SKIPCONTROLSINFO = "crawl.skipcontrolsinfo";
 	public static final String KEY_WORDWRAP = "crawl.wordwrap";
 	public static final String KEY_NEWTURNMARK = "crawl.newturnmark";
+	public static final String KEY_COMPACTHUD = "crawl.compacthud";
 	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
 
 	public static final String KEY_FONTFACE = "crawl.fontface";
@@ -189,6 +190,14 @@ final public class Preferences
 	public static boolean getNewturnMark()
 	{
 		return sharedPreferences.getBoolean(Preferences.KEY_NEWTURNMARK, true);
+	}
+
+	// Compact HUD mode. Frees three terminal HUD rows (title/vitals to native
+	// scrollable views, HP/MP to native vertical bars) so the map panel grows.
+	// Boot-wired like word wrap; a toggle hard-relaunches the game. Default off.
+	public static boolean getCompactHud()
+	{
+		return sharedPreferences.getBoolean(Preferences.KEY_COMPACTHUD, false);
 	}
 
 	// One-shot flag marking that the next launch follows a save-restore

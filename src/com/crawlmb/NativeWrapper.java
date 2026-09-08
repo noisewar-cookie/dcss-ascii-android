@@ -17,6 +17,17 @@ public class NativeWrapper
 	private int lastMsgWrapCols = -1;
 	private int lastProseWrapCols = -1;
 
+	// Last compact-HUD pushes. These native rows/bars aren't part of the
+	// retained terminal grid, so a view rebuild (onStart/fold) leaves them
+	// blank until the next output.cc stat push. Cache them here and re-apply
+	// on link() so the new views repaint immediately.
+	private String lastHudTitleTexts = null;
+	private int[] lastHudTitleColours = null;
+	private String lastHudVitalsTexts = null;
+	private int[] lastHudVitalsColours = null;
+	private int[] lastHudHp = null;
+	private int[] lastHudMp = null;
+
 	// Serializes all terminal-state access: taken by frameUpdate (game
 	// thread) and RegionRouter's UI-thread replay paths.
 	public static final Object display_lock = new Object();
@@ -42,6 +53,7 @@ public class NativeWrapper
 		int proseCols = renderer.getProseWrapCols();
 		setWordwrap(wrapCols, msgRows, proseCols);
 		setNewturnMark(renderer.getNewturnMark());
+		setCompactHud(renderer.getCompactHud());
 		initGame(dataDir, settingsDir, morgueDir);
 	}
 
@@ -76,6 +88,7 @@ public class NativeWrapper
 	public native void initGame(String dataDir, String settingsDir, String morgueDir);
 	private native void setWordwrap(int msgWrapCols, int msgRows, int proseWrapCols);
 	private native void setNewturnMark(boolean enabled);
+	private native void setCompactHud(boolean enabled);
 	private native void setMsgMaxWidthLive(int msgWrapCols);
 	private native void setProseWrapColsLive(int proseWrapCols);
 	public static native void nativeSaveGame();
@@ -143,6 +156,17 @@ public class NativeWrapper
 		synchronized (display_lock)
 		{
 			renderer = r;
+			// Repaint the compact rows/bars on the freshly built views (they're
+			// not in the retained grid that refreshTerminal replays).
+			if (r != null)
+			{
+				if (lastHudTitleTexts != null)
+					r.updateHudTitle(lastHudTitleTexts, lastHudTitleColours);
+				if (lastHudVitalsTexts != null)
+					r.updateHudVitals(lastHudVitalsTexts, lastHudVitalsColours);
+				if (lastHudHp != null)
+					r.updateHudBars(lastHudHp, lastHudMp);
+			}
 		}
 	}
 
@@ -198,6 +222,45 @@ public class NativeWrapper
 		{
 			if (renderer != null)
 				renderer.updateStatusLights(texts, colours);
+		}
+	}
+
+	// Compact HUD native rows (pushed from output.cc). Tab-joined coloured
+	// segments for the title/vitals rows; the vitals row is horizontally
+	// scrollable when it overflows.
+	public void updateHudTitle(String texts, int[] colours)
+	{
+		synchronized (display_lock)
+		{
+			lastHudTitleTexts = texts;
+			lastHudTitleColours = colours;
+			if (renderer != null)
+				renderer.updateHudTitle(texts, colours);
+		}
+	}
+
+	public void updateHudVitals(String texts, int[] colours)
+	{
+		synchronized (display_lock)
+		{
+			lastHudVitalsTexts = texts;
+			lastHudVitalsColours = colours;
+			if (renderer != null)
+				renderer.updateHudVitals(texts, colours);
+		}
+	}
+
+	// Vertical HP/MP bars. Each array is 8 ints:
+	// [def_pm, cur_pm, old_pm, argbDefault, argbChangePos, argbPoison,
+	//  argbChangeNeg, argbEmpty]; mp is length 0 for species with no MP.
+	public void updateHudBars(int[] hp, int[] mp)
+	{
+		synchronized (display_lock)
+		{
+			lastHudHp = hp;
+			lastHudMp = mp;
+			if (renderer != null)
+				renderer.updateHudBars(hp, mp);
 		}
 	}
 

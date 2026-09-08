@@ -22,6 +22,13 @@ public class FontConfig
     public final float portraitMapZoomStep2;
     public final float portraitHudFontScale;
     public final int portraitHudOffsetCols;
+    // Compact-mode vertical bar glyphs, as Unicode codepoints. HP and MP are
+    // set independently, each with its own filled-cell and empty-track glyph.
+    // Accept "U+XXXX", "0xXXXX", "#XXXX" (hex) or a plain decimal.
+    public final int compactHpBarGlyph;
+    public final int compactHpBarEmptyGlyph;
+    public final int compactMpBarGlyph;
+    public final int compactMpBarEmptyGlyph;
     public final float portraitMsgFontScale;
     // Word-wrap mode only (crawl.wordwrap pref): terminal rows given to the
     // DCSS message window (msg history retained for scrollback) and how many
@@ -142,6 +149,10 @@ public class FontConfig
         this.portraitMapZoomStep2      = getFloat(props, "portrait_map_zoom_step2", 1.5f);
         this.portraitHudFontScale      = getFloat(props, "portrait_hud_font_scale", 1.0f);
         this.portraitHudOffsetCols     = getInt  (props, "portrait_hud_offset_cols", 0);
+        this.compactHpBarGlyph         = getCodepoint(props, "compact_hp_bar_glyph", 0x2592);
+        this.compactHpBarEmptyGlyph    = getCodepoint(props, "compact_hp_bar_empty_glyph", 0x007C);
+        this.compactMpBarGlyph         = getCodepoint(props, "compact_mp_bar_glyph", 0x2592);
+        this.compactMpBarEmptyGlyph    = getCodepoint(props, "compact_mp_bar_empty_glyph", 0x007C);
         this.portraitMsgFontScale      = getFloat(props, "portrait_msg_font_scale", 1.5f);
         // Clamped: min 7 preserves the classic window, max 31 keeps the msg
         // window inside the 48-row terminal (rows 17..47).
@@ -280,6 +291,37 @@ public class FontConfig
         catch (NumberFormatException e)
         {
             Log.w(TAG, "Invalid value for " + key + ": " + val);
+            return def;
+        }
+    }
+
+    // Parse a Unicode codepoint: "U+XXXX", "0xXXXX", "#XXXX" as hex, or a
+    // plain decimal.
+    private static int getCodepoint(Properties props, String key, int def)
+    {
+        String val = props.getProperty(key);
+        if (val == null)
+            return def;
+        String t = val.trim();
+        int radix = 10;
+        if (t.startsWith("U+") || t.startsWith("u+")
+                || t.startsWith("0x") || t.startsWith("0X"))
+        {
+            t = t.substring(2);
+            radix = 16;
+        }
+        else if (t.startsWith("#"))
+        {
+            t = t.substring(1);
+            radix = 16;
+        }
+        try
+        {
+            return Integer.parseInt(t, radix);
+        }
+        catch (NumberFormatException e)
+        {
+            Log.w(TAG, "Invalid codepoint for " + key + ": " + val);
             return def;
         }
     }

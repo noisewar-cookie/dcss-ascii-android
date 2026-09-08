@@ -128,6 +128,14 @@ public class GameActivity extends Activity
 	private RegionTermView portraitMlistView = null;
 	private RelativeLayout portraitSplitContainer = null;
 	private StatusBarView portraitStatusBar = null;
+	// Compact mode caps the visible message slot to this many rows, freeing the
+	// rest for the map.
+	private static final int COMPACT_MSG_ROWS = 5;
+	// Compact HUD native rows/bars (null unless the pref is on).
+	private boolean compactHudActive = false;
+	private StatusBarView portraitCompactTitle = null;
+	private StatusBarView portraitCompactVitals = null;
+	private com.crawlmb.view.VerticalBarsView portraitCompactBars = null;
 	private FontConfig portraitFontConfig = null;
 	private RegionRouter portraitRouter = null;
 	private View[] portraitExtraScrollTargets = null;
@@ -684,6 +692,7 @@ public class GameActivity extends Activity
 						iconConfig, this::restoreKeyboardAfterReload);
 				hudButtonController = new HudButtonController(this, screenLayout,
 						portraitHudView, iconConfig, portraitDirectionalView,
+						compactHudActive,
 						new HudButtonController.Callbacks()
 						{
 							@Override
@@ -1440,16 +1449,28 @@ public class GameActivity extends Activity
 				RegionRouter.MAP_START_ROW, RegionRouter.MAP_START_COL,
 				RegionRouter.MAP_END_ROW, RegionRouter.MAP_END_COL);
 		mapView.setId(View.generateViewId());
-		mapView.setFontScaleMultiplier(fontConfig.portraitMapFontScale);
+		// Compact frees vertical rows, so let the map grow to width-fill (scale
+		// 1.0); onMeasure's height self-fit backs it off to best-fit the band.
+		compactHudActive = Preferences.getCompactHud();
+		mapView.setFontScaleMultiplier(compactHudActive
+				? 1.0f : fontConfig.portraitMapFontScale);
 		mapView.setCenterHorizontally(true);
 		mapView.setCenterVertically(true);
+		// Compact: dock the map lower so its aspect-bound vertical slack pools
+		// at the top (bevel) and the gap above the HUD roughly halves.
+		if (compactHudActive)
+			mapView.setVerticalContentBias(0.75f);
 		mapView.setCenterContentCols(33);
 		mapView.setOffsetCols(fontConfig.portraitMapOffsetCols);
 		portraitMapView = mapView;
 
+		// Compact HUD: hudView samples only rows 0-3 (stats1/stats2/wp/qv);
+		// title, vitals and HP/MP bars move to native views built below.
+		int hudEndRow = compactHudActive
+				? RegionRouter.HUD_END_ROW_COMPACT : RegionRouter.HUD_END_ROW;
 		RegionTermView hudView = new RegionTermView(this,
 				RegionRouter.HUD_START_ROW, RegionRouter.HUD_START_COL,
-				RegionRouter.HUD_END_ROW, RegionRouter.HUD_END_COL);
+				hudEndRow, RegionRouter.HUD_END_COL);
 		hudView.setId(View.generateViewId());
 		hudView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
 		hudView.setOffsetCols(fontConfig.portraitHudOffsetCols);
@@ -1481,15 +1502,26 @@ public class GameActivity extends Activity
 				msgEndRow, RegionRouter.MSG_END_COL);
 		msgView.setId(View.generateViewId());
 		msgView.setFontScaleMultiplier(fontConfig.portraitMsgFontScale);
+		int msgVisibleRows = compactHudActive
+				? COMPACT_MSG_ROWS : fontConfig.portraitMsgVisibleRows;
 		if (wordwrap)
 		{
 			msgView.setVerticalScrollEnabled(true);
-			msgView.setMaxVisibleRows(fontConfig.portraitMsgVisibleRows);
+			msgView.setMaxVisibleRows(msgVisibleRows);
 			msgView.setStickyScrollToBottom(true);
 		}
 		else
 		{
 			msgView.setHorizontalScrollEnabled(true);
+			// Cap the fixed-region panel too: vscroll + sticky-bottom keep the
+			// newest lines in the slot; horizontal scroll still handles wide
+			// lines (axis-locked per gesture).
+			if (compactHudActive)
+			{
+				msgView.setVerticalScrollEnabled(true);
+				msgView.setMaxVisibleRows(msgVisibleRows);
+				msgView.setStickyScrollToBottom(true);
+			}
 		}
 		portraitMsgView = msgView;
 
@@ -1539,6 +1571,45 @@ public class GameActivity extends Activity
 
 		portraitHudView = hudView;
 		portraitMlistView = mlistView;
+
+		// Compact HUD native rows/bars. The title and vitals rows reuse
+		// StatusBarView (tab-joined coloured segments, horizontal drag-scroll)
+		// but with inter-segment spacing off — output.cc bakes the gaps into
+		// the caption text. The bars view shares the HUD font. All three use
+		// the same typeface/size/height as the status-lights bar.
+		if (compactHudActive)
+		{
+			StatusBarView titleRow = new StatusBarView(this);
+			titleRow.setId(View.generateViewId());
+			titleRow.setTypeface(gameTf);
+			titleRow.setFontSizePx(statusFontPx);
+			titleRow.setSegmentSpacing(false);
+			titleRow.setPadding(
+					charWidthPx * fontConfig.portraitHudOffsetCols, 0, 0, 0);
+
+			StatusBarView vitalsRow = new StatusBarView(this);
+			vitalsRow.setId(View.generateViewId());
+			vitalsRow.setTypeface(gameTf);
+			vitalsRow.setFontSizePx(statusFontPx);
+			vitalsRow.setSegmentSpacing(false);
+			vitalsRow.setPadding(
+					charWidthPx * fontConfig.portraitHudOffsetCols, 0, 0, 0);
+
+			com.crawlmb.view.VerticalBarsView bars =
+					new com.crawlmb.view.VerticalBarsView(this);
+			bars.setId(View.generateViewId());
+			bars.setTypeface(gameTf);
+			bars.setFontSizePx(statusFontPx);
+			bars.setHpGlyphs(fontConfig.compactHpBarGlyph,
+					fontConfig.compactHpBarEmptyGlyph);
+			bars.setMpGlyphs(fontConfig.compactMpBarGlyph,
+					fontConfig.compactMpBarEmptyGlyph);
+			bars.setMapView(mapView);
+
+			portraitCompactTitle = titleRow;
+			portraitCompactVitals = vitalsRow;
+			portraitCompactBars = bars;
+		}
 
 		// splitRoot is the container the router toggles VISIBLE/INVISIBLE for
 		// the in-game view. In unfolded (foldable) mode it's a horizontal
@@ -1616,6 +1687,19 @@ public class GameActivity extends Activity
 			else
 				mapParams.addRule(RelativeLayout.ABOVE, nextTopId);
 			splitContainer.addView(mapView, mapParams);
+
+			// Vertical HP/MP bars overlay the map's right edge, spanning its
+			// height and docked to the bottom-right corner.
+			if (compactHudActive && portraitCompactBars != null)
+			{
+				RelativeLayout.LayoutParams barParams =
+						new RelativeLayout.LayoutParams(
+								LayoutParams.WRAP_CONTENT, 0);
+				barParams.addRule(RelativeLayout.ALIGN_TOP, mapView.getId());
+				barParams.addRule(RelativeLayout.ALIGN_BOTTOM, mapView.getId());
+				barParams.addRule(RelativeLayout.ALIGN_RIGHT, mapView.getId());
+				splitContainer.addView(portraitCompactBars, barParams);
+			}
 
 			portraitSplitContainer = splitContainer;
 			splitRoot = splitContainer;
@@ -1798,6 +1882,10 @@ public class GameActivity extends Activity
 		router.setUnfoldedMenuGeometry(menuConfine, menuHalfWidth, menuHalfLeft);
 		router.setSplitContainer(splitRoot);
 		router.setStatusBarView(statusBar);
+		router.setCompactHud(compactHudActive);
+		if (compactHudActive)
+			router.setCompactHudViews(portraitCompactTitle,
+					portraitCompactVitals, portraitCompactBars);
 		router.addRegion(mapView);
 		router.addRegion(hudView);
 		router.addRegion(mlistView);
@@ -1854,9 +1942,17 @@ public class GameActivity extends Activity
 		// skillsView/msgView, so without this registration drags over the
 		// QC panel are swallowed by DirectionalTouchView's 9-grid tap
 		// handler and the panel never scrolls.
-		portraitExtraScrollTargets = new View[] {
-				ngsDesc, ngbDesc, quickControlsView, ngsScroll, ngbScroll,
-				ngwScroll };
+		// Compact title/vitals rows are StatusBarViews that scroll horizontally
+		// on overflow; register them so DirectionalTouchView forwards drags to
+		// them (without this the touch overlay swallows the drag as a 9-grid tap).
+		if (compactHudActive && portraitCompactTitle != null)
+			portraitExtraScrollTargets = new View[] {
+					ngsDesc, ngbDesc, quickControlsView, ngsScroll, ngbScroll,
+					ngwScroll, portraitCompactTitle, portraitCompactVitals };
+		else
+			portraitExtraScrollTargets = new View[] {
+					ngsDesc, ngbDesc, quickControlsView, ngsScroll, ngbScroll,
+					ngwScroll };
 
 		final float MIN_FONT_SCALE = 0.3f;
 		final float MIN_SCALE_DELTA = 0.01f;
@@ -1932,8 +2028,20 @@ public class GameActivity extends Activity
 									? msgView.getMeasuredHeight()
 											* (msgBase / curMsg)
 									: msgView.getMeasuredHeight();
+							// Compact title/vitals rows are fixed-height (HUD font),
+							// so they add to the stack like the status bar.
+							int compactHb = 0;
+							if (compactHudActive)
+							{
+								if (portraitCompactTitle != null)
+									compactHb += portraitCompactTitle
+											.getMeasuredHeight();
+								if (portraitCompactVitals != null)
+									compactHb += portraitCompactVitals
+											.getMeasuredHeight();
+							}
 							float stackHb = hudHb + mlistHb + msgHb
-									+ statusBar.getMeasuredHeight();
+									+ statusBar.getMeasuredHeight() + compactHb;
 							float hf = stackHb > 0
 									? Math.min(1f, (availPanel - 1f) / stackHb)
 									: 1f;
@@ -1965,6 +2073,7 @@ public class GameActivity extends Activity
 					private int lastMsgH = -1;
 					private int lastStatusH = -1;
 					private int lastMlistH = -1;
+					private int lastCompactH = -1;
 
 					@Override
 					public void onGlobalLayout()
@@ -1977,22 +2086,36 @@ public class GameActivity extends Activity
 						int msgH = msgView.getMeasuredHeight();
 						int statusH = statusBar.getMeasuredHeight();
 						int mlistH = mlistView.getMeasuredHeight();
+						// Compact title/vitals rows sit in the hud unit but are
+						// separate views, so their height eats the map budget too.
+						int compactH = 0;
+						if (compactHudActive)
+						{
+							if (portraitCompactTitle != null)
+								compactH += portraitCompactTitle
+										.getMeasuredHeight();
+							if (portraitCompactVitals != null)
+								compactH += portraitCompactVitals
+										.getMeasuredHeight();
+						}
 						if (available <= 0 || hudH <= 0 || msgH <= 0)
 							return;
 
 						if (available == lastAvailable
 								&& hudH == lastHudH && msgH == lastMsgH
 								&& statusH == lastStatusH
-								&& mlistH == lastMlistH)
+								&& mlistH == lastMlistH
+								&& compactH == lastCompactH)
 							return;
 						lastAvailable = available;
 						lastHudH = hudH;
 						lastMsgH = msgH;
 						lastStatusH = statusH;
 						lastMlistH = mlistH;
+						lastCompactH = compactH;
 
 						int mapTarget = available - hudH - statusH
-								- mlistH - msgH;
+								- mlistH - msgH - compactH;
 						if (mapTarget <= 0)
 							return;
 						int mapH = mapView.getMeasuredHeight();
@@ -2024,6 +2147,11 @@ public class GameActivity extends Activity
 		switch (key)
 		{
 		case "hud":
+			// Compact: title + vitals rows sit above the stats grid, status
+			// lights below it (the vertical bars overlay the map separately).
+			if (compactHudActive && portraitCompactTitle != null)
+				return new View[] { portraitCompactTitle, portraitCompactVitals,
+						hudView, statusBar };
 			return new View[] { hudView, statusBar };
 		case "mlist":
 			return new View[] { mlistView };
@@ -2060,6 +2188,15 @@ public class GameActivity extends Activity
 		mapView.setFontScaleMultiplier(1.0f);
 		mapHalf.addView(mapView, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+
+		// Compact HUD vertical bars overlay the map half's bottom-right.
+		if (compactHudActive && portraitCompactBars != null)
+		{
+			FrameLayout.LayoutParams barLp = new FrameLayout.LayoutParams(
+					LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT);
+			barLp.gravity = android.view.Gravity.END | android.view.Gravity.TOP;
+			mapHalf.addView(portraitCompactBars, barLp);
+		}
 
 		// Panels keep their single-screen geometry, just scoped to the half:
 		// each width-fits its OWN region cols (hud/mlist 43, msg 80) at its

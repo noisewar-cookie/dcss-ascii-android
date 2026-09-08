@@ -43,12 +43,16 @@ public class HudButtonController
     }
 
     // HUD region height in terminal rows (RegionRouter.HUD_START_ROW..HUD_END_ROW).
+    // Compact mode samples only 4 rows (stats1, stats2, weapon, quiver).
     private static final float HUD_ROWS = 9f;
+    private static final float HUD_ROWS_COMPACT = 4f;
     // Vertical anchors as a fraction of HUD height: the info button centers on
     // the Health/Magic bars (rows 2-3), the wiki button on the Noise/XL stat
-    // rows below them (rows 4-5).
+    // rows below them (rows 4-5). In compact mode the help button is suppressed
+    // and the wiki button centers on the two stat rows (AC/EV/SH + Str/Int/Dex).
     private static final float HELP_CENTER_FRAC = 3f / 9f;
     private static final float WIKI_CENTER_FRAC = 5f / 9f;
+    private static final float WIKI_CENTER_FRAC_COMPACT = 1f / 4f;
     // Width/height of each drawable's tightened viewport (help 20x20, wiki
     // 24x20), so the box matches the glyph's aspect.
     private static final float HELP_ASPECT = 20f / 20f;
@@ -65,6 +69,7 @@ public class HudButtonController
     // replayed to it as a normal control tap. May be null.
     private final View passThroughTarget;
     private final Callbacks cb;
+    private final boolean compact;
 
     private final FrameLayout container;
     private final ImageView helpButton;
@@ -74,12 +79,13 @@ public class HudButtonController
 
     public HudButtonController(Activity activity, RelativeLayout root,
             RegionTermView hudView, IconConfig cfg, View passThroughTarget,
-            Callbacks cb)
+            boolean compact, Callbacks cb)
     {
         this.root = root;
         this.hudView = hudView;
         this.cfg = cfg;
         this.passThroughTarget = passThroughTarget;
+        this.compact = compact;
         this.cb = cb;
 
         float density = activity.getResources().getDisplayMetrics().density;
@@ -260,7 +266,7 @@ public class HudButtonController
         int contentRight = hudLeft + hudView.getContentRightX();
         int viewRight = hudLeft + hudView.getWidth();
 
-        float rowH = h / HUD_ROWS;
+        float rowH = h / (compact ? HUD_ROWS_COMPACT : HUD_ROWS);
         // Icon height = configured HUD-row span; width follows each drawable's
         // aspect so the box is tight to the glyph. Clamp height to the band.
         int size = Math.min(Math.round(cfg.hudButtonRowSpan * rowH), h / 2);
@@ -284,11 +290,13 @@ public class HudButtonController
         int leftAnchor = Math.min(contentRight + marginPx,
                 viewRight - marginPx - maxW);
         int centerX = leftAnchor + maxW / 2;
+        // Compact mode suppresses the info/help button entirely (req 9).
         place(helpButton, centerX - helpW / 2,
                 Math.round(hudTop + h * HELP_CENTER_FRAC - size / 2f),
-                cb.isHelpEnabled());
+                !compact && cb.isHelpEnabled());
+        float wikiFrac = compact ? WIKI_CENTER_FRAC_COMPACT : WIKI_CENTER_FRAC;
         place(wikiButton, centerX - wikiW / 2,
-                Math.round(hudTop + h * WIKI_CENTER_FRAC - size / 2f),
+                Math.round(hudTop + h * wikiFrac - size / 2f),
                 cb.isWikiEnabled());
     }
 

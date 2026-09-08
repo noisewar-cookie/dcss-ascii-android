@@ -74,6 +74,10 @@ public class RegionRouter implements TerminalRenderer
 	// Stats only: rows 0-8 (stats/wp/qv). Status-light terminal rows
 	// (9-10) are suppressed — the native StatusBarView replaces them.
 	public static final int HUD_END_ROW = 9;
+	// Compact HUD: only rows 0-3 carry terminal content (stats1, stats2,
+	// weapon, quiver). Title/vitals/HP-MP bars move to native views, and
+	// the freed rows let the map grow.
+	public static final int HUD_END_ROW_COMPACT = 4;
 	public static final int MLIST_START_ROW = 11;
 	public static final int MLIST_END_ROW = 15;
 	public static final int HUD_START_COL = 37;
@@ -341,6 +345,11 @@ public class RegionRouter implements TerminalRenderer
 	private MenuType lastAppliedMenuType = MenuType.DEFAULT;
 	private ViewGroup splitContainer;
 	private StatusBarView statusBarView;
+	// Compact-mode native rows/bars (fed from output.cc via NativeWrapper).
+	private boolean compactHud;
+	private StatusBarView compactTitleView;
+	private StatusBarView compactVitalsView;
+	private VerticalBarsView compactBarsView;
 	// Newgame panel containers. Each holds a vertical stack of
 	// RegionTermViews — those panels are also added to splitRegions so
 	// drawPoint forwards into their fixed terminal rectangles. The
@@ -756,6 +765,25 @@ public class RegionRouter implements TerminalRenderer
 	public void setStatusBarView(StatusBarView view)
 	{
 		this.statusBarView = view;
+	}
+
+	public void setCompactHud(boolean on)
+	{
+		this.compactHud = on;
+	}
+
+	@Override
+	public boolean getCompactHud()
+	{
+		return compactHud;
+	}
+
+	public void setCompactHudViews(StatusBarView title, StatusBarView vitals,
+			VerticalBarsView bars)
+	{
+		this.compactTitleView = title;
+		this.compactVitalsView = vitals;
+		this.compactBarsView = bars;
 	}
 
 	public void setSplitContainer(ViewGroup container)
@@ -2047,6 +2075,29 @@ public class RegionRouter implements TerminalRenderer
 			statusBarView.post(() -> statusBarView.updateLights(texts, colours));
 	}
 
+	@Override
+	public void updateHudTitle(String texts, int[] colours)
+	{
+		if (compactTitleView != null)
+			compactTitleView.post(
+					() -> compactTitleView.updateLights(texts, colours));
+	}
+
+	@Override
+	public void updateHudVitals(String texts, int[] colours)
+	{
+		if (compactVitalsView != null)
+			compactVitalsView.post(
+					() -> compactVitalsView.updateLights(texts, colours));
+	}
+
+	@Override
+	public void updateHudBars(int[] hp, int[] mp)
+	{
+		if (compactBarsView != null)
+			compactBarsView.post(() -> compactBarsView.setBars(hp, mp));
+	}
+
 	// Remap the 24x80 two-column skills layout into a compact
 	// single-column view. Uses the cached anchor and the compact row
 	// mappings built by recomputeSkillsAnchor(). Blank-line dividers
@@ -2884,6 +2935,18 @@ public class RegionRouter implements TerminalRenderer
 
 	private LayoutMode detectMode()
 	{
+		// Compact HUD removes the Health:/HP:/Magic:/MP:/XL: captions the
+		// standard anchor scans (they moved to native rows). Instead anchor on
+		// the "@:" place field, re-emitted at col 37 row 1 every print_stats,
+		// and "Noise:" at col 37 row 0 as a backup (absent only when the
+		// non-default equip_bar option replaces it).
+		if (compactHud)
+		{
+			if (matchesAt(HUD_START_ROW + 1, HUD_ANCHOR_COL, "@:")
+					|| matchesAt(HUD_START_ROW, HUD_ANCHOR_COL, "Noise:"))
+				return LayoutMode.GAMEPLAY;
+			return gameplayEverDetected ? LayoutMode.MENU : LayoutMode.PREGAME;
+		}
 		for (int r = HUD_ANCHOR_ROW_MIN; r <= HUD_ANCHOR_ROW_MAX; r++)
 		{
 			for (String label : HUD_LABELS)

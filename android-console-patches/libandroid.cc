@@ -81,6 +81,14 @@ static int android_msg_rows = 0;
 // Uses -extra-opt-last so the pref always wins over init.txt.
 static bool android_newturn_mark = true;
 
+// Compact HUD mode (Android preference). Set by NativeWrapper.setCompactHud
+// at gameStart (boot-wired; a toggle hard-relaunches the game like word wrap).
+// When true, output.cc draws the further-condensed HUD: the title and vitals
+// rows are pushed to native scrollable views instead of terminal cells, the
+// HP/MP bars go to a native vertical-bar view, and the remaining stat rows are
+// repacked. Non-static so output.cc reads it via `extern bool`.
+bool android_compact_hud = false;
+
 // Table-reflow toggles: padded 80-col table sections that get restacked to
 // fit the wrap width when word wrap is active (each only takes effect while
 // android_prose_wrap_cols / android_msg_wrap_cols > 0). One flag per
@@ -166,6 +174,9 @@ static jmethodID NativeWrapper_setCharacterLogMode;
 static jmethodID NativeWrapper_showCharacterFile;
 static jmethodID NativeWrapper_notifyGameSaved;
 static jmethodID NativeWrapper_setMapAnchor;
+static jmethodID NativeWrapper_updateHudTitle;
+static jmethodID NativeWrapper_updateHudVitals;
+static jmethodID NativeWrapper_updateHudBars;
 
 // Terminal stuff
 class TerminalChar //I guess this could be a struct.
@@ -250,6 +261,12 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"notifyGameSaved", "(Ljava/lang/String;)V");
 	NativeWrapper_setMapAnchor = e->GetMethodID(NativeWrapperClass,
 		"setMapAnchor", "(II)V");
+	NativeWrapper_updateHudTitle = e->GetMethodID(NativeWrapperClass,
+		"updateHudTitle", "(Ljava/lang/String;[I)V");
+	NativeWrapper_updateHudVitals = e->GetMethodID(NativeWrapperClass,
+		"updateHudVitals", "(Ljava/lang/String;[I)V");
+	NativeWrapper_updateHudBars = e->GetMethodID(NativeWrapperClass,
+		"updateHudBars", "([I[I)V");
 
 	return NativeWrapper_fatal
 		&& NativeWrapper_getch
@@ -259,7 +276,10 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		&& NativeWrapper_setCharacterLogMode
 		&& NativeWrapper_showCharacterFile
 		&& NativeWrapper_notifyGameSaved
-		&& NativeWrapper_setMapAnchor;
+		&& NativeWrapper_setMapAnchor
+		&& NativeWrapper_updateHudTitle
+		&& NativeWrapper_updateHudVitals
+		&& NativeWrapper_updateHudBars;
 }
 
 // Called from the patched _replay_messages_core (message.cc) at entry and
@@ -385,6 +405,7 @@ extern "C"
 	void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir);
 	void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, jint msgWrapCols, jint msgRows, jint proseWrapCols);
 	void Java_com_crawlmb_NativeWrapper_setNewturnMark( JNIEnv* env, jobject object, jboolean enabled);
+	void Java_com_crawlmb_NativeWrapper_setCompactHud( JNIEnv* env, jobject object, jboolean enabled);
 	void Java_com_crawlmb_NativeWrapper_setMsgMaxWidthLive( JNIEnv* env, jobject object, jint msgWrapCols);
 	void Java_com_crawlmb_NativeWrapper_setProseWrapColsLive( JNIEnv* env, jobject object, jint proseWrapCols);
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
@@ -417,6 +438,14 @@ void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, ji
 void Java_com_crawlmb_NativeWrapper_setNewturnMark( JNIEnv* env, jobject object, jboolean enabled)
 {
 	android_newturn_mark = enabled;
+}
+
+// Called on the game thread from NativeWrapper.gameStart, before initGame.
+// Boot-wired like word wrap / newturn mark; a preference toggle hard-relaunches
+// the game, so output.cc reads android_compact_hud only at print_stats time.
+void Java_com_crawlmb_NativeWrapper_setCompactHud( JNIEnv* env, jobject object, jboolean enabled)
+{
+	android_compact_hud = enabled;
 }
 
 // Live msg wrap-width update after a fold/unfold (width only, no re-layout).
@@ -631,6 +660,108 @@ void android_send_status_lights(const char** texts, const int* colours,
 		env->ExceptionClear();
 	env->DeleteLocalRef(jtext);
 	env->DeleteLocalRef(jcolours);
+}
+
+// Shared body for the two Compact-HUD text rows (title, vitals). Segments are
+// tab-joined verbatim (no space inserted — callers bake spacing into the text),
+// colours mapped DCSS->ARGB. Mirrors android_send_status_lights but targets an
+// arbitrary NativeWrapper method so the same marshalling serves both rows.
+static void _send_hud_segments(jmethodID method, const char** texts,
+	const int* colours, int count)
+{
+	if (count <= 0 || !texts || !colours)
+	{
+		jstring empty = env->NewStringUTF("");
+		jintArray arr = env->NewIntArray(0);
+		if (!empty || !arr)
+		{
+			env->ExceptionClear();
+			if (empty) env->DeleteLocalRef(empty);
+			if (arr) env->DeleteLocalRef(arr);
+			return;
+		}
+		JAVA_CALL(method, empty, arr);
+		env->DeleteLocalRef(empty);
+		env->DeleteLocalRef(arr);
+		return;
+	}
+	std::string joined;
+	jint* argb = new jint[count];
+	for (int i = 0; i < count; i++)
+	{
+		if (i > 0)
+			joined += '\t';
+		if (texts[i])
+			joined += texts[i];
+		argb[i] = colourMap[(COLOURS)(colours[i] & 0x0f)];
+	}
+	jstring jtext = env->NewStringUTF(joined.c_str());
+	jintArray jcolours = env->NewIntArray(count);
+	if (!jtext || !jcolours)
+	{
+		env->ExceptionClear();
+		delete[] argb;
+		if (jtext) env->DeleteLocalRef(jtext);
+		if (jcolours) env->DeleteLocalRef(jcolours);
+		return;
+	}
+	env->SetIntArrayRegion(jcolours, 0, count, argb);
+	delete[] argb;
+	JAVA_CALL(method, jtext, jcolours);
+	if (env->ExceptionCheck())
+		env->ExceptionClear();
+	env->DeleteLocalRef(jtext);
+	env->DeleteLocalRef(jcolours);
+}
+
+// Compact-HUD title row: name + title + species + god, one scrollable line.
+void android_send_hud_title(const char** texts, const int* colours, int count)
+{
+	_send_hud_segments(NativeWrapper_updateHudTitle, texts, colours, count);
+}
+
+// Compact-HUD vitals row: HP / MP / XL / piety / Doom / Contam / turns.
+void android_send_hud_vitals(const char** texts, const int* colours, int count)
+{
+	_send_hud_segments(NativeWrapper_updateHudVitals, texts, colours, count);
+}
+
+// Compact-HUD vertical HP/MP bars. Each bar is an 8-int array
+//   [def_pm, cur_pm, old_pm, argb_default, argb_changepos,
+//    argb_poison, argb_changeneg, argb_empty]
+// where *_pm are per-mille fill boundaries mirroring colour_bar::draw() and the
+// five colours are the DCSS colour enums for that bar (converted here). Pass
+// hp_count / mp_count == 0 to send an empty array (e.g. Djinn: no MP bar).
+void android_send_hud_bars(const int* hp, int hp_count,
+	const int* mp, int mp_count)
+{
+	// Colour slots (indices 3..7) hold DCSS colour enums; map them to ARGB.
+	// Per-mille slots (0..2) pass through unchanged.
+	jint hpv[8];
+	jint mpv[8];
+	for (int i = 0; i < 8 && i < hp_count; i++)
+		hpv[i] = (i < 3) ? (jint)hp[i] : colourMap[(COLOURS)(hp[i] & 0x0f)];
+	for (int i = 0; i < 8 && i < mp_count; i++)
+		mpv[i] = (i < 3) ? (jint)mp[i] : colourMap[(COLOURS)(mp[i] & 0x0f)];
+
+	jintArray jhp = env->NewIntArray(hp_count > 0 ? 8 : 0);
+	jintArray jmp = env->NewIntArray(mp_count > 0 ? 8 : 0);
+	if (!jhp || !jmp)
+	{
+		env->ExceptionClear();
+		if (jhp) env->DeleteLocalRef(jhp);
+		if (jmp) env->DeleteLocalRef(jmp);
+		return;
+	}
+	if (hp_count > 0)
+		env->SetIntArrayRegion(jhp, 0, 8, hpv);
+	if (mp_count > 0)
+		env->SetIntArrayRegion(jmp, 0, 8, mpv);
+	JAVA_CALL(NativeWrapper_updateHudBars, jhp, jmp);
+	if (env->ExceptionCheck())
+		env->ExceptionClear();
+	env->DeleteLocalRef(jhp);
+	env->DeleteLocalRef(jmp);
 }
 
 int getchk()

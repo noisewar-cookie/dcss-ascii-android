@@ -29,6 +29,12 @@ public interface TerminalRenderer
 
 	default void updateStatusLights(String texts, int[] colours) {}
 
+	// Compact HUD native rows/bars (pushed from output.cc via NativeWrapper).
+	// Default no-ops for renderers that don't implement compact mode.
+	default void updateHudTitle(String texts, int[] colours) {}
+	default void updateHudVitals(String texts, int[] colours) {}
+	default void updateHudBars(int[] hp, int[] mp) {}
+
 	// Called from libandroid.cc (via NativeWrapper) at entry/exit of the
 	// Ctrl+P / startup message history popup. RegionRouter uses this to
 	// classify the popup as MenuType.MESSAGES so fullView's region widens
@@ -66,4 +72,8 @@ public interface TerminalRenderer
 	// Whether the new-turn indicator marks (_/-) are shown. Queried by
 	// NativeWrapper.gameStart to pass to libandroid.cc before initGame.
 	default boolean getNewturnMark() { return true; }
+
+	// Whether Compact HUD mode is enabled. Queried by NativeWrapper.gameStart
+	// to pass to libandroid.cc before initGame. Default off (TermView).
+	default boolean getCompactHud() { return false; }
 }

@@ -1,8 +1,90 @@
 diff --git a/crawl-ref/source/output.cc b/crawl-ref/source/output.cc
-index 3c3bfb8186..6bbcdcf31c 100644
+index 3c3bfb8186..9731c07e36 100644
 --- a/crawl-ref/source/output.cc
 +++ b/crawl-ref/source/output.cc
-@@ -648,6 +648,10 @@ void update_message_status()
+@@ -406,6 +406,24 @@ static string _god_powers();
+ static string _god_asterisks(bool leading_space = false);
+ static int _god_status_colour(int default_colour);
+ 
++// Android Compact HUD (libandroid.cc). Flag is boot-wired via setCompactHud;
++// the three push functions feed the native scrollable title/vitals rows and the
++// native vertical HP/MP bars. See compact print path below.
++extern bool android_compact_hud;
++extern void android_send_status_lights(const char** texts, const int* colours,
++                                       int count);
++extern void android_send_hud_title(const char** texts, const int* colours,
++                                   int count);
++extern void android_send_hud_vitals(const char** texts, const int* colours,
++                                     int count);
++extern void android_send_hud_bars(const int* hp, int hp_count,
++                                   const int* mp, int mp_count);
++
++// Compact-HUD helpers (defined below print_stats; forward-declared for the
++// earlier update_turn_count / print_stats_level compact branches).
++static void _push_compact_vitals();
++static void _print_compact_place(int y);
++
+ // Colour for captions like 'Health:', 'Str:', etc.
+ #define HUD_CAPTION_COLOUR Options.status_caption_colour
+ 
+@@ -580,6 +598,44 @@ public:
+         m_request_redraw_after = 0;
+     }
+ 
++    // Android Compact HUD: compute the per-mille (0..1000) fill boundaries for
++    // the native vertical bar, updating the change-tracking state exactly like
++    // draw() so the recent-damage sliver and the timed clear behave the same.
++    // out8 receives [def_pm, cur_pm, old_pm, m_default, m_change_pos, YELLOW,
++    // m_change_neg, m_empty]; the caller converts the five colour enums to ARGB.
++    // Only ever called in compact mode, where draw() is never called on the same
++    // object, so m_old_disp lives entirely in per-mille units here.
++    void compute_native_zones(int val, int max_val, int sub_val, int out8[8])
++    {
++        if (max_val <= 0)
++        {
++            m_old_disp = -1;
++            for (int i = 0; i < 8; i++)
++                out8[i] = 0;
++            return;
++        }
++        const int sub_disp = 1000 * val / max_val;
++        int disp = 1000 * max(0, val - sub_val) / max_val;
++        const int old_disp = (m_old_disp < 0) ? sub_disp : m_old_disp;
++        m_old_disp = sub_disp;
++        if (sub_val)
++            disp = max(0, min(sub_disp - 1, disp));
++
++        if (old_disp != disp)
++            m_request_redraw_after = you.num_turns + 4;
++        else
++            m_request_redraw_after = 0;
++
++        out8[0] = disp;
++        out8[1] = sub_disp;
++        out8[2] = old_disp;
++        out8[3] = m_default;
++        out8[4] = m_change_pos;
++        out8[5] = YELLOW;
++        out8[6] = m_change_neg;
++        out8[7] = m_empty;
++    }
++
+  private:
+     int m_old_disp;
+     int m_request_redraw_after; // force a redraw at this turn count
+@@ -590,7 +646,10 @@ static colour_bar HP_Bar(LIGHTGREEN, GREEN, RED, DARKGREY);
+ #ifdef USE_TILE_LOCAL
+ static colour_bar MP_Bar(BLUE, BLUE, LIGHTBLUE, DARKGREY);
+ #else
+-static colour_bar MP_Bar(LIGHTBLUE, BLUE, MAGENTA, DARKGREY);
++// Fill is BLUE (#0040FF), not LIGHTBLUE: our palette maps LIGHTBLUE to cyan
++// (#00FFFF), which reads as teal on the bar. BLUE is DCSS's canonical mana
++// colour (the tiles MP_Bar above uses it).
++static colour_bar MP_Bar(BLUE, BLUE, MAGENTA, DARKGREY);
+ #endif
+ 
+ #ifdef USE_TILE_LOCAL
+@@ -648,6 +707,10 @@ void update_message_status()
  }
  #endif
  
@@ -13,19 +95,15 @@ index 3c3bfb8186..6bbcdcf31c 100644
  void update_turn_count()
  {
      if (crawl_state.game_is_arena())
-@@ -661,29 +665,13 @@ void update_turn_count()
+@@ -661,29 +724,21 @@ void update_turn_count()
          return;
      }
  
 -    const int turncount_start_x = 19 + 6;
 -    int ypos = 9;
 -    // TODO: unify this with the calculation in print_stats
-+    // Android HUD condense: turn count shares row 7 with Doom/Contam/Place,
-+    // and the row is repainted as one composite line so dynamic field widths
-+    // stay packed.
-+    int ypos = 7;
-     if (you.has_mutation(MUT_HP_CASTING) && !_is_using_small_layout())
-         ypos--;
+-    if (you.has_mutation(MUT_HP_CASTING) && !_is_using_small_layout())
+-        ypos--;
 -    CGOTOXY(turncount_start_x, ypos, GOTO_STAT);
 -
 -    textcolour(HUD_VALUE_COLOUR);
@@ -34,21 +112,32 @@ index 3c3bfb8186..6bbcdcf31c 100644
 -        : make_stringf("%d", you.num_turns);
 -
 -    if (!_is_using_small_layout())
--    {
++    // Compact HUD: the turn count lives on the native vitals row, repushed on
++    // each action (this runs once per action, skipped during rest/travel above).
++    if (android_compact_hud)
+     {
 -        time += make_stringf(" (%.1f)",
 -                (you.elapsed_time - you.elapsed_time_at_last_input) / 10.0);
 -        CPRINTF("%s",
 -            chop_string(time, crawl_view.hudsz.x - turncount_start_x + 1).c_str());
--    }
++        _push_compact_vitals();
++        return;
+     }
 -    else
 -        CPRINTF("%s", chop_string(time, 7).c_str());
--
+ 
 -    textcolour(LIGHTGREY);
++    // Android HUD condense: turn count shares row 7 with Doom/Contam/Place,
++    // and the row is repainted as one composite line so dynamic field widths
++    // stay packed.
++    int ypos = 7;
++    if (you.has_mutation(MUT_HP_CASTING) && !_is_using_small_layout())
++        ypos--;
 +    _print_stats_bottom_row(ypos);
  }
  
  static int _count_digits(int val)
-@@ -812,12 +800,13 @@ static void _print_stats_noise(int x, int y)
+@@ -812,12 +867,13 @@ static void _print_stats_noise(int x, int y)
  
      if (silence)
      {
@@ -67,7 +156,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
          Noise_Bar.reset(); // so it doesn't display a change bar after silence ends
      }
      else
-@@ -1018,107 +1007,176 @@ static short _get_stat_colour(stat_type stat)
+@@ -1018,107 +1074,176 @@ static short _get_stat_colour(stat_type stat)
  
  static void _print_stat(stat_type stat, int x, int y)
  {
@@ -129,13 +218,13 @@ index 3c3bfb8186..6bbcdcf31c 100644
 -        CPRINTF("          ");
 -        return;
 -    }
--
--    CGOTOXY(x, y, GOTO_STAT);
--    textcolour(HUD_CAPTION_COLOUR);
--    CPRINTF("Doom: ");
 +        textcolour(HUD_CAPTION_COLOUR);
 +        NOWRAP_EOL_CPRINTF("Doom:");
  
+-    CGOTOXY(x, y, GOTO_STAT);
+-    textcolour(HUD_CAPTION_COLOUR);
+-    CPRINTF("Doom: ");
+-
 -    if (you.attribute[ATTR_DOOM] >= 75)
 -        textcolour(LIGHTMAGENTA);
 -    else if (you.attribute[ATTR_DOOM] >= 50)
@@ -162,11 +251,11 @@ index 3c3bfb8186..6bbcdcf31c 100644
 +    }
      you.redraw_doom = false;
 -}
--
+ 
 -static void _print_stats_contam(int x, int y)
 -{
 -    CGOTOXY(x, y, GOTO_STAT);
- 
+-
 -    // Hide the bar entirely if the player has no contam
 -    if (you.magic_contamination == 0 && !Options.always_show_doom_contam)
 +    if (you.magic_contamination > 0 || Options.always_show_doom_contam)
@@ -310,13 +399,357 @@ index 3c3bfb8186..6bbcdcf31c 100644
  
      you.redraw_evasion = false;
  }
-@@ -1518,9 +1576,10 @@ void print_stats()
+@@ -1512,15 +1637,354 @@ static void _redraw_title()
+     you.redraw_title = false;
+ }
+ 
++// ----------------------------------------------------------------------
++// Android Compact HUD
++//
++// A user preference (boot-wired; toggling hard-relaunches the game). It frees
++// three terminal HUD rows so the map panel can grow: the title and vitals lines
++// move to native scrollable views, and the HP/MP bars to a native vertical-bar
++// view. Only two terminal HUD rows remain, plus weapon/quiver/status:
++//   row 1: Noise   | AC | EV | SH
++//   row 2: @:Place | Str | Int | Dex
++//   row 3: weapon      row 4: quiver      rows 5-6: status-light cells (cleared)
++// XL, piety, Doom, Contam and the turn count live on the native vitals row.
++// The AC/EV/SH and Str/Int/Dex column layout is unchanged from the standard
++// condensed HUD, so their printers are reused verbatim at the new y.
++// ----------------------------------------------------------------------
++
++// Compact Place field: use the full short name for already-brief branches and
++// fall back to the abbrev only for the long ones (Orcish Mines->Orc, Elven
++// Halls->Elf) so "@:<place>" stays inside the 16-col budget before the AC label.
++static string _level_description_string_hud_compact()
++{
++    const PlaceInfo& place = you.get_place_info();
++    string short_name = branches[place.branch].shortname;
++    string s = short_name.size() > 8 ? branches[place.branch].abbrevname
++                                     : short_name;
++    if (brdepth[place.branch] > 1)
++        s += make_stringf(":%d", you.depth);
++    return s;
++}
++
++static void _print_compact_place(int y)
++{
++    CGOTOXY(1, y, GOTO_STAT);
++    textcolour(HUD_CAPTION_COLOUR);
++    NOWRAP_EOL_CPRINTF("@:");
++    textcolour(HUD_VALUE_COLOUR);
++    // Chop to 15 so "@:" + place never reaches col 18 (the mandatory gap
++    // before "AC:" at col 19); a runaway name is cut off rather than bleeding.
++    NOWRAP_EOL_CPRINTF("%s",
++        chop_string(_level_description_string_hud_compact(), 15, false).c_str());
++    // Pad the remainder of the left field to col 17 to erase a longer stale
++    // place name; NOWRAP clips so we can't touch the AC value slot.
++    int col = wherex() - crawl_view.hudp.x;
++    for (int i = 17 - col; i > 0; i--)
++        NOWRAP_EOL_CPRINTF(" ");
++    CGOTOXY(1, y, GOTO_STAT);
++}
++
++// Push the native title row: name + title + species + [of God]. No piety here
++// (piety rides the vitals row); one YELLOW segment, scrollable Java-side.
++static void _push_compact_title()
++{
++    string title = filtered_lang(player_title());
++    title = you.your_name + (title[0] == ',' ? "" : " ") + title;
++    title += " ";
++    title += player_species_name();
++    if (!you_worship(GOD_NO_GOD))
++    {
++        title += " of ";
++        title += you_worship(GOD_JIYVA) ? god_name_jiyva(true)
++                                        : god_name(you.religion);
++    }
++    const char* seg = title.c_str();
++    int col = YELLOW;
++    android_send_hud_title(&seg, &col, 1);
++    you.redraw_title = false;
++}
++
++// Push the native vitals row: HP / MP / XL / piety / Doom / Contam / turns.
++// Segments carry their own colours; spacing is baked into the caption text.
++static void _push_compact_vitals()
++{
++    vector<string> segs;
++    vector<int> cols;
++
++    // HP (number colour uses the same threshold logic as _print_stats_hp).
++    {
++        short hp_colour = HUD_VALUE_COLOUR;
++        if (_boosted_hp())
++            hp_colour = LIGHTBLUE;
++        else
++        {
++            const int hp_percent = (you.hp * 100) / get_real_hp(true, true);
++            for (const auto &e : Options.hp_colour)
++                if (hp_percent <= e.first)
++                    hp_colour = e.second;
++        }
++        segs.push_back("HP:");
++        cols.push_back(HUD_CAPTION_COLOUR);
++        const int max_max_hp = get_real_hp(true, false);
++        string v = make_stringf(" %d/%d", you.hp, you.hp_max);
++        if (max_max_hp != you.hp_max)
++            v += make_stringf(" (%d)", max_max_hp);
++        segs.push_back(v);
++        cols.push_back(hp_colour);
++    }
++
++    // MP (omitted entirely for Djinn / MUT_HP_CASTING).
++    if (!you.has_mutation(MUT_HP_CASTING))
++    {
++        short mp_colour = HUD_VALUE_COLOUR;
++        if (_boosted_mp())
++            mp_colour = LIGHTBLUE;
++        else
++        {
++            const int mp_percent = you.max_magic_points == 0 ? 100
++                : (you.magic_points * 100) / you.max_magic_points;
++            for (const auto &e : Options.mp_colour)
++                if (mp_percent <= e.first)
++                    mp_colour = e.second;
++        }
++        segs.push_back("  MP:");
++        cols.push_back(HUD_CAPTION_COLOUR);
++        segs.push_back(make_stringf(" %d/%d", you.magic_points,
++                                    you.max_magic_points));
++        cols.push_back(mp_colour);
++    }
++
++    // XL as a decimal reading: integer level + fractional progress (#.##),
++    // the fractional part dimmed. Saves the " (…%)" wrapper's two chars.
++    segs.push_back("  XL:");
++    cols.push_back(HUD_CAPTION_COLOUR);
++    segs.push_back(make_stringf(" %d", you.experience_level));
++    cols.push_back(HUD_VALUE_COLOUR);
++    if (you.experience_level >= you.get_max_xl())
++    {
++        segs.push_back(" (max)");
++        cols.push_back(HUD_CAPTION_COLOUR);
++    }
++    else
++    {
++        segs.push_back(make_stringf(".%d",
++            min(9, (get_exp_progress() + 5) / 10)));
++        cols.push_back(DARKGRAY);
++    }
++
++    // Piety (only while worshipping); flattened to one colour for the row.
++    if (!you_worship(GOD_NO_GOD))
++    {
++        formatted_string piety =
++            formatted_string::parse_string(_god_asterisks(false));
++        string ptext = piety.tostring();
++        if (!ptext.empty())
++        {
++            segs.push_back("  " + ptext);
++            cols.push_back(_god_status_colour(YELLOW));
++        }
++    }
++
++    // Doom (hidden until accumulated, unless always_show_doom_contam).
++    if (you.attribute[ATTR_DOOM] > 0 || Options.always_show_doom_contam)
++    {
++        const int d = you.attribute[ATTR_DOOM];
++        int c = DARKGRAY;
++        if (d >= 75)
++            c = LIGHTMAGENTA;
++        else if (d >= 50)
++            c = LIGHTRED;
++        else if (d >= 25)
++            c = YELLOW;
++        else if (d > 0)
++            c = LIGHTGRAY;
++        segs.push_back("  Doom:");
++        cols.push_back(HUD_CAPTION_COLOUR);
++        segs.push_back(make_stringf("%d%%", d));
++        cols.push_back(c);
++    }
++
++    // Contamination (hidden until accumulated, unless always_show_doom_contam).
++    if (you.magic_contamination > 0 || Options.always_show_doom_contam)
++    {
++        const int contam = max(you.magic_contamination > 0 ? 1 : 0,
++                               you.magic_contamination / 10);
++        int c = DARKGRAY;
++        if (contam >= 200)
++            c = RED;
++        else if (contam >= 100)
++            c = YELLOW;
++        segs.push_back("  Contam:");
++        cols.push_back(HUD_CAPTION_COLOUR);
++        segs.push_back(make_stringf("%d%%", contam));
++        cols.push_back(c);
++    }
++
++    // Turn count (+ delta), matching the standard bottom row's format.
++    segs.push_back("  T:");
++    cols.push_back(HUD_CAPTION_COLOUR);
++    {
++        string time_str = Options.show_game_time
++            ? make_stringf("%.1f", you.elapsed_time / 10.0)
++            : make_stringf("%d", you.num_turns);
++        time_str += make_stringf(" (%.1f)",
++            (you.elapsed_time - you.elapsed_time_at_last_input) / 10.0);
++        segs.push_back(time_str);
++        cols.push_back(HUD_VALUE_COLOUR);
++    }
++
++    const int n = (int)segs.size();
++    const char** texts = new const char*[n];
++    int* c = new int[n];
++    for (int i = 0; i < n; i++)
++    {
++        texts[i] = segs[i].c_str();
++        c[i] = cols[i];
++    }
++    android_send_hud_vitals(texts, c, n);
++    delete[] texts;
++    delete[] c;
++}
++
++// Push the native vertical HP/MP bars. Zone maths mirror colour_bar::draw()
++// (poison sub-bar for HP, recent-change sliver, timed clear). Djinn: no MP bar.
++static void _push_compact_bars()
++{
++    int hp[8];
++    HP_Bar.compute_native_zones(you.hp, you.hp_max,
++        you.hp - max(0, poison_survival()), hp);
++    if (you.has_mutation(MUT_HP_CASTING))
++        android_send_hud_bars(hp, 8, nullptr, 0);
++    else
++    {
++        int mp[8];
++        MP_Bar.compute_native_zones(you.magic_points, you.max_magic_points,
++                                    0, mp);
++        android_send_hud_bars(hp, 8, mp, 8);
++    }
++}
++
++static void _print_stats_compact()
++{
++    cursor_control coff(false);
++    textcolour(LIGHTGREY);
++
++    // Displayed evasion is tied to dex/str.
++    if (you.redraw_stats[STAT_DEX] || you.redraw_stats[STAT_STR])
++        you.redraw_evasion = true;
++
++    if (HP_Bar.wants_redraw())
++        you.redraw_hit_points = true;
++    if (MP_Bar.wants_redraw())
++        you.redraw_magic_points = true;
++
++    // Poison display depends on regen rate, so redraw every turn while poisoned.
++    if (you.duration[DUR_POISONING])
++    {
++        you.redraw_hit_points = true;
++        you.redraw_status_lights = true;
++    }
++
++    // --- Native rows (JNI pushes gated on the same redraw_* flags) ---
++    if (you.redraw_title)
++        _push_compact_title();
++
++    // Bars refresh every call so they never blank out when HP/MP sit full and
++    // stable (no redraw flag fires then). compute_native_zones trails m_old_disp
++    // by one call, matching the standard console draw()'s change-sliver decay.
++    _push_compact_bars();
++
++    bool vitals_dirty = you.redraw_experience || you.redraw_doom
++                        || you.redraw_contam
++                        || you.redraw_hit_points || you.redraw_magic_points;
++    if (vitals_dirty)
++        _push_compact_vitals();
++    you.redraw_hit_points = false;
++    you.redraw_magic_points = false;
++    you.redraw_experience = false;
++    you.redraw_doom = false;
++    you.redraw_contam = false;
++
++    // --- Terminal rows 1-2 ---
++    // Noise shares row 1 with AC/EV/SH (its standard-HUD row); Place drops to
++    // row 2 beside Str/Int/Dex. Place refreshes cheaply every call (no dedicated
++    // redraw flag; Java diffs the frame before any JNI, so unchanged cells cost
++    // nothing downstream).
++    _print_compact_place(2);
++
++    if (Options.equip_bar)
++    {
++        if (you.gear_change || you.wield_change)
++            _print_stats_equip(1, 1);
++    }
++    else if (you.redraw_noise)
++        _print_stats_noise(1, 1);
++
++    if (you.redraw_armour_class)
++        _print_stats_ac(1, 1);
++    if (you.redraw_evasion)
++        _print_stats_ev(1, 1);
++
++    static const int stat_label_cols[NUM_STATS] = { 18, 27, 36 };
++    for (int i = 0; i < NUM_STATS; ++i)
++        if (you.redraw_stats[i])
++            _print_stat(static_cast<stat_type>(i), stat_label_cols[i], 2);
++    you.redraw_stats.init(false);
++
++    if (you.wield_change)
++        _print_stats_wp(3);
++    if (you.redraw_quiver)
++        _print_stats_qv(4);
++
++    if (you.redraw_status_lights)
++    {
++        vector<status_light> lights;
++        _get_status_lights(lights);
++        const int n = (int)lights.size();
++        if (n > 0)
++        {
++            const char** texts = new const char*[n];
++            int* cols = new int[n];
++            for (int i = 0; i < n; i++)
++            {
++                texts[i] = lights[i].text.c_str();
++                cols[i] = (int)lights[i].colour;
++            }
++            android_send_status_lights(texts, cols, n);
++            delete[] texts;
++            delete[] cols;
++        }
++        else
++            android_send_status_lights(nullptr, nullptr, 0);
++
++        for (int row = 5; row <= 6 && row <= (int)crawl_view.hudsz.y; row++)
++        {
++            CGOTOXY(1, row, GOTO_STAT);
++            clear_to_end_of_line();
++        }
++        you.redraw_status_lights = false;
++    }
++
++#ifndef USE_TILE_LOCAL
++    assert_valid_cursor_pos();
++#endif
++}
++
+ void print_stats()
+ {
+ #ifndef USE_TILE_LOCAL
      if (crawl_state.smallterm)
          return;
  #endif
 -    int ac_pos = 5;
 -    int ev_pos = ac_pos + 1;
 -
++    if (android_compact_hud)
++    {
++        _print_stats_compact();
++        return;
++    }
 +    // Android HUD condense: rows 5/6/7 combine pairs of upstream rows so the
 +    // HUD panel uses 3 fewer rows total. Row 5 packs Noise|AC|EV|SH, row 6
 +    // packs XL|Str|Int|Dex, row 7 packs Doom|Contam|Place|T. Wp/Qv/status
@@ -324,7 +757,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
      cursor_control coff(false);
      textcolour(LIGHTGREY);
  
-@@ -1559,66 +1618,112 @@ void print_stats()
+@@ -1559,66 +2023,112 @@ void print_stats()
      else if (you.redraw_magic_points)
          _print_stats_mp(1, 4);
  
@@ -335,15 +768,15 @@ index 3c3bfb8186..6bbcdcf31c 100644
 -        _print_stats_ac(1, ac_pos - rows_hidden);
 -    if (you.redraw_evasion)
 -        _print_stats_ev(1, ev_pos - rows_hidden);
-+    const int row5 = 5 - rows_hidden;
-+    const int row6 = 6 - rows_hidden;
-+    const int row7 = 7 - rows_hidden;
- 
+-
 -    for (int i = 0; i < NUM_STATS; ++i)
 -        if (you.redraw_stats[i])
 -            _print_stat(static_cast<stat_type>(i), 19, 5 + i - rows_hidden);
 -    you.redraw_stats.init(false);
--
++    const int row5 = 5 - rows_hidden;
++    const int row6 = 6 - rows_hidden;
++    const int row7 = 7 - rows_hidden;
+ 
 -    if (you.redraw_doom)
 -        _print_stats_doom(32, 5 - rows_hidden);
 +    // Row 5: Noise (cols 1-16) | AC (label col 18, value col 22) | EV (label
@@ -475,12 +908,20 @@ index 3c3bfb8186..6bbcdcf31c 100644
  
  #ifndef USE_TILE_LOCAL
      assert_valid_cursor_pos();
-@@ -1627,23 +1732,13 @@ void print_stats()
+@@ -1627,23 +2137,21 @@ void print_stats()
  
  void print_stats_level()
  {
 -    int ypos = 8;
 -    // TODO: unify this with the calculation in print_stats
++    // Compact HUD: Place lives on row 2 (left of Str/Int/Dex), matching
++    // _print_stats_compact.
++    if (android_compact_hud)
++    {
++        _print_compact_place(2);
++        return;
++    }
++
 +    // Android HUD condense: Place lives on row 7 alongside Doom/Contam/T,
 +    // emitted as part of the composite bottom row. No "Place: " label per
 +    // the new layout.
@@ -504,13 +945,28 @@ index 3c3bfb8186..6bbcdcf31c 100644
  }
  
  void draw_border()
-@@ -1655,33 +1750,28 @@ void draw_border()
+@@ -1655,33 +2163,43 @@ void draw_border()
  
      textcolour(Options.status_caption_colour);
  
 -    int ac_pos;
 -    // TODO: unify this calculation with rows_hidden in print_stats in a
 -    // non-insane way
++    // Compact HUD: AC/EV/SH labels on row 1, Str/Int/Dex on row 2. Same
++    // columns as the standard condensed HUD (colons of the 2- and 3-letter
++    // labels aligned), just moved up. The @:Place and Noise left fields, and
++    // all remaining stats, are drawn by the printers, not here.
++    if (android_compact_hud)
++    {
++        CGOTOXY(19, 1, GOTO_STAT); CPRINTF("AC:");
++        CGOTOXY(28, 1, GOTO_STAT); CPRINTF("EV:");
++        CGOTOXY(37, 1, GOTO_STAT); CPRINTF("SH:");
++        CGOTOXY(18, 2, GOTO_STAT); CPRINTF("Str:");
++        CGOTOXY(27, 2, GOTO_STAT); CPRINTF("Int:");
++        CGOTOXY(36, 2, GOTO_STAT); CPRINTF("Dex:");
++        return;
++    }
++
 +    // Android HUD condense: row 5 packs Noise|AC|EV|SH, row 6 packs
 +    // XL|Str|Int|Dex. AC/EV/SH labels move from col 1 to cols 18/27/36 on
 +    // row 5; Str/Int/Dex labels stay on row 6 at the same cols, aligned
@@ -556,7 +1012,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
  }
  
  #ifndef USE_TILE_LOCAL
-@@ -2171,15 +2261,10 @@ static string _overview_screen_title(int sw)
+@@ -2171,15 +2689,10 @@ static string _overview_screen_title(int sw)
                                        species::name(you.species).c_str(),
                                        get_job_name(you.char_class));
  
@@ -573,7 +1029,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
  
      if (linelength >= sw)
      {
-@@ -2191,22 +2276,13 @@ static string _overview_screen_title(int sw)
+@@ -2191,22 +2704,13 @@ static string _overview_screen_title(int sw)
  
      // Still not enough?
      if (linelength >= sw)
@@ -596,7 +1052,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
      text += "</yellow>\n";
  
      return text;
-@@ -2296,15 +2372,15 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2296,15 +2800,15 @@ static vector<formatted_string> _get_overview_stats()
  {
      formatted_string entry;
  
@@ -615,7 +1071,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
  
      entry.textcolour(HUD_CAPTION_COLOUR);
      if (player_drained())
-@@ -2423,6 +2499,24 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2423,6 +2927,24 @@ static vector<formatted_string> _get_overview_stats()
      cols.add_formatted(2, entry.to_colour_string(), false);
      entry.clear();
  
@@ -640,7 +1096,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
      entry.textcolour(HUD_CAPTION_COLOUR);
      entry.cprintf("XL:     ");
  
-@@ -2438,7 +2532,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2438,7 +2960,7 @@ static vector<formatted_string> _get_overview_stats()
          entry.cprintf("%d%%", get_exp_progress());
      }
  
@@ -649,7 +1105,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
      entry.clear();
  
      entry.textcolour(HUD_CAPTION_COLOUR);
-@@ -2453,7 +2547,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2453,7 +2975,7 @@ static vector<formatted_string> _get_overview_stats()
  #endif
      entry += formatted_string::parse_string(godpowers);
  
@@ -658,7 +1114,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
      entry.clear();
  
      if (!you.has_mutation(MUT_INNATE_CASTER))
-@@ -2465,7 +2559,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2465,7 +2987,7 @@ static vector<formatted_string> _get_overview_stats()
          entry.cprintf("%d/%d levels left",
                        player_spell_levels(), player_total_spell_levels());
  
@@ -667,7 +1123,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
          entry.clear();
      }
  
-@@ -2483,11 +2577,11 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2483,11 +3005,11 @@ static vector<formatted_string> _get_overview_stats()
          entry.textcolour(HUD_VALUE_COLOUR);
          entry.cprintf("%d", you.deaths);
  
@@ -681,7 +1137,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
  }
  
  // generator of resistance strings:
-@@ -2629,7 +2723,10 @@ static vector<formatted_string> _get_overview_resistances(
+@@ -2629,7 +3151,10 @@ static vector<formatted_string> _get_overview_resistances(
  class overview_popup : public formatted_scroller
  {
  public:
@@ -693,7 +1149,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
      vector<char> equip_chars;
  private:
      maybe_bool process_key(int ch) override
-@@ -2658,6 +2755,10 @@ void print_overview_screen()
+@@ -2658,6 +3183,10 @@ void print_overview_screen()
          overview.add_formatted_string(bline, true);
      overview.add_text("\n");
  
@@ -704,7 +1160,7 @@ index 3c3bfb8186..6bbcdcf31c 100644
      {
          vector<formatted_string> blines =
              _get_overview_resistances(overview.equip_chars, num_cols);
-@@ -2683,6 +2784,13 @@ string dump_overview_screen()
+@@ -2683,6 +3212,13 @@ string dump_overview_screen()
      }
      text += "\n";
  
