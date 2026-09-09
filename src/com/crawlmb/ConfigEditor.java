@@ -60,6 +60,10 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+
 public class ConfigEditor extends Activity
 {
 	private static final String TAG = ConfigEditor.class.getName();
@@ -115,6 +119,7 @@ public class ConfigEditor extends Activity
 	protected void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
+		WindowCompatAdapter.applyEdgeToEdge(this);
 
 		mSelectionStart = 0;
 		mSelectionStop = 0;
@@ -158,7 +163,31 @@ public class ConfigEditor extends Activity
 		setContentView(R.layout.config_editor);
 
 		getMText();
+		applyImeInsets(mText);
 
+	}
+
+	// The window is edge-to-edge (targetSdk 36), so the IME draws over the
+	// content instead of resizing it — windowSoftInputMode adjust modes are
+	// no-ops on API 35+. Consume the keyboard + system-bar insets ourselves
+	// as padding on top of the layout's own padding, so the focused line
+	// scrolls above the keyboard instead of hiding behind it.
+	private void applyImeInsets(EditText edit)
+	{
+		final int baseLeft = edit.getPaddingLeft();
+		final int baseTop = edit.getPaddingTop();
+		final int baseRight = edit.getPaddingRight();
+		final int baseBottom = edit.getPaddingBottom();
+		ViewCompat.setOnApplyWindowInsetsListener(edit, (v, windowInsets) ->
+		{
+			Insets insets = windowInsets.getInsets(
+					WindowInsetsCompat.Type.ime()
+					| WindowInsetsCompat.Type.systemBars()
+					| WindowInsetsCompat.Type.displayCutout());
+			v.setPadding(baseLeft + insets.left, baseTop + insets.top,
+					baseRight + insets.right, baseBottom + insets.bottom);
+			return WindowInsetsCompat.CONSUMED;
+		});
 	}
 
     private EditText getMText() {
