@@ -30,6 +30,10 @@ public class FontConfig
     public final int compactHpBarEmptyGlyph;
     public final int compactMpBarGlyph;
     public final int compactMpBarEmptyGlyph;
+    // Compact-mode MP bar fill colour (ARGB), overriding the console MP_Bar
+    // BLUE zones. Default 0xFF305FE8 is DCSS BLUE (#0040FF) with HSL lightness
+    // +10% and saturation -20%.
+    public final int compactMpBarColor;
     public final float portraitMsgFontScale;
     // Word-wrap mode only (crawl.wordwrap pref): terminal rows given to the
     // DCSS message window (msg history retained for scrollback) and how many
@@ -152,6 +156,7 @@ public class FontConfig
         this.compactHpBarEmptyGlyph    = getCodepoint(props, "compact_hp_bar_empty_glyph", 0x007C);
         this.compactMpBarGlyph         = getCodepoint(props, "compact_mp_bar_glyph", 0x2592);
         this.compactMpBarEmptyGlyph    = getCodepoint(props, "compact_mp_bar_empty_glyph", 0x007C);
+        this.compactMpBarColor         = getColor(props, "compact_mp_bar_color", 0xFF305FE8);
         this.portraitMsgFontScale      = getFloat(props, "portrait_msg_font_scale", 1.5f);
         // Clamped: min 7 preserves the classic window, max 31 keeps the msg
         // window inside the 48-row terminal (rows 17..47).

@@ -35,6 +35,9 @@ public class VerticalBarsView extends View
 	private String mpEmpty = "|";
 	private int[] hp = new int[0];
 	private int[] mp = new int[0];
+	// ARGB override for the MP fill (default + change-up zones); 0 = use the
+	// console zone colours from the payload unchanged.
+	private int mpFillColor = 0;
 	private float fontSizePx = 14f;
 	// Map panel the bars overlay; used to clamp the bars to its drawn glyph
 	// block so they never extend past the map's characters.
@@ -81,6 +84,15 @@ public class VerticalBarsView extends View
 		mpFilled = glyph(fillCp, mpFilled);
 		mpEmpty = glyph(emptyCp, mpEmpty);
 		requestLayout();
+	}
+
+	// Override the MP bar fill colour (font_config compact_mp_bar_color),
+	// replacing the console BLUE default/change-up zones. Pass 0 to keep the
+	// payload colours.
+	public void setMpFillColor(int argb)
+	{
+		mpFillColor = argb;
+		invalidate();
 	}
 
 	// Decode a codepoint to a glyph string, keeping the fallback on an invalid
@@ -169,10 +181,10 @@ public class VerticalBarsView extends View
 
 		float x = getPaddingLeft();
 		drawColumn(canvas, x, top, cellH, blockTop, cells, labelBaseline, 'H', hp,
-				hpFilled, hpEmpty);
+				hpFilled, hpEmpty, 0);
 		if (mp.length >= 8)
 			drawColumn(canvas, x + hpColW + barGapPx, top, cellH, blockTop, cells,
-					labelBaseline, 'M', mp, mpFilled, mpEmpty);
+					labelBaseline, 'M', mp, mpFilled, mpEmpty, mpFillColor);
 	}
 
 	// One column: `cells` rows draining down (cell 0 at the top empties first,
@@ -181,7 +193,7 @@ public class VerticalBarsView extends View
 	// missing cells draw the empty-track glyph in the empty-track colour.
 	private void drawColumn(Canvas canvas, float x, float top, float cellH,
 			float blockTop, int cells, float labelBaseline, char label, int[] z,
-			String filledGlyph, String emptyGlyph)
+			String filledGlyph, String emptyGlyph, int fillOverride)
 	{
 		final int def = z[0], cur = z[1], old = z[2];
 		for (int i = 0; i < cells; i++)
@@ -192,10 +204,17 @@ public class VerticalBarsView extends View
 			int fpm = (int) (f * 1000);
 			int argb;
 			boolean isEmpty = false;
+			boolean isFill = false;
 			if (fpm < def && fpm < old)
+			{
 				argb = z[3];
+				isFill = true;
+			}
 			else if (fpm < def)
+			{
 				argb = z[4];
+				isFill = true;
+			}
 			else if (fpm < cur)
 				argb = z[5];
 			else if (fpm < old)
@@ -205,6 +224,8 @@ public class VerticalBarsView extends View
 				argb = z[7];
 				isEmpty = true;
 			}
+			if (fillOverride != 0 && isFill)
+				argb = fillOverride;
 			paint.setColor(argb | 0xFF000000);
 			// -top shifts the glyph down into its cell band; cell 0 sits at the
 			// block top (map top row) and cell `cells-1` just above the label.
@@ -214,7 +235,7 @@ public class VerticalBarsView extends View
 
 		// Label on the map's last row, in the bar's default fill colour so H/M
 		// read as their bar.
-		paint.setColor(z[3] | 0xFF000000);
+		paint.setColor((fillOverride != 0 ? fillOverride : z[3]) | 0xFF000000);
 		canvas.drawText(String.valueOf(label), x, labelBaseline, paint);
 	}
 }

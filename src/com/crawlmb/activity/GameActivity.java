@@ -1606,6 +1606,7 @@ public class GameActivity extends Activity
 					fontConfig.compactHpBarEmptyGlyph);
 			bars.setMpGlyphs(fontConfig.compactMpBarGlyph,
 					fontConfig.compactMpBarEmptyGlyph);
+			bars.setMpFillColor(fontConfig.compactMpBarColor);
 			bars.setMapView(mapView);
 
 			portraitCompactTitle = titleRow;

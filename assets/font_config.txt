@@ -112,6 +112,11 @@ compact_hp_bar_empty_glyph=U+007C
 compact_mp_bar_glyph=U+2588
 compact_mp_bar_empty_glyph=U+007C
 
+# Compact HUD: MP bar fill colour (RRGGBB / #RRGGBB / 0xRRGGBB / 8-digit ARGB).
+# Overrides the console MP bar BLUE fill. Default 305FE8 = DCSS BLUE (0040FF)
+# with HSL lightness +10% and saturation -20%.
+compact_mp_bar_color=305FE8
+
 # Portrait: message panel
 # Shown during: gameplay — bottom strip, game messages
 # Terminal region: 80 cols x 7 rows  (terminal cols 0-79, rows 17-23)
