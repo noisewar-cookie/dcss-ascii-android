@@ -355,6 +355,26 @@ public class GameActivity extends Activity
 		menuHalfLeft = kbHalfLeft;
 	}
 
+	// Edge margin (crawl.bevelmargin) as a uniform zoom on the game area:
+	// positive dp insets, negative dp bleeds content past the edges. Pivot
+	// bottom-centre keeps the message panel docked to the keyboard top.
+	// setScale is draw-time (no relayout), so onGlobalLayout can't loop.
+	private void applyEdgeMarginScale(View gamePanel) {
+		int w = gamePanel.getWidth();
+		int h = gamePanel.getHeight();
+		if (w <= 0 || h <= 0)
+			return;
+		float marginPx = Preferences.getBevelMarginDp()
+				* getResources().getDisplayMetrics().density;
+		float scale = (w - 2f * marginPx) / w;
+		if (scale < 0.1f)
+			scale = 0.1f;
+		gamePanel.setPivotX(w / 2f);
+		gamePanel.setPivotY(h);
+		gamePanel.setScaleX(scale);
+		gamePanel.setScaleY(scale);
+	}
+
 	// UNFOLDED Left/Right: shorten the keyboard-side split half by the keyboard's
 	// height so its panels reflow above the keyboard while the other half stays
 	// full height. Runs once the keyboard view has a measured height.
@@ -570,17 +590,11 @@ public class GameActivity extends Activity
 
 				lastBottomInset = bottom;
 
-				// Edge margin (user pref): a relative offset on the
-				// device-adaptive baseline (system bars + corners).
-				// Positive = extra padding; negative = content overflows
-				// past corners / system bars and the display clips it.
-				// Not added to the keyboard width (keys can't reflow).
-				int bevelPx = Math.round(Preferences.getBevelMarginDp()
-						* getResources().getDisplayMetrics().density);
-				left += bevelPx;
-				top += bevelPx;
-				right += bevelPx;
-
+				// Baseline safe-area only (system bars + corners). The user
+				// edge margin is a separate zoom (applyEdgeMarginScale), not
+				// padding — padding fed the font width-fit and only rescaled
+				// glyphs instead of bleeding content past the edges.
+				//
 				// Distribute the safe-area insets per-child instead of padding
 				// screenLayout as a whole. The crawl keyboard is a fixed-size
 				// KeyboardView whose key grid can't reflow to a narrower width
@@ -604,11 +618,10 @@ public class GameActivity extends Activity
 				else
 				{
 					if (gameArea != null)
-						gameArea.setPadding(left, top, right,
-								bottom + bevelPx);
+						gameArea.setPadding(left, top, right, bottom);
 					if (portraitDirectionalView != null)
 						portraitDirectionalView.setPadding(left, top, right,
-								bottom + bevelPx);
+								bottom);
 				}
 				return WindowInsetsCompat.CONSUMED;
 			});
@@ -1942,6 +1955,19 @@ public class GameActivity extends Activity
 		mapView.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 
 		screenLayout.addView(gamePanel);
+
+		// Re-apply the edge-margin zoom each layout so the pivot tracks the
+		// panel size (keyboard show/hide, inset changes).
+		final View gamePanelScaleTarget = gamePanel;
+		gamePanel.getViewTreeObserver().addOnGlobalLayoutListener(
+				new ViewTreeObserver.OnGlobalLayoutListener()
+				{
+					@Override
+					public void onGlobalLayout()
+					{
+						applyEdgeMarginScale(gamePanelScaleTarget);
+					}
+				});
 
 		RegionRouter router = new RegionRouter(this);
 		router.setFullView(fullView);
