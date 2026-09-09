@@ -65,7 +65,7 @@
     <string name="preferences_skipsplash_title">Skip splash screen</string>
     <string name="preferences_skipsplash_summary">Skip the splash screen on startup.</string>
     <string name="preferences_skipcontrolsinfo_title">Skip startup help screens</string>
-    <string name="preferences_skipcontrolsinfo_summary">Automatically skip the controls info screens on startup.</string>
+    <string name="preferences_skipcontrolsinfo_summary">Skip the controls info screens on startup.</string>
     <string name="preferences_wordwrap_title">Word wrap</string>
     <string name="preferences_wordwrap_summary">Wrap most texts at screen edge. Restarts app.</string>
     <string name="preferences_compacthud_title">Compact UI Mode</string>

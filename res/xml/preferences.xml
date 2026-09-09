@@ -6,6 +6,26 @@
 			android:title="@string/menu_help"
 			android:summary="How do I work this?"
 			android:key="help"/>
+		<CheckBoxPreference
+			android:key="crawl.skipcontrolsinfo"
+			android:defaultValue="false"
+			android:title="@string/preferences_skipcontrolsinfo_title"
+			android:summary="@string/preferences_skipcontrolsinfo_summary" />
+		<CheckBoxPreference
+			android:key="crawl.helpbuttonenabled"
+			android:defaultValue="true"
+			android:title="@string/preferences_helpbutton_title"
+			android:summary="@string/preferences_helpbutton_summary"/>
+		<CheckBoxPreference
+			android:key="crawl.wikibuttonenabled"
+			android:defaultValue="true"
+			android:title="@string/preferences_wikibutton_title"
+			android:summary="@string/preferences_wikibutton_summary"/>
+		<CheckBoxPreference
+			android:key="crawl.hudbuttonlongpress"
+			android:defaultValue="false"
+			android:title="@string/preferences_hudbutton_longpress_title"
+			android:summary="@string/preferences_hudbutton_longpress_summary"/>
 	</PreferenceCategory>
   <PreferenceCategory android:title="@string/display_category">
 	<CheckBoxPreference 
@@ -29,11 +49,6 @@
 	   android:defaultValue="false"
 	   android:title="@string/preferences_skipsplash_title"
 	   android:summary="@string/preferences_skipsplash_summary" />
-	<CheckBoxPreference
-	   android:key="crawl.skipcontrolsinfo"
-	   android:defaultValue="false"
-	   android:title="@string/preferences_skipcontrolsinfo_title"
-	   android:summary="@string/preferences_skipcontrolsinfo_summary" />
 	<CheckBoxPreference
 	   android:key="crawl.wordwrap"
 	   android:defaultValue="false"
@@ -108,21 +123,6 @@
        android:defaultValue="true"
        android:title="@string/preferences_haptic_feedback_title"
        android:summary="@string/preferences_haptic_feedback_summary"/>
-	<CheckBoxPreference
-	   android:key="crawl.helpbuttonenabled"
-	   android:defaultValue="true"
-	   android:title="@string/preferences_helpbutton_title"
-	   android:summary="@string/preferences_helpbutton_summary"/>
-	<CheckBoxPreference
-	   android:key="crawl.wikibuttonenabled"
-	   android:defaultValue="true"
-	   android:title="@string/preferences_wikibutton_title"
-	   android:summary="@string/preferences_wikibutton_summary"/>
-	<CheckBoxPreference
-	   android:key="crawl.hudbuttonlongpress"
-	   android:defaultValue="false"
-	   android:title="@string/preferences_hudbutton_longpress_title"
-	   android:summary="@string/preferences_hudbutton_longpress_summary"/>
 	<PreferenceScreen
 	   android:title="Hardware Key Mapping"
 	   android:summary="Configure hardware buttons on your device to perform various functions">	  
