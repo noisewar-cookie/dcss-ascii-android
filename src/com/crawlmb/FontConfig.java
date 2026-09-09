@@ -17,9 +17,10 @@ public class FontConfig
     public final boolean portraitDefaultVScrollable;
     public final float portraitMapFontScale;
     public final int portraitMapOffsetCols;
-    public final float portraitMapZoomStepOutBase;
-    public final float portraitMapZoomStep1;
-    public final float portraitMapZoomStep2;
+    // Map vertical-slack behaviour when the map is width-constrained: false =
+    // center the map block with equal top/bottom margin; true = grow the font
+    // to fill the panel height (larger glyphs, left/right columns cropped).
+    public final boolean portraitMapVfitFill;
     public final float portraitHudFontScale;
     public final int portraitHudOffsetCols;
     // Compact-mode vertical bar glyphs, as Unicode codepoints. HP and MP are
@@ -144,9 +145,7 @@ public class FontConfig
         this.portraitDefaultVScrollable= getBool (props, "portrait_default_vscrollable", true);
         this.portraitMapFontScale      = getFloat(props, "portrait_map_font_scale", 1.0f);
         this.portraitMapOffsetCols     = getInt  (props, "portrait_map_offset_cols", 0);
-        this.portraitMapZoomStepOutBase= getFloat(props, "portrait_map_zoom_step_out_base", 0.88f);
-        this.portraitMapZoomStep1      = getFloat(props, "portrait_map_zoom_step1", 1.25f);
-        this.portraitMapZoomStep2      = getFloat(props, "portrait_map_zoom_step2", 1.5f);
+        this.portraitMapVfitFill       = getBool (props, "portrait_map_vfit_fill", false);
         this.portraitHudFontScale      = getFloat(props, "portrait_hud_font_scale", 1.0f);
         this.portraitHudOffsetCols     = getInt  (props, "portrait_hud_offset_cols", 0);
         this.compactHpBarGlyph         = getCodepoint(props, "compact_hp_bar_glyph", 0x2592);

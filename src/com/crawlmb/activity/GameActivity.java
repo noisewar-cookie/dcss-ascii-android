@@ -1455,11 +1455,13 @@ public class GameActivity extends Activity
 		mapView.setFontScaleMultiplier(compactHudActive
 				? 1.0f : fontConfig.portraitMapFontScale);
 		mapView.setCenterHorizontally(true);
-		mapView.setCenterVertically(true);
-		// Compact: dock the map lower so its aspect-bound vertical slack pools
-		// at the top (bevel) and the gap above the HUD roughly halves.
-		if (compactHudActive)
-			mapView.setVerticalContentBias(0.75f);
+		// Width-fit the 33 real dungeon cols (cols 33-36 are blank padding to
+		// the HUD), not the full 37-col region, so glyphs fill the panel.
+		mapView.setFontReferenceCols(33);
+		mapView.setVfitFill(fontConfig.portraitMapVfitFill);
+		// Fixed spacer below the map's last glyph row, before the HUD (compact
+		// and non-compact alike); see RegionTermView.setBottomGapRows.
+		mapView.setBottomGapRows(0.25f);
 		mapView.setCenterContentCols(33);
 		mapView.setOffsetCols(fontConfig.portraitMapOffsetCols);
 		portraitMapView = mapView;
@@ -1678,14 +1680,26 @@ public class GameActivity extends Activity
 
 			RelativeLayout.LayoutParams mapParams = new RelativeLayout.LayoutParams(
 					LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-			if (mapIdx == 0)
-				mapParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-			else
-				mapParams.addRule(RelativeLayout.BELOW, prevBottomId);
-			if (mapIdx == panelOrder.length - 1)
-				mapParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-			else
+			boolean mapHasLower = mapIdx != panelOrder.length - 1;
+			if (mapHasLower)
+			{
+				// Bottom-pin the map to its lower neighbour so its baked-in bottom
+				// spacer sits directly above it and fit slack floats up. Keep the
+				// BELOW anchor when there's an upper panel so self-fit can't grow
+				// the map into that panel's band.
 				mapParams.addRule(RelativeLayout.ABOVE, nextTopId);
+				if (mapIdx != 0)
+					mapParams.addRule(RelativeLayout.BELOW, prevBottomId);
+			}
+			else
+			{
+				// Map is the bottom-most panel: pin as before (no HUD below it).
+				if (mapIdx == 0)
+					mapParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+				else
+					mapParams.addRule(RelativeLayout.BELOW, prevBottomId);
+				mapParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+			}
 			splitContainer.addView(mapView, mapParams);
 
 			// Vertical HP/MP bars overlay the map's right edge, spanning its
@@ -1979,6 +1993,15 @@ public class GameActivity extends Activity
 							if (splitRoot.getVisibility() != View.VISIBLE)
 								return;
 
+							// Reserve the docked bars' width so the map fits and
+							// centers left of them (no-ops once stable).
+							if (compactHudActive && portraitCompactBars != null)
+							{
+								int barsW = portraitCompactBars.getWidth();
+								if (barsW > 0)
+									mapView.setRightReservePx(barsW);
+							}
+
 							int available = gamePanel.getHeight();
 							if (available <= 0)
 								return;
@@ -2080,6 +2103,15 @@ public class GameActivity extends Activity
 					{
 						if (splitContainer.getVisibility() != View.VISIBLE)
 							return;
+
+						// Reserve the docked bars' width so the map fits and
+						// centers left of them (no-ops once stable).
+						if (compactHudActive && portraitCompactBars != null)
+						{
+							int barsW = portraitCompactBars.getWidth();
+							if (barsW > 0)
+								mapView.setRightReservePx(barsW);
+						}
 
 						int available = gamePanel.getHeight();
 						int hudH = hudView.getMeasuredHeight();
@@ -2739,11 +2771,8 @@ public class GameActivity extends Activity
 			view.setRouter(portraitRouter);
 		if (portraitExtraScrollTargets != null)
 			view.setExtraScrollTargets(portraitExtraScrollTargets);
-		if (portraitMapView != null && portraitFontConfig != null)
-			view.setMapZoom(portraitMapView,
-					portraitFontConfig.portraitMapZoomStepOutBase,
-					portraitFontConfig.portraitMapZoomStep1,
-					portraitFontConfig.portraitMapZoomStep2);
+		if (portraitMapView != null)
+			view.setMapZoom(portraitMapView);
 
 		view.setHapticFeedbackEnabled(hapticFeedbackEnabled);
 	}

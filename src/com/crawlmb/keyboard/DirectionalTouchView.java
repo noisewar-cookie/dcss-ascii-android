@@ -52,28 +52,16 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	// global config (HALF mode, non-fold).
 	private String[] foldHalfSides = null;
 
-	// Map pinch-zoom (portrait): stepped levels [horizontal-fit, 1.0, step1,
-	// step2], one step per pinch gesture. Session-only — resets on rewire.
-	// The stepOut factor is computed at zoom time from the mapView's rendered
-	// canvas_width vs. its allocated View width, so it always shows the full
-	// horizontal content (may leave vertical slack when the chosen font
-	// overflows horizontally).
+	// Map pinch-zoom (portrait): stepped levels [-1..2], one step per pinch
+	// gesture. Session-only — resets on rewire. The factor at each level is
+	// derived dynamically from the map's row count (applyMapZoomStep), so
+	// there are no per-font config knobs.
 	private RegionTermView mapView;
-	private float mapZoomStep1 = 1.25f;
-	private float mapZoomStep2 = 1.5f;
 	private int mapZoomLevel = 0;
 	private float mapZoomAnchorSpan = 0f;
 	private boolean scalingMap = false;
 	private boolean mapZoomStepFiredThisPinch = false;
 	private static final float MAP_ZOOM_STEP_RATIO = 1.12f;
-	// Baseline shrink applied at zoom-out level -1 when the rendered map
-	// already fits horizontally at default zoom (i.e. horizontal-fit would
-	// be a no-op). Guarantees the pinch-out gesture always produces a
-	// visible zoom change. Overridable via portrait_map_zoom_step_out_base
-	// in font_config.txt; falls back to this default if setMapZoom is
-	// never called.
-	private static final float MAP_ZOOM_STEP_OUT_BASE_DEFAULT = 0.88f;
-	private float mapZoomStepOutBase = MAP_ZOOM_STEP_OUT_BASE_DEFAULT;
 
 	// 9-grid hold: holding a direction cell past HOLD_INITIAL_DELAY_MS starts
 	// repeating that direction every touchRepeatInterval ms (0 = disabled).
@@ -236,13 +224,9 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 
 	// Applied as a content-scale transform in RegionTermView.onDraw —
 	// no DCSS redraw needed, just invalidate.
-	public void setMapZoom(RegionTermView mapView, float stepOutBase,
-			float step1, float step2)
+	public void setMapZoom(RegionTermView mapView)
 	{
 		this.mapView = mapView;
-		this.mapZoomStepOutBase = stepOutBase;
-		this.mapZoomStep1 = step1;
-		this.mapZoomStep2 = step2;
 		this.mapZoomLevel = 0;
 	}
 
@@ -735,29 +719,15 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
     if (next == mapZoomLevel)
       return false;
     mapZoomLevel = next;
-    float factor;
-    if (mapZoomLevel == -1)
-    {
-      // Zoom-out = min(baseline, horizontal-fit):
-      //   - Narrow fonts (canvasW <= panelW): horizontal-fit >= 1.0, so
-      //     baseline wins → consistent shrink so the pinch always does
-      //     something.
-      //   - Very wide fonts (canvasW * baseline > panelW): horizontal-fit
-      //     wins → exact fit, vertical slack top/bottom.
-      // Falls back to baseline if the view hasn't been measured yet.
-      int panelW = mapView.getWidth();
-      int canvasW = mapView.canvas_width;
-      float fit = (panelW > 0 && canvasW > 0)
-          ? panelW / (float) canvasW
-          : mapZoomStepOutBase;
-      factor = Math.min(mapZoomStepOutBase, fit);
-    }
-    else if (mapZoomLevel == 0)
-      factor = 1.0f;
-    else if (mapZoomLevel == 1)
-      factor = mapZoomStep1;
-    else
-      factor = mapZoomStep2;
+    // Dynamic factor: scaling the R0-row content block by R0/(R0-2L) about its
+    // center (RegionTermView.onDraw) crops exactly L rows off the top AND
+    // bottom at zoom-in level L, and reveals L empty rows top+bottom at
+    // zoom-out (L=-1). Font-independent — always crops whole rows for the font
+    // in use, so no hardcoded per-font factors.
+    int r0 = mapView.getRegionRows();
+    float factor = (r0 > 2)
+        ? r0 / (float) (r0 - 2 * mapZoomLevel)
+        : 1.0f;
     performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
     mapView.setContentZoom(factor);
     return true;

@@ -84,19 +84,13 @@ portrait_map_font_scale=0.93
 # Use this only to bias the centering (e.g. +1 to shift one col right).
 portrait_map_offset_cols=0
 
-# Portrait: map pinch-zoom levels [zoom-out, 1.00, step1, step2].
-# Default starts at 1.00; one pinch gesture = one level step.
-# Session-only (resets on restart). Zoom-in crops at panel edges.
-#
-# The zoom-out step (level -1) is computed automatically as
-#     min(portrait_map_zoom_step_out_base, panel_width / rendered_canvas_width)
-# so it's always at least the baseline shrink; very wide fonts that
-# overflow past the baseline (Flexi_IBM_VGA_False etc.) instead shrink to
-# exact horizontal fit with vertical slack top/bottom. Lower the baseline
-# to make zoom-out more aggressive for narrow fonts.
-portrait_map_zoom_step_out_base=0.88
-portrait_map_zoom_step1=1.14
-portrait_map_zoom_step2=1.54
+# Portrait: map vertical-slack behaviour when the map is width-constrained
+# (the usual portrait case, where the 33-col dungeon view fills the width
+# before it fills the height). false = keep the width-fit block, bottom-
+# pinned to the HUD with fit slack above it. true = grow the font to fill
+# the panel height (bigger glyphs; left/right columns crop, clipped off the
+# bars).
+portrait_map_vfit_fill=false
 
 # Portrait: HUD panel (stats only; monster list is a separate panel below
 # the native status bar)

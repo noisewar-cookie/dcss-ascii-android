@@ -152,24 +152,35 @@ public class VerticalBarsView extends View
 			blockH = mapView.getContentBlockHeight();
 		}
 
-		int cells = (int) Math.floor(blockH / cellH) - 1; // one row for label
+		// Reserve exactly the map's last row for the H/M labels so they sit on
+		// that row (aligned with the map's last glyph line) rather than in the
+		// spacer below. The fill cells occupy the block above it, bottom-aligned
+		// so the stack abuts the label row.
+		float mapRowH = (mapView != null && mapView.getContentRowHeight() > 0)
+				? mapView.getContentRowHeight() : cellH;
+		float fillH = blockH - mapRowH;
+		int cells = (int) Math.floor(fillH / cellH);
 		if (cells < 1)
 			return;
+		// Label baseline: vertically centered in the last map-row band.
+		Paint.FontMetrics fm = paint.getFontMetrics();
+		float labelBaseline = blockTop + blockH - mapRowH / 2f
+				- (fm.ascent + fm.descent) / 2f;
 
 		float x = getPaddingLeft();
-		drawColumn(canvas, x, top, cellH, blockTop, cells, 'H', hp,
+		drawColumn(canvas, x, top, cellH, blockTop, cells, labelBaseline, 'H', hp,
 				hpFilled, hpEmpty);
 		if (mp.length >= 8)
 			drawColumn(canvas, x + hpColW + barGapPx, top, cellH, blockTop, cells,
-					'M', mp, mpFilled, mpEmpty);
+					labelBaseline, 'M', mp, mpFilled, mpEmpty);
 	}
 
 	// One column: `cells` rows draining down (cell 0 at the top empties first,
-	// the bottom cell drains last), then the H/M label on the row below them.
-	// Filled cells draw the fill glyph in their zone colour; missing cells draw
-	// the empty-track glyph in the empty-track colour.
+	// the bottom cell drains last), then the H/M label at labelBaseline (on the
+	// map's last row). Filled cells draw the fill glyph in their zone colour;
+	// missing cells draw the empty-track glyph in the empty-track colour.
 	private void drawColumn(Canvas canvas, float x, float top, float cellH,
-			float blockTop, int cells, char label, int[] z,
+			float blockTop, int cells, float labelBaseline, char label, int[] z,
 			String filledGlyph, String emptyGlyph)
 	{
 		final int def = z[0], cur = z[1], old = z[2];
@@ -195,17 +206,15 @@ public class VerticalBarsView extends View
 				isEmpty = true;
 			}
 			paint.setColor(argb | 0xFF000000);
-			// +1 cellH: fill starts one row below the block top so its bottom
-			// cell aligns with the map's last drawn row (label drops into the
-			// right-edge gap below, clear of the left-aligned HUD text).
-			float baseline = blockTop + (i + 1) * cellH - top;
+			// -top shifts the glyph down into its cell band; cell 0 sits at the
+			// block top (map top row) and cell `cells-1` just above the label.
+			float baseline = blockTop + i * cellH - top;
 			canvas.drawText(isEmpty ? emptyGlyph : filledGlyph, x, baseline, paint);
 		}
 
-		// Label below the last cell, in the bar's default fill colour so H/M
+		// Label on the map's last row, in the bar's default fill colour so H/M
 		// read as their bar.
 		paint.setColor(z[3] | 0xFF000000);
-		canvas.drawText(String.valueOf(label), x,
-				blockTop + (cells + 1) * cellH - top, paint);
+		canvas.drawText(String.valueOf(label), x, labelBaseline, paint);
 	}
 }

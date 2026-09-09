@@ -99,16 +99,19 @@ public class RegionTermView extends View
 	private int centerContentCols = 0;
 	private int drawOffsetX = 0;
 	private int offsetCols = 0;
-	// When true, reports the parent's height allocation and offsets the
-	// bitmap down so short content sits centered in the panel. Prevents a
-	// gap between map and HUD when a wide-cell font makes the width-bound
-	// canvas_height shorter than the parent's allocation.
-	private boolean centerVertically = false;
-	// Fraction of the vertical slack placed above the content (0.5 = centered).
-	// >0.5 docks content lower, shrinking the gap below it (compact map: the
-	// aspect-bound slack pools at the top, where the bevel is, not at the HUD).
-	private float verticalContentBias = 0.5f;
 	private int drawOffsetY = 0;
+	// Px reserved on the right for the docked compact HP/MP bars. Font-fit and
+	// horizontal centering use (width - rightReservePx) so the map content sits
+	// left of the bars, and the draw is clipped there so a zoomed-in map can
+	// never overlap them. 0 = no reserve (non-compact, no bars).
+	private int rightReservePx = 0;
+	// When true (font_config portrait_map_vfit_fill), grow the font to fill the
+	// panel height instead of leaving the width-fit block in vertical slack.
+	private boolean vfitFill = false;
+	// Fixed spacer (in rows of this panel's font) baked below the content. The
+	// panel reports canvas_height + this gap and is bottom-pinned to the next
+	// panel, so exactly this much space sits below the last glyph row.
+	private float bottomGapRows = 0f;
 
 	private boolean horizontalScrollEnabled = false;
 	private boolean verticalScrollEnabled = false;
@@ -201,25 +204,31 @@ public class RegionTermView extends View
 	public int getEndCol() { return endCol; }
 	public int getEndRow() { return endRow; }
 
+	public int getRegionRows() { return regionRows; }
+
+	// Width (px) of the visible content block: centerContentCols when set
+	// (the map's real 33 dungeon cols, excluding the blank cols 33-36 padded
+	// out to the HUD), else the full canvas.
+	public int contentWidthPx()
+	{
+		return (centerContentCols > 0 ? centerContentCols : regionCols)
+				* char_width;
+	}
+
 	// Right edge (view-local px) of the rendered content, i.e. just past the
-	// last column. Lets an overlay anchor to where the text ends rather than to
-	// the view's full (often MATCH_PARENT) width. Valid after measure.
-	public int getContentRightX() { return drawOffsetX + canvas_width; }
+	// last visible column. Lets an overlay (compact bars) anchor to where the
+	// map glyphs end rather than to the view's full (MATCH_PARENT) width or the
+	// blank-padded canvas edge. Valid after measure.
+	public int getContentRightX() { return drawOffsetX + contentWidthPx(); }
 
 	// Top edge (view-local px) of the drawn glyph block, and its pixel height.
 	// Lets an overlay (compact vertical bars) match the map's actual glyph
 	// extent rather than the view's full padded height. Valid after measure.
 	public int getContentTopY() { return drawOffsetY; }
 	public int getContentBlockHeight() { return canvas_height; }
-
-	public void setVerticalContentBias(float bias)
-	{
-		if (this.verticalContentBias == bias)
-			return;
-		this.verticalContentBias = bias;
-		if (canvas != null)
-			requestLayout();
-	}
+	// Height (px) of one map row — lets the bars reserve exactly the last map
+	// row for the H/M labels so they sit on it, not in the spacer below.
+	public int getContentRowHeight() { return char_height; }
 
 	// When true, onMeasure reports height based on maxContentRow (the lowest
 	// row with non-space content) + 1 spacer row, instead of the full
@@ -681,11 +690,6 @@ public class RegionTermView extends View
 		this.centerHorizontally = center;
 	}
 
-	public void setCenterVertically(boolean center)
-	{
-		this.centerVertically = center;
-	}
-
 	public void setCenterContentCols(int cols)
 	{
 		this.centerContentCols = cols;
@@ -694,6 +698,40 @@ public class RegionTermView extends View
 	public void setOffsetCols(int cols)
 	{
 		this.offsetCols = cols;
+	}
+
+	// Reserve px on the right for the docked compact bars (0 = none).
+	public void setRightReservePx(int px)
+	{
+		if (this.rightReservePx == px)
+			return;
+		this.rightReservePx = px;
+		if (canvas != null)
+			requestLayout();
+	}
+
+	public void setVfitFill(boolean fill)
+	{
+		if (this.vfitFill == fill)
+			return;
+		this.vfitFill = fill;
+		if (canvas != null)
+			requestLayout();
+	}
+
+	public void setBottomGapRows(float rows)
+	{
+		if (this.bottomGapRows == rows)
+			return;
+		this.bottomGapRows = rows;
+		if (canvas != null)
+			requestLayout();
+	}
+
+	// The fixed bottom gap in px at the current font size.
+	private int bottomGapPx()
+	{
+		return bottomGapRows > 0f ? Math.round(bottomGapRows * char_height) : 0;
 	}
 
 	public void setGameStartTrigger(Handler handler)
@@ -796,11 +834,29 @@ public class RegionTermView extends View
 		}
 		else if (contentZoom != 1.0f)
 		{
-			// Dungeon-view stepped zoom: scale around panel center so
-			// content stays put near player. Overflow clips to panel.
+			// Dungeon-view stepped zoom: scale about the content-block center
+			// and clip to the block so each step crops the outer rows/cols
+			// symmetrically (zoom-in) or reveals empty margin inside the block
+			// (zoom-out) rather than spilling into the panel margins or the
+			// docked bars. The block footprint stays fixed.
+			int cw = contentWidthPx();
+			float clipRight = drawOffsetX + cw;
+			if (rightReservePx > 0)
+				clipRight = Math.min(clipRight, getWidth() - rightReservePx);
 			canvas.save();
+			canvas.clipRect(drawOffsetX, drawOffsetY, clipRight,
+					drawOffsetY + canvas_height);
 			canvas.scale(contentZoom, contentZoom,
-					getWidth() / 2f, getHeight() / 2f);
+					drawOffsetX + cw / 2f, drawOffsetY + canvas_height / 2f);
+			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX,
+					drawOffsetY - scrollOffsetY, null);
+			canvas.restore();
+		}
+		else if (rightReservePx > 0)
+		{
+			// Keep the (possibly height-filled) map off the docked bars.
+			canvas.save();
+			canvas.clipRect(0, 0, getWidth() - rightReservePx, getHeight());
 			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX,
 					drawOffsetY - scrollOffsetY, null);
 			canvas.restore();
@@ -1094,8 +1150,11 @@ public class RegionTermView extends View
 	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec)
 	{
 		int width = MeasureSpec.getSize(widthMeasureSpec);
+		// Fit the map into the width left of the docked bars so its content
+		// sits left of them (a slightly larger left margin is expected).
+		int usableWidth = Math.max(1, width - rightReservePx);
 
-		autoSizeFontByWidth(width);
+		autoSizeFontByWidth(usableWidth);
 		computeCanvasSize();
 
 		// Height self-fit for tall-aspect screens (Galaxy Fold class):
@@ -1104,15 +1163,37 @@ public class RegionTermView extends View
 		// height tracks content, not bitmap).
 		int heightMode = MeasureSpec.getMode(heightMeasureSpec);
 		int heightLimit = MeasureSpec.getSize(heightMeasureSpec);
+		// Reserve the fixed bottom gap so the font is fit to leave room for it.
 		if (!verticalScrollEnabled && !anchorToContent
 				&& heightMode == MeasureSpec.AT_MOST && heightLimit > 0
-				&& regionRows > 0 && canvas_height > heightLimit)
+				&& regionRows > 0
+				&& canvas_height + bottomGapPx() > heightLimit)
 		{
 			while (font_text_size > MIN_FONT_SIZE
-					&& canvas_height > heightLimit)
+					&& canvas_height + bottomGapPx() > heightLimit)
 			{
 				setFontSize(font_text_size - 1, false);
 				computeCanvasSize();
+			}
+		}
+
+		// vfit=fill: after width-fit, grow the font until it fills the panel
+		// height (left/right columns then crop, clipped in onDraw). Skipped for
+		// scrollable/content-anchored panels that manage their own height.
+		if (vfitFill && !verticalScrollEnabled && !anchorToContent
+				&& heightMode == MeasureSpec.AT_MOST && heightLimit > 0
+				&& regionRows > 0 && canvas_height + bottomGapPx() < heightLimit)
+		{
+			while (font_text_size < MAX_FONT_SIZE)
+			{
+				setFontSize(font_text_size + 1, false);
+				computeCanvasSize();
+				if (canvas_height + bottomGapPx() > heightLimit)
+				{
+					setFontSize(font_text_size - 1, false);
+					computeCanvasSize();
+					break;
+				}
 			}
 		}
 
@@ -1121,7 +1202,7 @@ public class RegionTermView extends View
 			int contentWidth = centerContentCols > 0
 					? centerContentCols * char_width
 					: canvas_width;
-			drawOffsetX = (width - contentWidth) / 2;
+			drawOffsetX = (usableWidth - contentWidth) / 2;
 		}
 		else
 		{
@@ -1187,22 +1268,12 @@ public class RegionTermView extends View
 				scrollOffsetY = maxY;
 		}
 
-		// Vertical center: when the parent gives us a real height allocation
-		// (AT_MOST/EXACTLY) larger than canvas_height, fill the allocation and
-		// offset the bitmap down so content sits centered. Skip for scrollable
-		// or content-anchored panels since those manage height themselves.
+		// Bake the fixed bottom spacer into the reported height (content stays at
+		// the panel top). The panel is bottom-pinned to the next one (GameActivity
+		// map anchor), so exactly this gap sits below the last glyph row.
 		drawOffsetY = 0;
-		if (centerVertically && !verticalScrollEnabled && !anchorToContent)
-		{
-			int mode = MeasureSpec.getMode(heightMeasureSpec);
-			int limit = MeasureSpec.getSize(heightMeasureSpec);
-			if (mode != MeasureSpec.UNSPECIFIED && limit > canvas_height)
-			{
-				drawOffsetY = (int) ((limit - canvas_height)
-						* verticalContentBias);
-				reportedHeight = limit;
-			}
-		}
+		if (bottomGapRows > 0f && !verticalScrollEnabled && !anchorToContent)
+			reportedHeight = canvas_height + bottomGapPx();
 
 		setMeasuredDimension(width, reportedHeight);
 	}
