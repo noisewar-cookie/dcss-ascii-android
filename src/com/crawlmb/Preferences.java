@@ -30,6 +30,13 @@ final public class Preferences
 	public static final String KEY_NEWTURNMARK = "crawl.newturnmark";
 	public static final String KEY_COMPACTHUD = "crawl.compacthud";
 	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
+	public static final String KEY_SEENPREFSOPTIONSVERSION = "crawl.seenprefsoptionsversion";
+
+	// Bump this by 1 in any release that adds new options to the preferences
+	// menu (res/xml/preferences.xml). GameActivity shows a one-time "new
+	// options" toast when the stored seen-version is behind this (or absent,
+	// i.e. first install). The dcssascii_release_prep skill prompts to bump it.
+	public static final int PREFS_OPTIONS_VERSION = 1;
 
 	public static final String KEY_FONTFACE = "crawl.fontface";
 	public static final String KEY_ENABLETOUCH = "crawl.enabletouch";
@@ -301,6 +308,18 @@ final public class Preferences
 		if (value == getFoldableSeen())
 			return;
 		sharedPreferences.edit().putBoolean(KEY_FOLDABLESEEN, value).apply();
+	}
+
+	// Highest PREFS_OPTIONS_VERSION the user has already been notified about.
+	// -1 (absent) means a fresh install that has never seen the toast.
+	public static int getSeenPrefsOptionsVersion()
+	{
+		return sharedPreferences.getInt(KEY_SEENPREFSOPTIONSVERSION, -1);
+	}
+
+	public static void setSeenPrefsOptionsVersion(int value)
+	{
+		sharedPreferences.edit().putInt(KEY_SEENPREFSOPTIONSVERSION, value).apply();
 	}
 
 	public static String getUnfoldedMapSide()

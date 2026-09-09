@@ -37,6 +37,12 @@ public class ModalOverlayController
     public static final int SCROLL_NONE = 0;
     public static final int SCROLL_BOTH = 2;
 
+    // Card sizing. FILL: the card fills the screen inset by modalPaddingPercent
+    // (help/wiki). WRAP: the card shrinks to its content and centres, for a
+    // small message box (the content bounds its own width).
+    public static final int SIZE_FILL = 0;
+    public static final int SIZE_WRAP = 1;
+
     private static final int SCRIM_COLOR = 0xB3000000; // ~70% black
     private static final int PANEL_BG = 0xFF0A0A0A;
     private static final int CLOSE_SIZE_DP = 18;
@@ -73,11 +79,16 @@ public class ModalOverlayController
     // WebView) or SCROLL_BOTH (the shell pans both axes at once).
     public void show(View content, int scrollMode)
     {
+        show(content, scrollMode, SIZE_FILL);
+    }
+
+    public void show(View content, int scrollMode, int sizeMode)
+    {
         if (active)
             dismiss();
         active = true;
         hideSystemIme();
-        buildUi(content, scrollMode);
+        buildUi(content, scrollMode, sizeMode);
     }
 
     public void dismiss()
@@ -97,7 +108,7 @@ public class ModalOverlayController
         panel = null;
     }
 
-    private void buildUi(View content, int scrollMode)
+    private void buildUi(View content, int scrollMode, int sizeMode)
     {
         // Scrim: opaque enough to read the card, clickable+focusable so it
         // swallows any touch the card doesn't handle (reposition precedent).
@@ -147,14 +158,25 @@ public class ModalOverlayController
         closeLp.rightMargin = closeMargin;
         panel.addView(close, closeLp);
 
-        modalRoot.addView(panel, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
+        if (sizeMode == SIZE_WRAP)
+        {
+            // Card hugs its content and centres; the content sets its own
+            // width. No percentage inset — the scrim dims the rest.
+            modalRoot.addView(panel, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        }
+        else
+        {
+            modalRoot.addView(panel, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Inset the card by the configured percentage of the (already
-        // safe-area-padded) scrim, on each layout pass.
-        modalRoot.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
-                applyInset());
+            // Inset the card by the configured percentage of the (already
+            // safe-area-padded) scrim, on each layout pass.
+            modalRoot.addOnLayoutChangeListener(
+                    (v, l, t, r, b, ol, ot, or, ob) -> applyInset());
+        }
 
         screenLayout.addView(modalRoot, new RelativeLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,

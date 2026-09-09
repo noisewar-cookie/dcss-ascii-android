@@ -292,6 +292,7 @@
     <string name="font_import">Import…</string>
     <string name="font_import_failed">Could not open font picker.</string>
     <string name="font_imported">Imported %s</string>
+    <string name="new_prefs_options_message">New options added!\n\nTwo-finger long press to see app menu.</string>
     <string name="font_delete">Delete font</string>
     <string name="font_delete_confirm_title">Remove font?</string>
     <string name="font_delete_confirm_msg">Delete "%s"? This cannot be undone.</string>

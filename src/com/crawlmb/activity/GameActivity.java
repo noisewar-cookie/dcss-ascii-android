@@ -47,6 +47,7 @@ import android.view.ViewGroup.LayoutParams;
 import android.view.ViewTreeObserver;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.ScrollView;
@@ -173,6 +174,9 @@ public class GameActivity extends Activity
 	// PreferencesActivity via the "repositionCenterline" result extra.
 	private boolean pendingCenterlineEntry = false;
 	private CenterlineController centerlineController = null;
+	// One-time "new preference options" modal, computed in onCreate and shown
+	// from rebuildViews once the modal shell is built (see showNewOptionsModal).
+	private boolean pendingNewOptionsModal = false;
 	// On-screen HUD shortcut buttons (help / wiki). Recreated each
 	// rebuildViews() so they re-anchor to the HUD's current slot.
 	private HudButtonController hudButtonController = null;
@@ -255,6 +259,13 @@ public class GameActivity extends Activity
 				&& getPackageManager().hasSystemFeature(
 						PackageManager.FEATURE_SENSOR_HINGE_ANGLE))
 			Preferences.setFoldableSeen(true);
+
+		// One-time nudge on first install, or the first launch after updating
+		// to a build that added preferences (PREFS_OPTIONS_VERSION bumped).
+		// Shown as a modal from rebuildViews once the modal shell exists; the
+		// seen version is persisted at show time to keep it to a single showing.
+		pendingNewOptionsModal = Preferences.getSeenPrefsOptionsVersion()
+				< Preferences.PREFS_OPTIONS_VERSION;
 	}
 
 	@Override
@@ -750,6 +761,11 @@ public class GameActivity extends Activity
 
 			if (pendingCenterlineEntry)
 				schedulePendingCenterlineEntry();
+
+			// Skip while the save-restore "Reloading..." overlay owns the
+			// screen; a later clean rebuild shows it (flag stays set).
+			if (pendingNewOptionsModal && !reloadOverlayActive)
+				showNewOptionsModal();
 		}
 	}
 
@@ -837,6 +853,45 @@ public class GameActivity extends Activity
 	// monospace-aligned, so render fixed-width WITHOUT wrap and let the 2D
 	// scroll modal handle overflow — wrapping would shear the columns. Only
 	// valid mid-game; on the main menu there are no bindings to report.
+	// One-time modal announcing new preference options: message text over the
+	// two-finger long-press icon in a compact centred card. Persists the seen
+	// version and clears the pending flag on show, so it appears exactly once.
+	private void showNewOptionsModal() {
+		if (modalController == null)
+			return;
+		pendingNewOptionsModal = false;
+		Preferences.setSeenPrefsOptionsVersion(
+				Preferences.PREFS_OPTIONS_VERSION);
+
+		float density = getResources().getDisplayMetrics().density;
+		LinearLayout box = new LinearLayout(this);
+		box.setOrientation(LinearLayout.VERTICAL);
+		box.setGravity(Gravity.CENTER_HORIZONTAL);
+		int pad = Math.round(20 * density);
+		box.setPadding(pad, pad, pad, pad);
+
+		TextView tv = new TextView(this);
+		tv.setText(R.string.new_prefs_options_message);
+		tv.setTextColor(CRAWL_LIGHTGRAY);
+		tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+		tv.setGravity(Gravity.CENTER);
+		// Bound the text width so the card stays compact on wide screens.
+		tv.setMaxWidth(Math.round(240 * density));
+		box.addView(tv, new LinearLayout.LayoutParams(
+				LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
+
+		ImageView icon = new ImageView(this);
+		icon.setImageResource(R.drawable.ic_two_finger_longpress);
+		icon.setAdjustViewBounds(true);
+		LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
+				Math.round(110 * density), LayoutParams.WRAP_CONTENT);
+		ilp.topMargin = Math.round(16 * density);
+		box.addView(icon, ilp);
+
+		modalController.show(box, ModalOverlayController.SCROLL_NONE,
+				ModalOverlayController.SIZE_WRAP);
+	}
+
 	private void showHelpModal() {
 		if (modalController == null)
 			return;
