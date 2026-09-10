@@ -2423,7 +2423,8 @@ public class GameActivity extends Activity
 		}
 		repositionController = new RepositionController(this, screenLayout,
 				portraitRouter, portraitSplitContainer, portraitMapView,
-				portraitHudView, portraitStatusBar, portraitMlistView,
+				portraitCompactBars, portraitHudView, portraitCompactTitle,
+				portraitCompactVitals, portraitStatusBar, portraitMlistView,
 				portraitMsgView, portraitKeyboardView, lastBottomInset,
 				portraitFontConfig.repositionHighlightColor,
 				new RepositionController.Callbacks()

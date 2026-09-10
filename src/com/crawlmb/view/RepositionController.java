@@ -86,21 +86,31 @@ public class RepositionController
 	private float downY = 0;
 	private float grabBaseTy = 0;
 
+	private static final View[] NO_OVERLAY = new View[0];
+
 	// One draggable unit of the stack. The hud unit spans two views (the
 	// HUD panel and the status-lights bar directly below it).
 	private static class Unit
 	{
 		final String key;
 		final String label;
+		// Geometry views: their tops/heights define the unit's slot.
 		final View[] members;
+		// Overlay views (the compact HP/MP bars, docked over the map) move with
+		// the unit but are excluded from geometry.
+		final View[] movable;
 		int laidOutTop; // px within splitContainer, untranslated
 		int height;     // px, sum of member heights
 
-		Unit(String key, String label, View... members)
+		Unit(String key, String label, View[] members, View[] overlay)
 		{
 			this.key = key;
 			this.label = label;
 			this.members = members;
+			this.movable = new View[members.length + overlay.length];
+			System.arraycopy(members, 0, movable, 0, members.length);
+			System.arraycopy(overlay, 0, movable, members.length,
+					overlay.length);
 		}
 
 		float translationY()
@@ -111,8 +121,9 @@ public class RepositionController
 
 	public RepositionController(Activity activity,
 			RelativeLayout screenLayout, RegionRouter router,
-			ViewGroup splitContainer, View mapView, View hudView,
-			View statusBar, View mlistView, View msgView, View keyboardView,
+			ViewGroup splitContainer, View mapView, View compactBars,
+			View hudView, View compactTitle, View compactVitals, View statusBar,
+			View mlistView, View msgView, View keyboardView,
 			int bottomInset, int highlightColor, Callbacks callbacks)
 	{
 		this.activity = activity;
@@ -124,19 +135,28 @@ public class RepositionController
 		this.highlightColor = highlightColor;
 		this.callbacks = callbacks;
 		this.density = activity.getResources().getDisplayMetrics().density;
+		// Compact HUD stacks title + vitals rows above the stats grid; they must
+		// travel with the hud unit.
+		View[] hudMembers = compactTitle != null
+				? new View[] { compactTitle, compactVitals, hudView, statusBar }
+				: new View[] { hudView, statusBar };
+		// Compact HP/MP bars are docked over the map's right edge; carry them as
+		// overlay so they follow the map during a drag without inflating its slot.
+		View[] mapOverlay = compactBars != null
+				? new View[] { compactBars } : NO_OVERLAY;
 		units = new Unit[] {
 				new Unit("map",
 						activity.getString(R.string.reposition_panel_map),
-						mapView),
+						new View[] { mapView }, mapOverlay),
 				new Unit("hud",
 						activity.getString(R.string.reposition_panel_hud),
-						hudView, statusBar),
+						hudMembers, NO_OVERLAY),
 				new Unit("mlist",
 						activity.getString(R.string.reposition_panel_mlist),
-						mlistView),
+						new View[] { mlistView }, NO_OVERLAY),
 				new Unit("msg",
 						activity.getString(R.string.reposition_panel_msg),
-						msgView) };
+						new View[] { msgView }, NO_OVERLAY) };
 	}
 
 	public boolean isActive()
@@ -181,7 +201,7 @@ public class RepositionController
 			return;
 		endDragIfActive();
 		for (Unit u : units)
-			for (View v : u.members)
+			for (View v : u.movable)
 			{
 				v.animate().cancel();
 				v.setTranslationY(0);
@@ -348,7 +368,7 @@ public class RepositionController
 			if (u == dragged)
 				continue;
 			float ty = slotTop(u) - u.laidOutTop;
-			for (View v : u.members)
+			for (View v : u.movable)
 			{
 				if (animate)
 					v.animate().translationY(ty)
@@ -409,7 +429,7 @@ public class RepositionController
 			return;
 		float y = event.getY(idx);
 		float ty = grabBaseTy + (y - downY);
-		for (View v : dragged.members)
+		for (View v : dragged.movable)
 			v.setTranslationY(ty);
 		maybeSwap(y - splitTopInOverlay);
 		overlayView.invalidate();
@@ -425,7 +445,7 @@ public class RepositionController
 	{
 		dragged = u;
 		float elevation = DRAG_ELEVATION_DP * density;
-		for (View v : dragged.members)
+		for (View v : dragged.movable)
 		{
 			// A DOWN during an in-flight snap re-bases from wherever the
 			// cancelled animation left the unit.
@@ -443,7 +463,7 @@ public class RepositionController
 		dragged = null;
 		trackedPointerId = -1;
 		float ty = slotTop(u) - u.laidOutTop;
-		for (View v : u.members)
+		for (View v : u.movable)
 			v.animate().translationY(ty).translationZ(0)
 					.setDuration(SNAP_ANIM_MS)
 					.setInterpolator(new DecelerateInterpolator())
