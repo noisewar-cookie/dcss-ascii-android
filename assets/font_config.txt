@@ -112,10 +112,16 @@ compact_hp_bar_empty_glyph=U+007C
 compact_mp_bar_glyph=U+2588
 compact_mp_bar_empty_glyph=U+007C
 
-# Compact HUD: MP bar fill colour (RRGGBB / #RRGGBB / 0xRRGGBB / 8-digit ARGB).
-# Overrides the console MP bar BLUE fill. Default 305FE8 = DCSS BLUE (0040FF)
-# with HSL lightness +10% and saturation -20%.
+# Compact HUD: vertical MP bar fill colour (RRGGBB / #RRGGBB / 0xRRGGBB /
+# 8-digit ARGB). Overrides the console MP bar BLUE fill. Default 305FE8 = DCSS
+# BLUE (0040FF) with HSL lightness +10% and saturation -20%.
 compact_mp_bar_color=305FE8
+
+# Standard HUD: horizontal MP bar fill colour (same formats). Recolours the
+# terminal MP bar to match the compact vertical bar above. Defaults to
+# compact_mp_bar_color, so set that alone to move both together, or override
+# here to colour the two bars independently.
+mp_bar_color=305FE8
 
 # Portrait: message panel
 # Shown during: gameplay — bottom strip, game messages

@@ -83,6 +83,8 @@ public class PreferencesActivity extends PreferenceActivity implements
 
         setHelpIntent();
 
+        setChangelogIntent();
+
         setConfigFilePreferences();
 
         setCharacterFilesIntent();
@@ -98,6 +100,8 @@ public class PreferencesActivity extends PreferenceActivity implements
         setRepositionCenterlineClickListener();
 
         gateUnfoldedPrefs();
+
+        gateCompactPrefs();
 
         addBackupRestorePreferences();
 
@@ -677,10 +681,50 @@ public class PreferencesActivity extends PreferenceActivity implements
             getPreferenceScreen().removePreference(cat);
     }
 
+    // The compact HP/MP bar-side picker is only meaningful while Compact UI
+    // Mode is on. Cache the row here (its order is assigned during XML
+    // inflation, so re-adding later drops it back into its declared slot)
+    // and gate it live as the toggle changes (onSharedPreferenceChanged).
+    private Preference compactBarSidePref;
+
+    private void gateCompactPrefs() {
+        compactBarSidePref = findPreference(Preferences.KEY_COMPACTBARSIDE);
+        setCompactBarSideVisible(Preferences.getCompactHud());
+    }
+
+    // Show/hide the bar-side row live as Compact UI Mode toggles. The legacy
+    // PreferenceActivity framework has no setVisible(), so the row is
+    // physically removed from / re-added to the display category.
+    private void setCompactBarSideVisible(boolean visible) {
+        if (compactBarSidePref == null)
+            return;
+        PreferenceCategory cat =
+                (PreferenceCategory) findPreference("display");
+        if (cat == null)
+            return;
+        boolean present =
+                findPreference(Preferences.KEY_COMPACTBARSIDE) != null;
+        if (visible && !present) {
+            cat.addPreference(compactBarSidePref);
+            // onCreate's applyCompactLayout skipped this row while it was
+            // absent; re-apply so the re-added row matches the others.
+            applyCompactLayout(cat);
+            setSummaryPref(compactBarSidePref);
+        } else if (!visible && present) {
+            cat.removePreference(compactBarSidePref);
+        }
+    }
+
     private void setHelpIntent() {
         Preference helpPreference = findPreference("help");
         Intent helpIntent = new Intent(this, HelpActivity.class);
         helpPreference.setIntent(helpIntent);
+    }
+
+    private void setChangelogIntent() {
+        Preference changelogPreference = findPreference("changelog");
+        Intent changelogIntent = new Intent(this, ChangelogActivity.class);
+        changelogPreference.setIntent(changelogIntent);
     }
 
     private void setCharacterFilesIntent() {
@@ -828,15 +872,25 @@ public class PreferencesActivity extends PreferenceActivity implements
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
                                           String key) {
         if (key.compareTo(Preferences.KEY_WORDWRAP) == 0
-                || key.compareTo(Preferences.KEY_NEWTURNMARK) == 0
-                || key.compareTo(Preferences.KEY_COMPACTHUD) == 0) {
-            // Word wrap / turn mark / compact HUD change DCSS options and the
-            // terminal layout, both wired once at game boot — same reason
-            // custom-folder changes hard-restart. The reload flag shows the
-            // "Reloading..." overlay across the relaunch. The game was
-            // already saved by GameActivity.onPause when this screen opened.
+                || key.compareTo(Preferences.KEY_NEWTURNMARK) == 0) {
+            // Word wrap / turn mark change DCSS options wired once at game boot
+            // (msg_max_width/height, show_newturn_mark) — same reason custom-
+            // folder changes hard-restart. The reload flag shows the
+            // "Reloading..." overlay across the relaunch. The game was already
+            // saved by GameActivity.onPause when this screen opened.
             Preferences.setReloadInProgressSync(true);
             killAndRelaunch(this);
+            return;
+        }
+        if (key.compareTo(Preferences.KEY_COMPACTHUD) == 0
+                || key.compareTo(Preferences.KEY_COMPACTBARSIDE) == 0) {
+            // Compact HUD / bar side only affect draw-time state: native
+            // android_compact_hud is read at print_stats time, and bar side is
+            // pure Java layout. GameActivity applies them live on resume — no
+            // process restart, so no "Reloading..." overlay.
+            Preferences.setLiveHudApplyPending(true);
+            if (key.compareTo(Preferences.KEY_COMPACTHUD) == 0)
+                setCompactBarSideVisible(Preferences.getCompactHud());
             return;
         }
         if (key.compareTo(Preferences.KEY_ACTIVEPROFILE) == 0

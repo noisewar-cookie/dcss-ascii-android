@@ -18,4 +18,17 @@
         <item> </item>
         <item>Happy crawling!</item>
     </string-array>
+
+    <!-- Compact-mode HP/MP bar position picker. Order/values must stay in
+         sync; values are matched by Preferences.getCompactBarSide(). -->
+    <string-array name="compactBarSideDescriptions">
+        <item>Left side</item>
+        <item>Right side</item>
+        <item>Off</item>
+    </string-array>
+    <string-array name="compactBarSideValues" translatable="false">
+        <item>left</item>
+        <item>right</item>
+        <item>off</item>
+    </string-array>
 </resources>

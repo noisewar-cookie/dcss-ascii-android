@@ -11,4 +11,19 @@
         android:layout_gravity="center"
         android:scaleType="centerInside" />
 
+    <TextView
+        android:id="@+id/version_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="6dp"
+        android:textColor="#B3ffffff"
+        android:textSize="11sp"
+        android:shadowColor="#ff000000"
+        android:shadowDx="1"
+        android:shadowDy="1"
+        android:shadowRadius="2"
+        android:visibility="gone" />
+
 </FrameLayout>

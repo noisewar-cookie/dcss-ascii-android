@@ -89,6 +89,12 @@ static bool android_newturn_mark = true;
 // repacked. Non-static so output.cc reads it via `extern bool`.
 bool android_compact_hud = false;
 
+// Horizontal MP bar fill colour (ARGB), boot-wired from font_config
+// (mp_bar_color) via NativeWrapper.setMpBarColour. Default matches the native
+// vertical bar's compact_mp_bar_color (DCSS BLUE nudged lighter/desaturated).
+// output.cc reads it via `extern int` at the MP bar draw site.
+int android_mp_bar_argb = 0xFF305FE8;
+
 // Table-reflow toggles: padded 80-col table sections that get restacked to
 // fit the wrap width when word wrap is active (each only takes effect while
 // android_prose_wrap_cols / android_msg_wrap_cols > 0). One flag per
@@ -406,6 +412,7 @@ extern "C"
 	void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, jint msgWrapCols, jint msgRows, jint proseWrapCols);
 	void Java_com_crawlmb_NativeWrapper_setNewturnMark( JNIEnv* env, jobject object, jboolean enabled);
 	void Java_com_crawlmb_NativeWrapper_setCompactHud( JNIEnv* env, jobject object, jboolean enabled);
+	void Java_com_crawlmb_NativeWrapper_setMpBarColour( JNIEnv* env, jobject object, jint argb);
 	void Java_com_crawlmb_NativeWrapper_setMsgMaxWidthLive( JNIEnv* env, jobject object, jint msgWrapCols);
 	void Java_com_crawlmb_NativeWrapper_setProseWrapColsLive( JNIEnv* env, jobject object, jint proseWrapCols);
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
@@ -446,6 +453,12 @@ void Java_com_crawlmb_NativeWrapper_setNewturnMark( JNIEnv* env, jobject object,
 void Java_com_crawlmb_NativeWrapper_setCompactHud( JNIEnv* env, jobject object, jboolean enabled)
 {
 	android_compact_hud = enabled;
+}
+
+// Boot-wired from NativeWrapper.gameStart with font_config's mp_bar_color.
+void Java_com_crawlmb_NativeWrapper_setMpBarColour( JNIEnv* env, jobject object, jint argb)
+{
+	android_mp_bar_argb = argb;
 }
 
 // Live msg wrap-width update after a fold/unfold (width only, no re-layout).
@@ -1105,6 +1118,15 @@ void textcolour(int col)
 	COLOURS fgcolour = (COLOURS) macro_colour(col & 0x00ff);
 	brand = get_brand(col);
 	foregroundColour = colourMap[fgcolour];
+}
+
+// Set the foreground to a literal ARGB, bypassing the 16-colour palette map.
+// Used by output.cc's horizontal MP bar so its fill can match the native
+// vertical bar's font_config colour (which isn't a palette entry).
+void textcolour_argb(int argb)
+{
+	brand = CHATTR_NORMAL;
+	foregroundColour = argb | 0xFF000000;
 }
 
 void textbackground(int col)

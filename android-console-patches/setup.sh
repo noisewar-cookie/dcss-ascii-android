@@ -74,6 +74,52 @@ echo "Syncing LICENSE into assets..."
 cp -v "$PROJECT_DIR/android-crawl-console/LICENSE" "$PROJECT_DIR/assets/LICENSE.txt"
 echo ""
 
+# ── Step 3b2b: Compile release changelogs into assets/docs ──
+# Concatenates every metadata/en-US/changelogs/<N>.txt (our fork's Play Store
+# release notes), newest version first, into one HTML page shown by
+# ChangelogActivity. The folder is globbed, so a new release's notes are picked
+# up automatically on the next build — no manual step. assets/docs/ is not part
+# of the dat-hash, and the page is read straight from the APK via
+# file:///android_asset/docs/changelogs.html, so this never gates re-extraction.
+echo "Compiling release changelogs into assets/docs/changelogs.html..."
+CL_SRC="$PROJECT_DIR/metadata/en-US/changelogs"
+CL_DST="$PROJECT_DIR/assets/docs/changelogs.html"
+mkdir -p "$(dirname "$CL_DST")"
+{
+    cat <<'HTML_HEAD'
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body { background:#000; color:#cfcfcf; font-family:sans-serif;
+       margin:0; padding:14px 14px 28px; }
+h1 { color:#e0b64c; font-size:20px; margin:6px 0 18px; }
+.entry { border-bottom:1px solid #2a2a2a; padding:0 0 14px; margin:0 0 14px; }
+.entry:last-child { border-bottom:none; }
+pre { white-space:pre-wrap; word-wrap:break-word; font-family:monospace;
+      font-size:14px; line-height:1.45; margin:0; }
+</style>
+</head>
+<body>
+<h1>Changelog</h1>
+HTML_HEAD
+    for n in $(ls "$CL_SRC" | sed -n 's/\.txt$//p' | sort -rn); do
+        f="$CL_SRC/$n.txt"
+        [ -f "$f" ] || continue
+        echo '<div class="entry"><pre>'
+        sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$f"
+        echo '</pre></div>'
+    done
+    cat <<'HTML_TAIL'
+</body>
+</html>
+HTML_TAIL
+} > "$CL_DST"
+echo "  $(ls "$CL_SRC"/*.txt | wc -l) changelog entries compiled."
+echo ""
+
 # ── Step 3b3: Sync title_*.png splash images into res/drawable ──
 # SplashActivity randomly picks one of these as the startup background. Upstream
 # adds new ones each release (see TITLEIMGS in source/Makefile). Filenames are

@@ -1,8 +1,8 @@
 diff --git a/crawl-ref/source/output.cc b/crawl-ref/source/output.cc
-index 3c3bfb8186..9731c07e36 100644
+index 3c3bfb8186..25ed16918d 100644
 --- a/crawl-ref/source/output.cc
 +++ b/crawl-ref/source/output.cc
-@@ -406,6 +406,24 @@ static string _god_powers();
+@@ -406,6 +406,31 @@ static string _god_powers();
  static string _god_asterisks(bool leading_space = false);
  static int _god_status_colour(int default_colour);
  
@@ -19,6 +19,13 @@ index 3c3bfb8186..9731c07e36 100644
 +extern void android_send_hud_bars(const int* hp, int hp_count,
 +                                   const int* mp, int mp_count);
 +
++// Android: ARGB fill colour for the horizontal MP bar, boot-wired from
++// font_config (mp_bar_color) via NativeWrapper.setMpBarColour. Matches the
++// native vertical MP bar's compact_mp_bar_color. textcolour_argb sets the
++// foreground to a literal ARGB (bypassing the 16-colour palette map).
++extern int android_mp_bar_argb;
++extern void textcolour_argb(int argb);
++
 +// Compact-HUD helpers (defined below print_stats; forward-declared for the
 +// earlier update_turn_count / print_stats_level compact branches).
 +static void _push_compact_vitals();
@@ -27,7 +34,39 @@ index 3c3bfb8186..9731c07e36 100644
  // Colour for captions like 'Health:', 'Str:', etc.
  #define HUD_CAPTION_COLOUR Options.status_caption_colour
  
-@@ -580,6 +598,44 @@ public:
+@@ -425,6 +450,10 @@ public:
+     colour_t m_change_neg;
+     colour_t m_empty;
+     int horiz_bar_width;
++    // Android: non-zero overrides the fill cells (m_default / m_change_pos)
++    // with this literal ARGB so the horizontal MP bar matches the native
++    // vertical bar. Set per-draw at the MP bar call site; HP leaves it 0.
++    int m_android_fill_argb = 0;
+ 
+     colour_bar(colour_t default_colour,
+                colour_t change_pos,
+@@ -486,12 +515,18 @@ public:
+ #else
+             if (cx < disp && cx < old_disp)
+             {
+-                textcolour(m_default);
++                if (m_android_fill_argb)
++                    textcolour_argb(m_android_fill_argb);
++                else
++                    textcolour(m_default);
+                 putwch('=');
+             }
+             else if (cx < disp)
+             {
+-                textcolour(m_change_pos);
++                if (m_android_fill_argb)
++                    textcolour_argb(m_android_fill_argb);
++                else
++                    textcolour(m_change_pos);
+                 putwch('=');
+             }
+             else if (cx < sub_disp)
+@@ -580,6 +615,44 @@ public:
          m_request_redraw_after = 0;
      }
  
@@ -72,7 +111,7 @@ index 3c3bfb8186..9731c07e36 100644
   private:
      int m_old_disp;
      int m_request_redraw_after; // force a redraw at this turn count
-@@ -590,7 +646,10 @@ static colour_bar HP_Bar(LIGHTGREEN, GREEN, RED, DARKGREY);
+@@ -590,7 +663,10 @@ static colour_bar HP_Bar(LIGHTGREEN, GREEN, RED, DARKGREY);
  #ifdef USE_TILE_LOCAL
  static colour_bar MP_Bar(BLUE, BLUE, LIGHTBLUE, DARKGREY);
  #else
@@ -84,7 +123,7 @@ index 3c3bfb8186..9731c07e36 100644
  #endif
  
  #ifdef USE_TILE_LOCAL
-@@ -648,6 +707,10 @@ void update_message_status()
+@@ -648,6 +724,10 @@ void update_message_status()
  }
  #endif
  
@@ -95,7 +134,7 @@ index 3c3bfb8186..9731c07e36 100644
  void update_turn_count()
  {
      if (crawl_state.game_is_arena())
-@@ -661,29 +724,21 @@ void update_turn_count()
+@@ -661,29 +741,21 @@ void update_turn_count()
          return;
      }
  
@@ -137,7 +176,7 @@ index 3c3bfb8186..9731c07e36 100644
  }
  
  static int _count_digits(int val)
-@@ -812,12 +867,13 @@ static void _print_stats_noise(int x, int y)
+@@ -812,12 +884,13 @@ static void _print_stats_noise(int x, int y)
  
      if (silence)
      {
@@ -156,7 +195,18 @@ index 3c3bfb8186..9731c07e36 100644
          Noise_Bar.reset(); // so it doesn't display a change bar after silence ends
      }
      else
-@@ -1018,107 +1074,176 @@ static short _get_stat_colour(stat_type stat)
+@@ -939,7 +1012,10 @@ static void _print_stats_mp(int x, int y)
+     }
+     else
+ #endif
++    {
++        MP_Bar.m_android_fill_argb = android_mp_bar_argb;
+         MP_Bar.draw(19, y, you.magic_points, you.max_magic_points);
++    }
+ 
+     you.redraw_magic_points = false;
+ }
+@@ -1018,107 +1094,176 @@ static short _get_stat_colour(stat_type stat)
  
  static void _print_stat(stat_type stat, int x, int y)
  {
@@ -399,7 +449,7 @@ index 3c3bfb8186..9731c07e36 100644
  
      you.redraw_evasion = false;
  }
-@@ -1512,15 +1637,354 @@ static void _redraw_title()
+@@ -1512,15 +1657,354 @@ static void _redraw_title()
      you.redraw_title = false;
  }
  
@@ -757,7 +807,7 @@ index 3c3bfb8186..9731c07e36 100644
      cursor_control coff(false);
      textcolour(LIGHTGREY);
  
-@@ -1559,66 +2023,112 @@ void print_stats()
+@@ -1559,66 +2043,112 @@ void print_stats()
      else if (you.redraw_magic_points)
          _print_stats_mp(1, 4);
  
@@ -908,7 +958,7 @@ index 3c3bfb8186..9731c07e36 100644
  
  #ifndef USE_TILE_LOCAL
      assert_valid_cursor_pos();
-@@ -1627,23 +2137,21 @@ void print_stats()
+@@ -1627,23 +2157,21 @@ void print_stats()
  
  void print_stats_level()
  {
@@ -945,7 +995,7 @@ index 3c3bfb8186..9731c07e36 100644
  }
  
  void draw_border()
-@@ -1655,33 +2163,43 @@ void draw_border()
+@@ -1655,33 +2183,43 @@ void draw_border()
  
      textcolour(Options.status_caption_colour);
  
@@ -1012,7 +1062,7 @@ index 3c3bfb8186..9731c07e36 100644
  }
  
  #ifndef USE_TILE_LOCAL
-@@ -2171,15 +2689,10 @@ static string _overview_screen_title(int sw)
+@@ -2171,15 +2709,10 @@ static string _overview_screen_title(int sw)
                                        species::name(you.species).c_str(),
                                        get_job_name(you.char_class));
  
@@ -1029,7 +1079,7 @@ index 3c3bfb8186..9731c07e36 100644
  
      if (linelength >= sw)
      {
-@@ -2191,22 +2704,13 @@ static string _overview_screen_title(int sw)
+@@ -2191,22 +2724,13 @@ static string _overview_screen_title(int sw)
  
      // Still not enough?
      if (linelength >= sw)
@@ -1052,7 +1102,7 @@ index 3c3bfb8186..9731c07e36 100644
      text += "</yellow>\n";
  
      return text;
-@@ -2296,15 +2800,15 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2296,15 +2820,15 @@ static vector<formatted_string> _get_overview_stats()
  {
      formatted_string entry;
  
@@ -1071,7 +1121,7 @@ index 3c3bfb8186..9731c07e36 100644
  
      entry.textcolour(HUD_CAPTION_COLOUR);
      if (player_drained())
-@@ -2423,6 +2927,24 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2423,6 +2947,24 @@ static vector<formatted_string> _get_overview_stats()
      cols.add_formatted(2, entry.to_colour_string(), false);
      entry.clear();
  
@@ -1096,7 +1146,7 @@ index 3c3bfb8186..9731c07e36 100644
      entry.textcolour(HUD_CAPTION_COLOUR);
      entry.cprintf("XL:     ");
  
-@@ -2438,7 +2960,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2438,7 +2980,7 @@ static vector<formatted_string> _get_overview_stats()
          entry.cprintf("%d%%", get_exp_progress());
      }
  
@@ -1105,7 +1155,7 @@ index 3c3bfb8186..9731c07e36 100644
      entry.clear();
  
      entry.textcolour(HUD_CAPTION_COLOUR);
-@@ -2453,7 +2975,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2453,7 +2995,7 @@ static vector<formatted_string> _get_overview_stats()
  #endif
      entry += formatted_string::parse_string(godpowers);
  
@@ -1114,7 +1164,7 @@ index 3c3bfb8186..9731c07e36 100644
      entry.clear();
  
      if (!you.has_mutation(MUT_INNATE_CASTER))
-@@ -2465,7 +2987,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2465,7 +3007,7 @@ static vector<formatted_string> _get_overview_stats()
          entry.cprintf("%d/%d levels left",
                        player_spell_levels(), player_total_spell_levels());
  
@@ -1123,7 +1173,7 @@ index 3c3bfb8186..9731c07e36 100644
          entry.clear();
      }
  
-@@ -2483,11 +3005,11 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2483,11 +3025,11 @@ static vector<formatted_string> _get_overview_stats()
          entry.textcolour(HUD_VALUE_COLOUR);
          entry.cprintf("%d", you.deaths);
  
@@ -1137,7 +1187,7 @@ index 3c3bfb8186..9731c07e36 100644
  }
  
  // generator of resistance strings:
-@@ -2629,7 +3151,10 @@ static vector<formatted_string> _get_overview_resistances(
+@@ -2629,7 +3171,10 @@ static vector<formatted_string> _get_overview_resistances(
  class overview_popup : public formatted_scroller
  {
  public:
@@ -1149,7 +1199,7 @@ index 3c3bfb8186..9731c07e36 100644
      vector<char> equip_chars;
  private:
      maybe_bool process_key(int ch) override
-@@ -2658,6 +3183,10 @@ void print_overview_screen()
+@@ -2658,6 +3203,10 @@ void print_overview_screen()
          overview.add_formatted_string(bline, true);
      overview.add_text("\n");
  
@@ -1160,7 +1210,7 @@ index 3c3bfb8186..9731c07e36 100644
      {
          vector<formatted_string> blines =
              _get_overview_resistances(overview.equip_chars, num_cols);
-@@ -2683,6 +3212,13 @@ string dump_overview_screen()
+@@ -2683,6 +3232,13 @@ string dump_overview_screen()
      }
      text += "\n";
  

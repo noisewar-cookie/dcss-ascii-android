@@ -76,4 +76,9 @@ public interface TerminalRenderer
 	// Whether Compact HUD mode is enabled. Queried by NativeWrapper.gameStart
 	// to pass to libandroid.cc before initGame. Default off (TermView).
 	default boolean getCompactHud() { return false; }
+
+	// ARGB fill colour for the horizontal MP bar (font_config mp_bar_color).
+	// Queried by NativeWrapper.gameStart to pass to libandroid.cc before
+	// initGame. Default matches the vertical bar's compact_mp_bar_color.
+	default int getMpBarColor() { return 0xFF305FE8; }
 }

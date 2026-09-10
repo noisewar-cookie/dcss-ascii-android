@@ -134,6 +134,9 @@ public class GameActivity extends Activity
 	private static final int COMPACT_MSG_ROWS = 5;
 	// Compact HUD native rows/bars (null unless the pref is on).
 	private boolean compactHudActive = false;
+	// Compact HP/MP bars docked to the map's left edge (else right); only
+	// meaningful when portraitCompactBars is non-null (bars enabled).
+	private boolean compactBarsLeft = false;
 	private StatusBarView portraitCompactTitle = null;
 	private StatusBarView portraitCompactVitals = null;
 	private com.crawlmb.view.VerticalBarsView portraitCompactBars = null;
@@ -1520,6 +1523,8 @@ public class GameActivity extends Activity
 		// Compact frees vertical rows, so let the map grow to width-fill (scale
 		// 1.0); onMeasure's height self-fit backs it off to best-fit the band.
 		compactHudActive = Preferences.getCompactHud();
+		compactBarsLeft = Preferences.getCompactBarSide()
+				.equals(Preferences.SIDE_LEFT);
 		mapView.setFontScaleMultiplier(compactHudActive
 				? 1.0f : fontConfig.portraitMapFontScale);
 		mapView.setCenterHorizontally(true);
@@ -1665,21 +1670,33 @@ public class GameActivity extends Activity
 			vitalsRow.setPadding(
 					charWidthPx * fontConfig.portraitHudOffsetCols, 0, 0, 0);
 
-			com.crawlmb.view.VerticalBarsView bars =
-					new com.crawlmb.view.VerticalBarsView(this);
-			bars.setId(View.generateViewId());
-			bars.setTypeface(gameTf);
-			bars.setFontSizePx(statusFontPx);
-			bars.setHpGlyphs(fontConfig.compactHpBarGlyph,
-					fontConfig.compactHpBarEmptyGlyph);
-			bars.setMpGlyphs(fontConfig.compactMpBarGlyph,
-					fontConfig.compactMpBarEmptyGlyph);
-			bars.setMpFillColor(fontConfig.compactMpBarColor);
-			bars.setMapView(mapView);
-
 			portraitCompactTitle = titleRow;
 			portraitCompactVitals = vitalsRow;
-			portraitCompactBars = bars;
+
+			// Bars off: null portraitCompactBars so every bar-layout / reserve
+			// path below is skipped and the map reclaims the full width. Must
+			// clear it explicitly — the field survives rebuilds, so a stale
+			// view from a prior bars-on build would otherwise be re-added to
+			// the new container ("child already has a parent").
+			if (!Preferences.getCompactBarSide().equals(Preferences.SIDE_OFF))
+			{
+				com.crawlmb.view.VerticalBarsView bars =
+						new com.crawlmb.view.VerticalBarsView(this);
+				bars.setId(View.generateViewId());
+				bars.setTypeface(gameTf);
+				bars.setFontSizePx(statusFontPx);
+				bars.setHpGlyphs(fontConfig.compactHpBarGlyph,
+						fontConfig.compactHpBarEmptyGlyph);
+				bars.setMpGlyphs(fontConfig.compactMpBarGlyph,
+						fontConfig.compactMpBarEmptyGlyph);
+				bars.setMpFillColor(fontConfig.compactMpBarColor);
+				bars.setMapView(mapView);
+				portraitCompactBars = bars;
+			}
+			else
+			{
+				portraitCompactBars = null;
+			}
 		}
 
 		// splitRoot is the container the router toggles VISIBLE/INVISIBLE for
@@ -1771,8 +1788,8 @@ public class GameActivity extends Activity
 			}
 			splitContainer.addView(mapView, mapParams);
 
-			// Vertical HP/MP bars overlay the map's right edge, spanning its
-			// height and docked to the bottom-right corner.
+			// Vertical HP/MP bars overlay the map's left or right edge (pref),
+			// spanning its height. The map reserves the matching side (below).
 			if (compactHudActive && portraitCompactBars != null)
 			{
 				RelativeLayout.LayoutParams barParams =
@@ -1780,7 +1797,9 @@ public class GameActivity extends Activity
 								LayoutParams.WRAP_CONTENT, 0);
 				barParams.addRule(RelativeLayout.ALIGN_TOP, mapView.getId());
 				barParams.addRule(RelativeLayout.ALIGN_BOTTOM, mapView.getId());
-				barParams.addRule(RelativeLayout.ALIGN_RIGHT, mapView.getId());
+				barParams.addRule(compactBarsLeft
+						? RelativeLayout.ALIGN_LEFT : RelativeLayout.ALIGN_RIGHT,
+						mapView.getId());
 				splitContainer.addView(portraitCompactBars, barParams);
 			}
 
@@ -2076,12 +2095,17 @@ public class GameActivity extends Activity
 								return;
 
 							// Reserve the docked bars' width so the map fits and
-							// centers left of them (no-ops once stable).
+							// centers beside them (no-ops once stable).
 							if (compactHudActive && portraitCompactBars != null)
 							{
 								int barsW = portraitCompactBars.getWidth();
 								if (barsW > 0)
-									mapView.setRightReservePx(barsW);
+								{
+									if (compactBarsLeft)
+										mapView.setLeftReservePx(barsW);
+									else
+										mapView.setRightReservePx(barsW);
+								}
 							}
 
 							int available = gamePanel.getHeight();
@@ -2187,12 +2211,17 @@ public class GameActivity extends Activity
 							return;
 
 						// Reserve the docked bars' width so the map fits and
-						// centers left of them (no-ops once stable).
+						// centers beside them (no-ops once stable).
 						if (compactHudActive && portraitCompactBars != null)
 						{
 							int barsW = portraitCompactBars.getWidth();
 							if (barsW > 0)
-								mapView.setRightReservePx(barsW);
+							{
+								if (compactBarsLeft)
+									mapView.setLeftReservePx(barsW);
+								else
+									mapView.setRightReservePx(barsW);
+							}
 						}
 
 						int available = gamePanel.getHeight();
@@ -2303,12 +2332,14 @@ public class GameActivity extends Activity
 		mapHalf.addView(mapView, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
-		// Compact HUD vertical bars overlay the map half's bottom-right.
+		// Compact HUD vertical bars overlay the map half's left or right edge.
 		if (compactHudActive && portraitCompactBars != null)
 		{
 			FrameLayout.LayoutParams barLp = new FrameLayout.LayoutParams(
 					LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT);
-			barLp.gravity = android.view.Gravity.END | android.view.Gravity.TOP;
+			barLp.gravity = (compactBarsLeft
+					? android.view.Gravity.START : android.view.Gravity.END)
+					| android.view.Gravity.TOP;
 			mapHalf.addView(portraitCompactBars, barLp);
 		}
 
@@ -2944,6 +2975,21 @@ public class GameActivity extends Activity
 
 		if (pendingCenterlineEntry)
 			schedulePendingCenterlineEntry();
+
+		// A compact-HUD / bar-side toggle applied live instead of restarting
+		// (PreferencesActivity.onSharedPreferenceChanged). onStart's
+		// rebuildViews already rebuilt the layout for the new pref; push the
+		// native flag and force DCSS to repaint stats through the now-current
+		// HUD branch. The parked game thread won't re-run print_stats on its
+		// own, and neither the terminal grid (compact off) nor the native HUD
+		// cache (compact on) holds fresh stat data for the layout we rebuilt
+		// into. Ctrl-R = CMD_REDRAW_SCREEN redraws everything, no turn taken.
+		if (Preferences.consumeLiveHudApplyPending()
+				&& gameKeyListener != null
+				&& gameKeyListener.nativew != null) {
+			gameKeyListener.nativew.applyCompactHud(Preferences.getCompactHud());
+			gameKeyListener.addKey(18, -1); // CONTROL('R')
+		}
 
 		// When Android resumes the activity from the recents/task switcher,
 		// our view-tree state survives but DCSS only repaints on its own

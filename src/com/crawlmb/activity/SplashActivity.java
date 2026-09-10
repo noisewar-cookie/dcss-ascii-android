@@ -28,10 +28,15 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.crawlmb.CustomFolderSync;
 import com.crawlmb.Paths;
@@ -69,7 +74,38 @@ public class SplashActivity extends Activity {
 
         setBackground();
 
+        setVersionLabel();
+
         installIfRequired();
+    }
+
+    // Show the bundled build's version (matches the changelog's newest entry)
+    // in the bottom-right corner while the splash is up. Skipped when the
+    // splash is disabled — there's nothing for it to sit on.
+    private void setVersionLabel() {
+        TextView label = (TextView) findViewById(R.id.version_label);
+        if (Preferences.getSkipSplash())
+            return;
+        label.setText(getString(R.string.splash_version_label,
+                getApplicationVersionCode(), getVersionName()));
+        label.setVisibility(View.VISIBLE);
+        // Edge-to-edge (forced on API 35+) draws the FrameLayout behind the
+        // nav bar, so a bottom-anchored label lands under it. Lift it by the
+        // real bottom inset. On pre-35 (no edge-to-edge here) the inset is 0
+        // and the XML margin alone positions it.
+        final int baseGap =
+                Math.round(6 * getResources().getDisplayMetrics().density);
+        ViewCompat.setOnApplyWindowInsetsListener(label, (v, insets) -> {
+            int bottom = insets.getInsets(
+                    WindowInsetsCompat.Type.systemBars()
+                    | WindowInsetsCompat.Type.displayCutout()).bottom;
+            ViewGroup.MarginLayoutParams lp =
+                    (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+            lp.bottomMargin = bottom + baseGap;
+            v.setLayoutParams(lp);
+            return insets;
+        });
+        ViewCompat.requestApplyInsets(label);
     }
 
     @Override

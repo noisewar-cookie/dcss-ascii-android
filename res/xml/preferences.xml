@@ -27,7 +27,9 @@
 			android:title="@string/preferences_hudbutton_longpress_title"
 			android:summary="@string/preferences_hudbutton_longpress_summary"/>
 	</PreferenceCategory>
-  <PreferenceCategory android:title="@string/display_category">
+  <PreferenceCategory
+	  android:key="display"
+	  android:title="@string/display_category">
 	<CheckBoxPreference 
 	   android:key="crawl.fullscreen"
 	   android:defaultValue="true" 
@@ -59,6 +61,15 @@
 	   android:defaultValue="false"
 	   android:title="@string/preferences_compacthud_title"
 	   android:summary="@string/preferences_compacthud_summary" />
+	<!-- Shown only while Compact UI Mode is on (PreferencesActivity.gateCompactPrefs). -->
+	<ListPreference
+	   android:key="crawl.compactbarside"
+	   android:defaultValue="right"
+	   android:title="@string/preferences_compactbarside_title"
+	   android:summary="@string/preferences_compactbarside_summary"
+	   android:dialogTitle="@string/preferences_compactbarside_dialogtitle"
+	   android:entries="@array/compactBarSideDescriptions"
+	   android:entryValues="@array/compactBarSideValues" />
 	<CheckBoxPreference
 	   android:key="crawl.newturnmark"
 	   android:defaultValue="true"
@@ -374,5 +385,11 @@
             android:key="character_files"
             android:title="Character files...">
         </Preference>
+    </PreferenceCategory>
+    <PreferenceCategory android:key="about" android:title="@string/about_category">
+        <Preference
+            android:key="changelog"
+            android:title="@string/preferences_changelog_title"
+            android:summary="@string/preferences_changelog_summary" />
     </PreferenceCategory>
 </PreferenceScreen>

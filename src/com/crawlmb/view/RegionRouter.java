@@ -778,6 +778,12 @@ public class RegionRouter implements TerminalRenderer
 		return compactHud;
 	}
 
+	@Override
+	public int getMpBarColor()
+	{
+		return fontConfig != null ? fontConfig.mpBarColor : 0xFF305FE8;
+	}
+
 	public void setCompactHudViews(StatusBarView title, StatusBarView vitals,
 			VerticalBarsView bars)
 	{

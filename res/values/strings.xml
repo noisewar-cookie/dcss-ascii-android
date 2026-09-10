@@ -19,6 +19,10 @@
     <string name="text_copied">Text copied to clipboard</string>
     <string name="morgue">Morgue</string>
     <string name="save_files">Save Files</string>
+    <string name="about_category">About</string>
+    <string name="splash_version_label">v%1$d (%2$s)</string>
+    <string name="preferences_changelog_title">Changelog</string>
+    <string name="preferences_changelog_summary">See what\'s new in each release.</string>
     <string name="backup_save_directory">Backup save directory</string>
     <string name="backup_morgue_directory">Backup morgue directory</string>
     <string name="restore_save_directory">Restore save directory</string>
@@ -70,6 +74,13 @@
     <string name="preferences_wordwrap_summary">Wrap most texts at screen edge. Restarts app.</string>
     <string name="preferences_compacthud_title">Compact UI Mode</string>
     <string name="preferences_compacthud_summary">Advanced compact UI to maximize map panel size.</string>
+    <string name="preferences_compactbarside_title">"    HP/MP vertical bars side"</string>
+    <string name="preferences_compactbarside_dialogtitle">HP/MP vertical bars side</string>
+    <!-- %s is replaced by the selected entry (ListPreference); leading spaces
+         (kept via quotes) indent it under the title. The summary font is
+         smaller than the title's, so it needs more spaces than the title's 4
+         to line up. -->
+    <string name="preferences_compactbarside_summary">"      %s"</string>
     <string name="preferences_newturnmark_title">New turn indicator</string>
     <string name="preferences_newturnmark_summary">Show turn markers in the message log. Restarts app.</string>
     <string name="preferences_bevelmargin_title">Edge margin</string>

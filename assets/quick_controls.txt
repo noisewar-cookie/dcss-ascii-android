@@ -1,6 +1,7 @@
 __________________________________________________
 
  QUICK CONTROLS
+ Use 2-finger long press to access App Menu.
      ? = help
     ?? = keyboard controls
 
@@ -23,10 +24,7 @@ __________________________________________________
         f/Q = fire / Quiver
       z/I/M = cast / list / Memorize spells
 
- Use 2-finger long press to access App Menu
-
- Press help (?) twice for extended controls list.
-__________________________________________________
+  __________________________________________________
 
  * NEW PLAYERS *
     If it's your first time playing DCSS,

@@ -29,6 +29,9 @@ final public class Preferences
 	public static final String KEY_WORDWRAP = "crawl.wordwrap";
 	public static final String KEY_NEWTURNMARK = "crawl.newturnmark";
 	public static final String KEY_COMPACTHUD = "crawl.compacthud";
+	// Compact-mode HP/MP vertical bars: which map edge they dock to, or off.
+	// Values SIDE_RIGHT (default) / SIDE_LEFT / SIDE_OFF.
+	public static final String KEY_COMPACTBARSIDE = "crawl.compactbarside";
 	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
 	public static final String KEY_SEENPREFSOPTIONSVERSION = "crawl.seenprefsoptionsversion";
 
@@ -87,6 +90,8 @@ final public class Preferences
 	public static final String SIDE_RIGHT = "right";
 	// Keyboard side only: spans the whole display (today's behavior).
 	public static final String SIDE_BOTH = "both";
+	// Compact HP/MP bars only: bars hidden, map reclaims their width.
+	public static final String SIDE_OFF = "off";
 
 	// Global bevel margin (dp): a uniform inset applied to the game area and
 	// all overlays on every edge, in every mode (single-screen too). Keeps
@@ -207,6 +212,16 @@ final public class Preferences
 		return sharedPreferences.getBoolean(Preferences.KEY_COMPACTHUD, false);
 	}
 
+	// Which map edge the compact HP/MP bars dock to, or off. Only meaningful
+	// while getCompactHud() is on. Default SIDE_RIGHT (the original position).
+	public static String getCompactBarSide()
+	{
+		String s = sharedPreferences.getString(KEY_COMPACTBARSIDE, SIDE_RIGHT);
+		if (SIDE_LEFT.equals(s) || SIDE_OFF.equals(s))
+			return s;
+		return SIDE_RIGHT;
+	}
+
 	// One-shot flag marking that the next launch follows a save-restore
 	// process restart (PreferencesActivity sets it just before killing the
 	// process). GameActivity reads it via consumeReloadInProgress() to show
@@ -260,6 +275,25 @@ final public class Preferences
 		if (v)
 			sharedPreferences.edit()
 					.putBoolean(Preferences.KEY_RELOADINPROGRESS, false).apply();
+		return v;
+	}
+
+	// In-process one-shot: a live-applicable HUD setting (compact HUD or bar
+	// side) changed while a game is running. GameActivity re-applies it on
+	// resume (setCompactHud + rebuildViews + forced redraw) instead of the
+	// full process restart the boot-wired settings need. In-memory only — the
+	// game is never killed on this path, so the flag never has to survive it.
+	private static boolean liveHudApplyPending = false;
+
+	public static void setLiveHudApplyPending(boolean value)
+	{
+		liveHudApplyPending = value;
+	}
+
+	public static boolean consumeLiveHudApplyPending()
+	{
+		boolean v = liveHudApplyPending;
+		liveHudApplyPending = false;
 		return v;
 	}
 

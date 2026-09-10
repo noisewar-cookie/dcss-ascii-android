@@ -54,6 +54,7 @@ public class NativeWrapper
 		setWordwrap(wrapCols, msgRows, proseCols);
 		setNewturnMark(renderer.getNewturnMark());
 		setCompactHud(renderer.getCompactHud());
+		setMpBarColour(renderer.getMpBarColor());
 		initGame(dataDir, settingsDir, morgueDir);
 	}
 
@@ -89,6 +90,7 @@ public class NativeWrapper
 	private native void setWordwrap(int msgWrapCols, int msgRows, int proseWrapCols);
 	private native void setNewturnMark(boolean enabled);
 	private native void setCompactHud(boolean enabled);
+	private native void setMpBarColour(int argb);
 	private native void setMsgMaxWidthLive(int msgWrapCols);
 	private native void setProseWrapColsLive(int proseWrapCols);
 	public static native void nativeSaveGame();
@@ -128,6 +130,15 @@ public class NativeWrapper
 		if (ctx == null || savePath == null)
 			return;
 		CustomFolderSync.pushSaveFileAsync(ctx, new java.io.File(savePath));
+	}
+
+	// Push the compact-HUD flag to native after a live settings toggle (no
+	// game restart). android_compact_hud is read at print_stats time, so the
+	// caller forces a redraw (Ctrl-R) afterward to repaint stats through the
+	// now-current HUD branch.
+	public void applyCompactHud(boolean enabled)
+	{
+		setCompactHud(enabled);
 	}
 
 	private native void refreshTerminal();

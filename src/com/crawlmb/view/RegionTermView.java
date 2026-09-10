@@ -100,10 +100,12 @@ public class RegionTermView extends View
 	private int drawOffsetX = 0;
 	private int offsetCols = 0;
 	private int drawOffsetY = 0;
-	// Px reserved on the right for the docked compact HP/MP bars. Font-fit and
-	// horizontal centering use (width - rightReservePx) so the map content sits
-	// left of the bars, and the draw is clipped there so a zoomed-in map can
-	// never overlap them. 0 = no reserve (non-compact, no bars).
+	// Px reserved on the left/right for the docked compact HP/MP bars. Font-fit
+	// and horizontal centering use (width - leftReservePx - rightReservePx) so
+	// the map content sits beside the bars, and the draw is clipped to that band
+	// so a zoomed-in map can never overlap them. At most one side is nonzero;
+	// both 0 = no reserve (non-compact, bars off, or bars on the far side).
+	private int leftReservePx = 0;
 	private int rightReservePx = 0;
 	// When true (font_config portrait_map_vfit_fill), grow the font to fill the
 	// panel height instead of leaving the width-fit block in vertical slack.
@@ -710,6 +712,16 @@ public class RegionTermView extends View
 			requestLayout();
 	}
 
+	// Reserve px on the left for left-docked compact bars (0 = none).
+	public void setLeftReservePx(int px)
+	{
+		if (this.leftReservePx == px)
+			return;
+		this.leftReservePx = px;
+		if (canvas != null)
+			requestLayout();
+	}
+
 	public void setVfitFill(boolean fill)
 	{
 		if (this.vfitFill == fill)
@@ -840,11 +852,14 @@ public class RegionTermView extends View
 			// (zoom-out) rather than spilling into the panel margins or the
 			// docked bars. The block footprint stays fixed.
 			int cw = contentWidthPx();
+			float clipLeft = drawOffsetX;
+			if (leftReservePx > 0)
+				clipLeft = Math.max(clipLeft, leftReservePx);
 			float clipRight = drawOffsetX + cw;
 			if (rightReservePx > 0)
 				clipRight = Math.min(clipRight, getWidth() - rightReservePx);
 			canvas.save();
-			canvas.clipRect(drawOffsetX, drawOffsetY, clipRight,
+			canvas.clipRect(clipLeft, drawOffsetY, clipRight,
 					drawOffsetY + canvas_height);
 			canvas.scale(contentZoom, contentZoom,
 					drawOffsetX + cw / 2f, drawOffsetY + canvas_height / 2f);
@@ -852,11 +867,12 @@ public class RegionTermView extends View
 					drawOffsetY - scrollOffsetY, null);
 			canvas.restore();
 		}
-		else if (rightReservePx > 0)
+		else if (rightReservePx > 0 || leftReservePx > 0)
 		{
 			// Keep the (possibly height-filled) map off the docked bars.
 			canvas.save();
-			canvas.clipRect(0, 0, getWidth() - rightReservePx, getHeight());
+			canvas.clipRect(leftReservePx, 0, getWidth() - rightReservePx,
+					getHeight());
 			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX,
 					drawOffsetY - scrollOffsetY, null);
 			canvas.restore();
@@ -1150,9 +1166,9 @@ public class RegionTermView extends View
 	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec)
 	{
 		int width = MeasureSpec.getSize(widthMeasureSpec);
-		// Fit the map into the width left of the docked bars so its content
-		// sits left of them (a slightly larger left margin is expected).
-		int usableWidth = Math.max(1, width - rightReservePx);
+		// Fit the map into the width beside the docked bars so its content sits
+		// next to them (a slightly larger margin on the bar side is expected).
+		int usableWidth = Math.max(1, width - leftReservePx - rightReservePx);
 
 		autoSizeFontByWidth(usableWidth);
 		computeCanvasSize();
@@ -1202,11 +1218,11 @@ public class RegionTermView extends View
 			int contentWidth = centerContentCols > 0
 					? centerContentCols * char_width
 					: canvas_width;
-			drawOffsetX = (usableWidth - contentWidth) / 2;
+			drawOffsetX = leftReservePx + (usableWidth - contentWidth) / 2;
 		}
 		else
 		{
-			drawOffsetX = 0;
+			drawOffsetX = leftReservePx;
 		}
 		drawOffsetX += offsetCols * char_width;
 
