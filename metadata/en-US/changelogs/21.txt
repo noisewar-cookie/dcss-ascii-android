@@ -1,11 +1,4 @@
-Release 20 (0.34.1)
-
-New Features:
-• Compact UI Mode: advanced HUD that maximizes map size.
-• Can now import custom monospace fonts.
-• More display settings, like custom screen margins.
+Release 21 (0.34.1)
 
 Bug Fixes:
-• Fixed keyboard drawing over the message editor.
-• Fixed map panel scaling and centering.
-• Several crashes and rendering issues addressed.
+• Misc. folding device hotfixes.
