@@ -286,8 +286,13 @@ public class HudButtonController
         // Anchor the widest icon just right of the content, clamped inside the
         // screen's right safe edge, then horizontally center both on that
         // column so the narrower icon aligns with the wider one.
+        // Compact SH/Dex print flush to the HUD's last column, so contentRight
+        // sits at the region edge, not the glyph edge: a 3-digit value fills
+        // that last column and would abut the button. Nudge one column right in
+        // compact so a 3-digit stat keeps the gap a 2-digit one has.
         int maxW = Math.max(helpW, wikiW);
-        int leftAnchor = Math.min(contentRight + marginPx,
+        int colNudge = compact ? hudView.getContentCharWidth() : 0;
+        int leftAnchor = Math.min(contentRight + marginPx + colNudge,
                 viewRight - marginPx - maxW);
         int centerX = leftAnchor + maxW / 2;
         // Compact mode suppresses the info/help button entirely (req 9).

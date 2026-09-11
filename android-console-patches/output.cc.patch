@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/output.cc b/crawl-ref/source/output.cc
-index 3c3bfb8186..25ed16918d 100644
+index 3c3bfb8186..572e32f1ba 100644
 --- a/crawl-ref/source/output.cc
 +++ b/crawl-ref/source/output.cc
 @@ -406,6 +406,31 @@ static string _god_powers();
@@ -176,26 +176,83 @@ index 3c3bfb8186..25ed16918d 100644
  }
  
  static int _count_digits(int val)
-@@ -812,12 +884,13 @@ static void _print_stats_noise(int x, int y)
+@@ -763,8 +835,25 @@ static void _print_stats_noise(int x, int y)
+ 
+     bool silence = silenced(you.pos());
+     int level = silence ? 0 : you.get_noise_perception(true);
+-    textcolour(HUD_CAPTION_COLOUR);
+-    CPRINTF("Noise: ");
++
++    // Compact HUD: while worshipping a god that has a piety meter, the meter
++    // replaces the "Noise:" caption and the bar runs unlabeled (empty string
++    // for GOD_NO_GOD / Gozag, so those keep the caption). Wizmode keeps the
++    // caption because it reuses that space for the raw noise value.
++    string compact_piety;
++    if (android_compact_hud && !(you.wizard && !silence))
++        compact_piety = formatted_string::parse_string(
++                            _god_asterisks(false)).tostring();
++    if (compact_piety.empty())
++    {
++        textcolour(HUD_CAPTION_COLOUR);
++        CPRINTF("Noise: ");
++    }
++    else
++    {
++        textcolour(_god_status_colour(YELLOW));
++        CPRINTF("%s", compact_piety.c_str());
++    }
+     colour_t noisecolour;
+ 
+     // This is calibrated roughly so that in an open-ish area:
+@@ -801,6 +890,14 @@ static void _print_stats_noise(int x, int y)
+         textcolour(noisecolour);
+         CPRINTF("%2d ", you.get_noise_perception(false));
+     }
++    else if (!compact_piety.empty())
++    {
++        Noise_Bar.horiz_bar_width = 9;
++        // Always 2 spaces between the piety meter and the unlabeled bar; the
++        // meter width (normally NUM_PIETY_STARS = 6) drives the offset, so a
++        // rare wider meter shifts the bar right instead of overlapping it.
++        bar_position = (int)compact_piety.size() + 2;
++    }
+     else
+     {
+         Noise_Bar.horiz_bar_width = 9;
+@@ -812,12 +909,14 @@ static void _print_stats_noise(int x, int y)
  
      if (silence)
      {
--        CGOTOXY(x + bar_position, y, GOTO_STAT);
-+        // Android HUD condense: the noise bar shares row 5 with AC/EV/SH,
-+        // so silence is shown as 10 magenta '#'s starting at the pad col
-+        // after "Noise:" (overwriting it), ending at the same col the bar
-+        // would end at.
-+        CGOTOXY(x + bar_position - 1, y, GOTO_STAT);
++        // Android HUD condense: the noise bar shares its row with AC/EV/SH, so
++        // silence is shown as a solid magenta block occupying the exact columns
++        // the noise bar would (same start and width), so silenced vs not differ
++        // only in content, not footprint. This keeps the piety meter's 2-space
++        // gap intact in the compact layout.
+         CGOTOXY(x + bar_position, y, GOTO_STAT);
          textcolour(LIGHTMAGENTA);
 -
 -        // This needs to be one extra wide in case silence happens
 -        // immediately after super-loud (magenta) noise
 -        CPRINTF("Silenced  ");
-+        CPRINTF("##########");
++        CPRINTF("%s", string(Noise_Bar.horiz_bar_width, '#').c_str());
          Noise_Bar.reset(); // so it doesn't display a change bar after silence ends
      }
      else
-@@ -939,7 +1012,10 @@ static void _print_stats_mp(int x, int y)
+@@ -829,8 +928,11 @@ static void _print_stats_noise(int x, int y)
+         }
+         else
+         {
+-            CGOTOXY(x + 16, y, GOTO_STAT);
+-            CPRINTF(" "); // clean up after the extra wide bar
++            // Clean up after the extra-wide (loud) bar: the stale cell sits
++            // just past the normal bar's end. Track bar_position so the compact
++            // piety-offset layout erases the right cell instead of a live one.
++            CGOTOXY(x + bar_position + Noise_Bar.horiz_bar_width, y, GOTO_STAT);
++            CPRINTF(" ");
+         }
+ #ifndef USE_TILE_LOCAL
+         // use the previous color for negative change in console; there's a
+@@ -939,7 +1041,10 @@ static void _print_stats_mp(int x, int y)
      }
      else
  #endif
@@ -206,7 +263,7 @@ index 3c3bfb8186..25ed16918d 100644
  
      you.redraw_magic_points = false;
  }
-@@ -1018,107 +1094,176 @@ static short _get_stat_colour(stat_type stat)
+@@ -1018,107 +1123,177 @@ static short _get_stat_colour(stat_type stat)
  
  static void _print_stat(stat_type stat, int x, int y)
  {
@@ -268,13 +325,13 @@ index 3c3bfb8186..25ed16918d 100644
 -        CPRINTF("          ");
 -        return;
 -    }
-+        textcolour(HUD_CAPTION_COLOUR);
-+        NOWRAP_EOL_CPRINTF("Doom:");
- 
+-
 -    CGOTOXY(x, y, GOTO_STAT);
 -    textcolour(HUD_CAPTION_COLOUR);
 -    CPRINTF("Doom: ");
--
++        textcolour(HUD_CAPTION_COLOUR);
++        NOWRAP_EOL_CPRINTF("Doom:");
+ 
 -    if (you.attribute[ATTR_DOOM] >= 75)
 -        textcolour(LIGHTMAGENTA);
 -    else if (you.attribute[ATTR_DOOM] >= 50)
@@ -386,13 +443,13 @@ index 3c3bfb8186..25ed16918d 100644
 +    (void)x; // Android HUD condense: cols are fixed by the combined row 5
 +             // layout (Noise | AC | EV | SH), so callers pass x=1 as a stub.
 +
-+    // AC value left-justified with its first digit anchored at col 23 (after
-+    // the "AC:" label at col 19). The gap col before it (col 22) doubles as
-+    // the sign column: a space for AC >= 0, a '-' for negative AC (corrosion
-+    // can drop it below 0). The digits never move, e.g. "AC: 15" vs "AC:-15".
-+    // Wizard-mode GDR% suffix is dropped (no room on the combined row).
-+    // AC:/EV:/SH: labels sit 1 col right of Str:/Int:/Dex: so the colons
-+    // align vertically (2-letter vs 3-letter labels).
++    // AC value: sign in a gap col, digits just after. Standard condensed anchors
++    // the sign at col 22 (digits 23), after the "AC:" label at col 19; compact
++    // shifts both 2 cols right (sign 24, digits 25) so the AC/EV/SH digit
++    // anchors are evenly spaced (25/33/41). The sign col is a space for AC >= 0
++    // or a '-' for negative AC (corrosion). The digits never move within a
++    // mode, e.g. "AC 15" vs "AC-15". Wizard-mode GDR% suffix is dropped (no
++    // room).
 +    const int ac = you.armour_class_scaled(1);
      auto text_col = _colour_from_stat_mod(you.temp_ac_mod());
 -    string ac = make_stringf("%2d ", you.armour_class_scaled(1));
@@ -403,7 +460,7 @@ index 3c3bfb8186..25ed16918d 100644
      textcolour(text_col);
 -    CGOTOXY(x+4, y, GOTO_STAT);
 -    CPRINTF("%-12s", ac.c_str());
-+    CGOTOXY(22, y, GOTO_STAT);
++    CGOTOXY(android_compact_hud ? 24 : 22, y, GOTO_STAT);
 +    CPRINTF("%c%-3d", ac < 0 ? '-' : ' ', ac < 0 ? -ac : ac);
  
 -    // SH: (two lines lower)
@@ -432,9 +489,10 @@ index 3c3bfb8186..25ed16918d 100644
  static void _print_stats_ev(int x, int y)
  {
 -    CGOTOXY(x+4, y, GOTO_STAT);
-+    (void)x; // Android HUD condense: EV digits at col 32 on combined row 5;
-+             // sign in the gap col 31.
-+    CGOTOXY(31, y, GOTO_STAT);
++    (void)x; // Android HUD condense: EV sign in a gap col, digits after.
++             // Standard condensed uses sign 31/digits 32; compact shifts +1
++             // (sign 32/digits 33) to tighten the colonless row.
++    CGOTOXY(android_compact_hud ? 32 : 31, y, GOTO_STAT);
  
      // Color EV based on whether temporary effects are raising or lowering it
      const int bonus = you.evasion_scaled(100) - you.evasion_scaled(100, true);
@@ -449,7 +507,7 @@ index 3c3bfb8186..25ed16918d 100644
  
      you.redraw_evasion = false;
  }
-@@ -1512,15 +1657,354 @@ static void _redraw_title()
+@@ -1512,15 +1687,348 @@ static void _redraw_title()
      you.redraw_title = false;
  }
  
@@ -464,19 +522,21 @@ index 3c3bfb8186..25ed16918d 100644
 +//   row 2: @:Place | Str | Int | Dex
 +//   row 3: weapon      row 4: quiver      rows 5-6: status-light cells (cleared)
 +// XL, piety, Doom, Contam and the turn count live on the native vitals row.
-+// The AC/EV/SH and Str/Int/Dex column layout is unchanged from the standard
-+// condensed HUD, so their printers are reused verbatim at the new y.
++// The stat printers are shared with the standard condensed HUD but shift the
++// AC/EV and Str/Int columns 1 col right in compact mode (gated on
++// android_compact_hud) to tighten the inter-stat gaps; SH/Dex stay pinned.
 +// ----------------------------------------------------------------------
 +
-+// Compact Place field: use the full short name for already-brief branches and
-+// fall back to the abbrev only for the long ones (Orcish Mines->Orc, Elven
-+// Halls->Elf) so "@:<place>" stays inside the 16-col budget before the AC label.
++// Compact Place field: always the full branch short name. Colon removal plus
++// the +1 stat shift opened cols on the left, so the place field spans cols
++// 3..19 (17 chars after "@:"), which easily fits every branch's shortname plus
++// its ":depth" suffix (longest: "Hall of Blades" = 14, "Orcish Mines:4" = 14),
++// so the old abbrev fallback is no longer needed. chop_string still clips at
++// 17 as a safety net for any unforeseen longer name.
 +static string _level_description_string_hud_compact()
 +{
 +    const PlaceInfo& place = you.get_place_info();
-+    string short_name = branches[place.branch].shortname;
-+    string s = short_name.size() > 8 ? branches[place.branch].abbrevname
-+                                     : short_name;
++    string s = branches[place.branch].shortname;
 +    if (brdepth[place.branch] > 1)
 +        s += make_stringf(":%d", you.depth);
 +    return s;
@@ -488,14 +548,15 @@ index 3c3bfb8186..25ed16918d 100644
 +    textcolour(HUD_CAPTION_COLOUR);
 +    NOWRAP_EOL_CPRINTF("@:");
 +    textcolour(HUD_VALUE_COLOUR);
-+    // Chop to 15 so "@:" + place never reaches col 18 (the mandatory gap
-+    // before "AC:" at col 19); a runaway name is cut off rather than bleeding.
++    // Chop to 18 so "@:" + place never reaches col 21 (where the Str label now
++    // sits after the colon removal and the +2 stat shift); a runaway name is
++    // cut off rather than bleeding into the stats.
 +    NOWRAP_EOL_CPRINTF("%s",
-+        chop_string(_level_description_string_hud_compact(), 15, false).c_str());
-+    // Pad the remainder of the left field to col 17 to erase a longer stale
-+    // place name; NOWRAP clips so we can't touch the AC value slot.
++        chop_string(_level_description_string_hud_compact(), 18, false).c_str());
++    // Pad the remainder of the left field to col 20 to erase a longer stale
++    // place name; NOWRAP clips so we can't touch the Str value slot.
 +    int col = wherex() - crawl_view.hudp.x;
-+    for (int i = 17 - col; i > 0; i--)
++    for (int i = 20 - col; i > 0; i--)
 +        NOWRAP_EOL_CPRINTF(" ");
 +    CGOTOXY(1, y, GOTO_STAT);
 +}
@@ -539,7 +600,7 @@ index 3c3bfb8186..25ed16918d 100644
 +                if (hp_percent <= e.first)
 +                    hp_colour = e.second;
 +        }
-+        segs.push_back("HP:");
++        segs.push_back("HP");
 +        cols.push_back(HUD_CAPTION_COLOUR);
 +        const int max_max_hp = get_real_hp(true, false);
 +        string v = make_stringf(" %d/%d", you.hp, you.hp_max);
@@ -563,7 +624,7 @@ index 3c3bfb8186..25ed16918d 100644
 +                if (mp_percent <= e.first)
 +                    mp_colour = e.second;
 +        }
-+        segs.push_back("  MP:");
++        segs.push_back("  MP");
 +        cols.push_back(HUD_CAPTION_COLOUR);
 +        segs.push_back(make_stringf(" %d/%d", you.magic_points,
 +                                    you.max_magic_points));
@@ -572,7 +633,7 @@ index 3c3bfb8186..25ed16918d 100644
 +
 +    // XL as a decimal reading: integer level + fractional progress (#.##),
 +    // the fractional part dimmed. Saves the " (…%)" wrapper's two chars.
-+    segs.push_back("  XL:");
++    segs.push_back("  XL");
 +    cols.push_back(HUD_CAPTION_COLOUR);
 +    segs.push_back(make_stringf(" %d", you.experience_level));
 +    cols.push_back(HUD_VALUE_COLOUR);
@@ -586,19 +647,6 @@ index 3c3bfb8186..25ed16918d 100644
 +        segs.push_back(make_stringf(".%d",
 +            min(9, (get_exp_progress() + 5) / 10)));
 +        cols.push_back(DARKGRAY);
-+    }
-+
-+    // Piety (only while worshipping); flattened to one colour for the row.
-+    if (!you_worship(GOD_NO_GOD))
-+    {
-+        formatted_string piety =
-+            formatted_string::parse_string(_god_asterisks(false));
-+        string ptext = piety.tostring();
-+        if (!ptext.empty())
-+        {
-+            segs.push_back("  " + ptext);
-+            cols.push_back(_god_status_colour(YELLOW));
-+        }
 +    }
 +
 +    // Doom (hidden until accumulated, unless always_show_doom_contam).
@@ -741,7 +789,11 @@ index 3c3bfb8186..25ed16918d 100644
 +    if (you.redraw_evasion)
 +        _print_stats_ev(1, 1);
 +
-+    static const int stat_label_cols[NUM_STATS] = { 18, 27, 36 };
++    // Compact shifts Str 2 cols and Int 1 col right (Dex stays pinned at the
++    // edge); _print_stat draws the sign at x+4 and digits at x+5, giving sign
++    // cols 24/32/40 and digit cols 25/33/41, evenly spaced and aligned under
++    // AC/EV/SH.
++    static const int stat_label_cols[NUM_STATS] = { 20, 28, 36 };
 +    for (int i = 0; i < NUM_STATS; ++i)
 +        if (you.redraw_stats[i])
 +            _print_stat(static_cast<stat_type>(i), stat_label_cols[i], 2);
@@ -807,7 +859,7 @@ index 3c3bfb8186..25ed16918d 100644
      cursor_control coff(false);
      textcolour(LIGHTGREY);
  
-@@ -1559,66 +2043,112 @@ void print_stats()
+@@ -1559,66 +2067,112 @@ void print_stats()
      else if (you.redraw_magic_points)
          _print_stats_mp(1, 4);
  
@@ -818,15 +870,15 @@ index 3c3bfb8186..25ed16918d 100644
 -        _print_stats_ac(1, ac_pos - rows_hidden);
 -    if (you.redraw_evasion)
 -        _print_stats_ev(1, ev_pos - rows_hidden);
--
--    for (int i = 0; i < NUM_STATS; ++i)
--        if (you.redraw_stats[i])
--            _print_stat(static_cast<stat_type>(i), 19, 5 + i - rows_hidden);
--    you.redraw_stats.init(false);
 +    const int row5 = 5 - rows_hidden;
 +    const int row6 = 6 - rows_hidden;
 +    const int row7 = 7 - rows_hidden;
  
+-    for (int i = 0; i < NUM_STATS; ++i)
+-        if (you.redraw_stats[i])
+-            _print_stat(static_cast<stat_type>(i), 19, 5 + i - rows_hidden);
+-    you.redraw_stats.init(false);
+-
 -    if (you.redraw_doom)
 -        _print_stats_doom(32, 5 - rows_hidden);
 +    // Row 5: Noise (cols 1-16) | AC (label col 18, value col 22) | EV (label
@@ -958,7 +1010,7 @@ index 3c3bfb8186..25ed16918d 100644
  
  #ifndef USE_TILE_LOCAL
      assert_valid_cursor_pos();
-@@ -1627,23 +2157,21 @@ void print_stats()
+@@ -1627,23 +2181,21 @@ void print_stats()
  
  void print_stats_level()
  {
@@ -995,25 +1047,28 @@ index 3c3bfb8186..25ed16918d 100644
  }
  
  void draw_border()
-@@ -1655,33 +2183,43 @@ void draw_border()
+@@ -1655,33 +2207,46 @@ void draw_border()
  
      textcolour(Options.status_caption_colour);
  
 -    int ac_pos;
 -    // TODO: unify this calculation with rows_hidden in print_stats in a
 -    // non-insane way
-+    // Compact HUD: AC/EV/SH labels on row 1, Str/Int/Dex on row 2. Same
-+    // columns as the standard condensed HUD (colons of the 2- and 3-letter
-+    // labels aligned), just moved up. The @:Place and Noise left fields, and
-+    // all remaining stats, are drawn by the printers, not here.
++    // Compact HUD: AC/EV/SH on row 1, Str/Int/Dex on row 2, colonless (the
++    // value's sign col supplies the single gap before each value). The left two
++    // stat columns sit right of the standard condensed HUD to even out the wide
++    // inter-stat gaps and free cols on the left for the @:Place and Noise
++    // fields; the rightmost column (SH/Dex) stays pinned to the HUD edge. Value
++    // digits are evenly spaced per column (cols 25/33/41) and are drawn by the
++    // printers, not here.
 +    if (android_compact_hud)
 +    {
-+        CGOTOXY(19, 1, GOTO_STAT); CPRINTF("AC:");
-+        CGOTOXY(28, 1, GOTO_STAT); CPRINTF("EV:");
-+        CGOTOXY(37, 1, GOTO_STAT); CPRINTF("SH:");
-+        CGOTOXY(18, 2, GOTO_STAT); CPRINTF("Str:");
-+        CGOTOXY(27, 2, GOTO_STAT); CPRINTF("Int:");
-+        CGOTOXY(36, 2, GOTO_STAT); CPRINTF("Dex:");
++        CGOTOXY(22, 1, GOTO_STAT); CPRINTF("AC");
++        CGOTOXY(30, 1, GOTO_STAT); CPRINTF("EV");
++        CGOTOXY(38, 1, GOTO_STAT); CPRINTF("SH");
++        CGOTOXY(21, 2, GOTO_STAT); CPRINTF("Str");
++        CGOTOXY(29, 2, GOTO_STAT); CPRINTF("Int");
++        CGOTOXY(37, 2, GOTO_STAT); CPRINTF("Dex");
 +        return;
 +    }
 +
@@ -1062,7 +1117,7 @@ index 3c3bfb8186..25ed16918d 100644
  }
  
  #ifndef USE_TILE_LOCAL
-@@ -2171,15 +2709,10 @@ static string _overview_screen_title(int sw)
+@@ -2171,15 +2736,10 @@ static string _overview_screen_title(int sw)
                                        species::name(you.species).c_str(),
                                        get_job_name(you.char_class));
  
@@ -1079,7 +1134,7 @@ index 3c3bfb8186..25ed16918d 100644
  
      if (linelength >= sw)
      {
-@@ -2191,22 +2724,13 @@ static string _overview_screen_title(int sw)
+@@ -2191,22 +2751,13 @@ static string _overview_screen_title(int sw)
  
      // Still not enough?
      if (linelength >= sw)
@@ -1102,7 +1157,7 @@ index 3c3bfb8186..25ed16918d 100644
      text += "</yellow>\n";
  
      return text;
-@@ -2296,15 +2820,15 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2296,15 +2847,15 @@ static vector<formatted_string> _get_overview_stats()
  {
      formatted_string entry;
  
@@ -1121,7 +1176,7 @@ index 3c3bfb8186..25ed16918d 100644
  
      entry.textcolour(HUD_CAPTION_COLOUR);
      if (player_drained())
-@@ -2423,6 +2947,24 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2423,6 +2974,24 @@ static vector<formatted_string> _get_overview_stats()
      cols.add_formatted(2, entry.to_colour_string(), false);
      entry.clear();
  
@@ -1146,7 +1201,7 @@ index 3c3bfb8186..25ed16918d 100644
      entry.textcolour(HUD_CAPTION_COLOUR);
      entry.cprintf("XL:     ");
  
-@@ -2438,7 +2980,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2438,7 +3007,7 @@ static vector<formatted_string> _get_overview_stats()
          entry.cprintf("%d%%", get_exp_progress());
      }
  
@@ -1155,7 +1210,7 @@ index 3c3bfb8186..25ed16918d 100644
      entry.clear();
  
      entry.textcolour(HUD_CAPTION_COLOUR);
-@@ -2453,7 +2995,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2453,7 +3022,7 @@ static vector<formatted_string> _get_overview_stats()
  #endif
      entry += formatted_string::parse_string(godpowers);
  
@@ -1164,7 +1219,7 @@ index 3c3bfb8186..25ed16918d 100644
      entry.clear();
  
      if (!you.has_mutation(MUT_INNATE_CASTER))
-@@ -2465,7 +3007,7 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2465,7 +3034,7 @@ static vector<formatted_string> _get_overview_stats()
          entry.cprintf("%d/%d levels left",
                        player_spell_levels(), player_total_spell_levels());
  
@@ -1173,7 +1228,7 @@ index 3c3bfb8186..25ed16918d 100644
          entry.clear();
      }
  
-@@ -2483,11 +3025,11 @@ static vector<formatted_string> _get_overview_stats()
+@@ -2483,11 +3052,11 @@ static vector<formatted_string> _get_overview_stats()
          entry.textcolour(HUD_VALUE_COLOUR);
          entry.cprintf("%d", you.deaths);
  
@@ -1187,7 +1242,7 @@ index 3c3bfb8186..25ed16918d 100644
  }
  
  // generator of resistance strings:
-@@ -2629,7 +3171,10 @@ static vector<formatted_string> _get_overview_resistances(
+@@ -2629,7 +3198,10 @@ static vector<formatted_string> _get_overview_resistances(
  class overview_popup : public formatted_scroller
  {
  public:
@@ -1199,7 +1254,7 @@ index 3c3bfb8186..25ed16918d 100644
      vector<char> equip_chars;
  private:
      maybe_bool process_key(int ch) override
-@@ -2658,6 +3203,10 @@ void print_overview_screen()
+@@ -2658,6 +3230,10 @@ void print_overview_screen()
          overview.add_formatted_string(bline, true);
      overview.add_text("\n");
  
@@ -1210,7 +1265,7 @@ index 3c3bfb8186..25ed16918d 100644
      {
          vector<formatted_string> blines =
              _get_overview_resistances(overview.equip_chars, num_cols);
-@@ -2683,6 +3232,13 @@ string dump_overview_screen()
+@@ -2683,6 +3259,13 @@ string dump_overview_screen()
      }
      text += "\n";
  

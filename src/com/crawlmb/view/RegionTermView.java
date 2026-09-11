@@ -223,6 +223,10 @@ public class RegionTermView extends View
 	// blank-padded canvas edge. Valid after measure.
 	public int getContentRightX() { return drawOffsetX + contentWidthPx(); }
 
+	// Width (px) of one glyph cell. Lets an overlay nudge itself by whole
+	// columns relative to the content edge. Valid after measure.
+	public int getContentCharWidth() { return char_width; }
+
 	// Top edge (view-local px) of the drawn glyph block, and its pixel height.
 	// Lets an overlay (compact vertical bars) match the map's actual glyph
 	// extent rather than the view's full padded height. Valid after measure.
