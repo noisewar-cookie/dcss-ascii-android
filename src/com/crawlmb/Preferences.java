@@ -39,7 +39,7 @@ final public class Preferences
 	// menu (res/xml/preferences.xml). GameActivity shows a one-time "new
 	// options" toast when the stored seen-version is behind this (or absent,
 	// i.e. first install). The dcssascii_release_prep skill prompts to bump it.
-	public static final int PREFS_OPTIONS_VERSION = 1;
+	public static final int PREFS_OPTIONS_VERSION = 2;
 
 	public static final String KEY_FONTFACE = "crawl.fontface";
 	public static final String KEY_ENABLETOUCH = "crawl.enabletouch";
