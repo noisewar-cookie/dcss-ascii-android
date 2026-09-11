@@ -66,6 +66,15 @@ public class VerticalBarsView extends View
 	public void setMapView(RegionTermView view)
 	{
 		mapView = view;
+		// We read the map's bounds at draw time, but it re-lays-out (font
+		// auto-fit, centering) after our first paint. Redraw on its bounds
+		// change so the H/M labels don't lag on stale geometry until a tap.
+		if (view != null)
+			view.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
+			{
+				if (l != ol || t != ot || r != or || b != ob)
+					invalidate();
+			});
 	}
 
 	// HP column filled / empty glyphs as Unicode codepoints (font_config

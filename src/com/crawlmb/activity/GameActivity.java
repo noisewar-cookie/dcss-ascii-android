@@ -132,6 +132,9 @@ public class GameActivity extends Activity
 	// Compact mode caps the visible message slot to this many rows, freeing the
 	// rest for the map.
 	private static final int COMPACT_MSG_ROWS = 5;
+	// Inset (dp) keeping the docked compact bars off the map half's outer edge
+	// so they don't abut the panel/hinge across the split.
+	private static final float COMPACT_BAR_OUTER_MARGIN_DP = 2f;
 	// Compact HUD native rows/bars (null unless the pref is on).
 	private boolean compactHudActive = false;
 	// Compact HP/MP bars docked to the map's left edge (else right); only
@@ -2094,17 +2097,21 @@ public class GameActivity extends Activity
 							if (splitRoot.getVisibility() != View.VISIBLE)
 								return;
 
-							// Reserve the docked bars' width so the map fits and
-							// centers beside them (no-ops once stable).
+							// Reserve the bars' width + outer inset so the map
+							// stops flush against them (no-ops once stable).
 							if (compactHudActive && portraitCompactBars != null)
 							{
 								int barsW = portraitCompactBars.getWidth();
 								if (barsW > 0)
 								{
+									int reserve = barsW + Math.round(
+											COMPACT_BAR_OUTER_MARGIN_DP
+											* getResources()
+													.getDisplayMetrics().density);
 									if (compactBarsLeft)
-										mapView.setLeftReservePx(barsW);
+										mapView.setLeftReservePx(reserve);
 									else
-										mapView.setRightReservePx(barsW);
+										mapView.setRightReservePx(reserve);
 								}
 							}
 
@@ -2329,17 +2336,28 @@ public class GameActivity extends Activity
 		// fills its half; the auto-fit listener only shrinks on height overflow).
 		mapView.setFontReferenceCols(33);
 		mapView.setFontScaleMultiplier(1.0f);
-		mapHalf.addView(mapView, new FrameLayout.LayoutParams(
-				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+		// Center the map in its half (it measures to content height, so without
+		// this it top-docks when the width-bound block is shorter than the half).
+		FrameLayout.LayoutParams mapLp = new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+		mapLp.gravity = android.view.Gravity.CENTER_VERTICAL;
+		mapHalf.addView(mapView, mapLp);
 
-		// Compact HUD vertical bars overlay the map half's left or right edge.
+		// Compact HP/MP bars overlay the map half's left/right edge, inset from
+		// the outer edge (the matching reserve keeps the map clear of them).
 		if (compactHudActive && portraitCompactBars != null)
 		{
+			int barOuterMargin = Math.round(COMPACT_BAR_OUTER_MARGIN_DP
+					* getResources().getDisplayMetrics().density);
 			FrameLayout.LayoutParams barLp = new FrameLayout.LayoutParams(
 					LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT);
 			barLp.gravity = (compactBarsLeft
 					? android.view.Gravity.START : android.view.Gravity.END)
 					| android.view.Gravity.TOP;
+			if (compactBarsLeft)
+				barLp.leftMargin = barOuterMargin;
+			else
+				barLp.rightMargin = barOuterMargin;
 			mapHalf.addView(portraitCompactBars, barLp);
 		}
 
