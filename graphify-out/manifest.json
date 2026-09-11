@@ -10,9 +10,9 @@
     "semantic_hash": "b309eb8545977b5aed36477f730aa500"
   },
   "build.gradle": {
-    "mtime": 1789098367.5916986,
-    "ast_hash": "93b05261cf71cb8ca77f24081c485e17",
-    "semantic_hash": "93b05261cf71cb8ca77f24081c485e17"
+    "mtime": 1789106036.6951873,
+    "ast_hash": "e4938547a634228bc77039965c94713d",
+    "semantic_hash": "e4938547a634228bc77039965c94713d"
   },
   "gradlew": {
     "mtime": 1776494228.7899022,
@@ -125,9 +125,9 @@
     "semantic_hash": "cc79c34b25313a0eefdcaaab815a5b18"
   },
   "src/com/crawlmb/activity/GameActivity.java": {
-    "mtime": 1789025746.0459578,
-    "ast_hash": "3aca1949d243f649cde68fae9be98bd1",
-    "semantic_hash": "3aca1949d243f649cde68fae9be98bd1"
+    "mtime": 1789105336.548753,
+    "ast_hash": "ecbb34f0b2bd890c4e78038885ea8f08",
+    "semantic_hash": "ecbb34f0b2bd890c4e78038885ea8f08"
   },
   "src/com/crawlmb/activity/HelpActivity.java": {
     "mtime": 1778744960.008869,
@@ -415,9 +415,9 @@
     "semantic_hash": "35bae48e2318967cadd30d59e1b35d1f"
   },
   "src/com/crawlmb/view/VerticalBarsView.java": {
-    "mtime": 1788922954.2863674,
-    "ast_hash": "72645b65887ab2d37ae8b422558f1957",
-    "semantic_hash": "72645b65887ab2d37ae8b422558f1957"
+    "mtime": 1789105341.1783383,
+    "ast_hash": "a6b948d529d54525838956b4e76b4bc9",
+    "semantic_hash": "a6b948d529d54525838956b4e76b4bc9"
   },
   "res/drawable-nodpi/ic_two_finger_longpress.png": {
     "mtime": 1788944596.962052,
