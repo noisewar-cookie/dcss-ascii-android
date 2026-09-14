@@ -3160,8 +3160,11 @@ public class RegionRouter implements TerminalRenderer
 				if (!transition && !frameChanged[r][c])
 					continue;
 				char ch = terminalShadow[r][c];
+				// extendedErase=true: clear +1px right/down so a bold/AA glyph
+				// that overhangs its cell box doesn't leave residue on a static
+				// neighbour. See RenderingImplementation.md.
 				routeCell(r, c, ch == 0 ? ' ' : ch, terminalFg[r][c],
-						terminalBg[r][c], false);
+						terminalBg[r][c], true);
 			}
 		skipSplitRegionsThisStorm = false;
 		skipFullViewThisStorm = false;
