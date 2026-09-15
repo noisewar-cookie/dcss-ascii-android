@@ -537,24 +537,35 @@ public class RegionRouter implements TerminalRenderer
 		Typeface face = fullView.getTypeface(Preferences.getFontFace());
 		if (face == null)
 			return 0;
-		float scale = Math.max(fontConfig.portraitDescribeFontScale,
-				fontConfig.portraitReligionFontScale);
+		// One global wrap width covers every prose screen, so cap at the
+		// largest menu scale (fewest cols) to fit them all.
+		float scale = fontConfig.portraitDescribeFontScale;
+		scale = Math.max(scale, fontConfig.portraitReligionFontScale);
+		scale = Math.max(scale, fontConfig.portraitMainmenuFontScale);
+		scale = Math.max(scale, fontConfig.portraitDefaultFontScale);
 		int refSize = GameFontShaper.widthFitTextSize(context,
 				TERMINAL_COLS, width,
 				RegionTermView.MIN_FONT_SIZE, RegionTermView.MAX_FONT_SIZE);
 		float matched = GameFontShaper.matchReferenceLineHeight(
 				context, face, refSize);
-		int scaledSize = Math.round(Math.round(matched) * scale);
+		// Mirror the render exactly: apply widthClamp (its scaleX stretch and
+		// possibly-reduced size) then measure with scaleX, else the probe
+		// undercounts char width and prose wraps past the edge.
+		int baseSize = Math.round(matched);
+		GameFontShaper.WidthClampResult clamp = GameFontShaper.widthClamp(
+				face, baseSize, TERMINAL_COLS, width);
+		int scaledSize = Math.round(clamp.textSize * scale);
 		scaledSize = Math.max(RegionTermView.MIN_FONT_SIZE,
 				Math.min(scaledSize, RegionTermView.MAX_FONT_SIZE));
 		Paint probe = new Paint();
 		probe.setTypeface(face);
 		probe.setTextSize(scaledSize);
-		int charWidth = (int) probe.measureText("X");
-		if (charWidth <= 0)
+		probe.setTextScaleX(clamp.scaleX);
+		float charWidth = probe.measureText("X");
+		if (charWidth <= 0f)
 			return 0;
 		// -1 safety margin against char-width rounding across font faces.
-		int cols = width / charWidth - 1;
+		int cols = (int) (width / charWidth) - 1;
 		return Math.max(0, Math.min(cols, TERMINAL_COLS - 1));
 	}
 
@@ -1702,15 +1713,22 @@ public class RegionRouter implements TerminalRenderer
 	{
 		String[] lines = context.getResources()
 				.getStringArray(R.array.loading_message_array);
+		// Wrap to visible cols so lines don't clip (always — crawl.wordwrap
+		// only gates DCSS output, not this Java overlay).
+		int wrapCols = (fullView != null) ? fullView.computeVisibleCols() : 0;
+		if (wrapCols <= 0)
+			wrapCols = TERMINAL_COLS;
+		wrapCols = Math.min(wrapCols, TERMINAL_COLS);
+		List<String> wrapped = wrapLoadingLines(lines, wrapCols);
 		// display_lock: classifyFrame mutates router state; this runs on the
 		// UI thread and must not interleave with a game-thread storm.
 		synchronized (NativeWrapper.display_lock)
 		{
-			int rowCount = Math.min(lines.length, TERMINAL_ROWS);
+			int rowCount = Math.min(wrapped.size(), TERMINAL_ROWS);
 			for (int r = 0; r < rowCount; r++)
 			{
-				String line = lines[r];
-				int colCount = Math.min(line.length(), TERMINAL_COLS);
+				String line = wrapped.get(r);
+				int colCount = Math.min(line.length(), wrapCols);
 				for (int c = 0; c < colCount; c++)
 					drawPoint(r, c, line.charAt(c), Color.WHITE, Color.BLACK, false);
 			}
@@ -1719,6 +1737,45 @@ public class RegionRouter implements TerminalRenderer
 			classifyFrame();
 			invalidateAllViews();
 		}
+	}
+
+	// Greedy word-wrap to maxCols; over-long words are hard-broken.
+	private static List<String> wrapLoadingLines(String[] lines, int maxCols)
+	{
+		List<String> out = new ArrayList<String>();
+		for (String line : lines)
+		{
+			if (line.length() <= maxCols)
+			{
+				out.add(line);
+				continue;
+			}
+			StringBuilder cur = new StringBuilder();
+			for (String word : line.split(" "))
+			{
+				while (word.length() > maxCols)
+				{
+					if (cur.length() > 0)
+					{
+						out.add(cur.toString());
+						cur.setLength(0);
+					}
+					out.add(word.substring(0, maxCols));
+					word = word.substring(maxCols);
+				}
+				int extra = (cur.length() > 0) ? 1 : 0;
+				if (cur.length() + extra + word.length() > maxCols)
+				{
+					out.add(cur.toString());
+					cur.setLength(0);
+				}
+				if (cur.length() > 0)
+					cur.append(' ');
+				cur.append(word);
+			}
+			out.add(cur.toString());
+		}
+		return out;
 	}
 
 	private void scheduleRedrawAfterLayout(final View target)

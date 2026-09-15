@@ -196,6 +196,17 @@ final public class Preferences
 		return sharedPreferences.getBoolean(Preferences.KEY_WORDWRAP, false);
 	}
 
+	// Default word wrap on. No-op if the key was ever written, so it never
+	// overwrites an existing user's choice.
+	public static void setWordwrapDefaultOnIfUnset()
+	{
+		if (sharedPreferences.contains(Preferences.KEY_WORDWRAP))
+			return;
+		SharedPreferences.Editor ed = sharedPreferences.edit();
+		ed.putBoolean(Preferences.KEY_WORDWRAP, true);
+		ed.apply();
+	}
+
 	// New turn indicator (_/- marks in the message log). When off, DCSS
 	// hides the marks and the msg panel skips the mark column so messages
 	// align flush with the HUD. Read once at layout/game start.

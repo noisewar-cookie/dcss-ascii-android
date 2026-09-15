@@ -21,6 +21,27 @@ diff --git a/crawl-ref/source/message.cc b/crawl-ref/source/message.cc
      const store_t msgs = buffer.get_store();
      formatted_string lines;
      for (int i = 0; i < msgs.size(); ++i)
+@@ -2268,8 +2276,18 @@
+             string text = msgs[i].full_text();
+             if (!text.size())
+                 continue;
++            // Ctrl+P / startup history renders in fullView at the prose font
++            // scale (same view + scale as prose popups), so cap its wrap to the
++            // prose width minus the 1-col prefix glyph — else lines overrun.
++            extern int android_prose_wrap_cols;
++            int wrap_w = cgetsize(GOTO_CRT).x - 1;
++            if (android_prose_wrap_cols > 1
++                && android_prose_wrap_cols - 1 < wrap_w)
++            {
++                wrap_w = android_prose_wrap_cols - 1;
++            }
+-            linebreak_string(text, cgetsize(GOTO_CRT).x - 1);
++            linebreak_string(text, wrap_w);
+             vector<formatted_string> parts;
+-            formatted_string::parse_string_to_multiple(text, parts, 80);
++            formatted_string::parse_string_to_multiple(text, parts, wrap_w);
+             for (unsigned int j = 0; j < parts.size(); ++j)
+             {
 @@ -2293,7 +2301,8 @@
          }
 

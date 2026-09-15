@@ -175,6 +175,12 @@ public class SplashActivity extends Activity {
         if (saveDir.exists()) {
             updating = true;
         }
+
+        // Fresh install (no prior hash file, no saves) → default word wrap on.
+        if (installedHash == null && !saveDir.exists()) {
+            Preferences.setWordwrapDefaultOnIfUnset();
+        }
+
         assetsFreshlyInstalled = true;
         new InstallProgramTask().execute();
     }
