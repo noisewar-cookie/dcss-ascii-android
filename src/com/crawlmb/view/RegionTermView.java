@@ -121,6 +121,10 @@ public class RegionTermView extends View
 	// height to this many rows so the panel keeps a fixed visual slot while
 	// its bitmap holds more rows (word-wrap msg panel: 7 visible of 14).
 	private int maxVisibleRows = 0;
+	// onMeasure's tall-aspect height self-fit (shrink font to fit the AT_MOST
+	// ceiling). Off for the map in a custom msg-rows layout, where the message
+	// font yields instead so the map never shrinks (GameActivity).
+	private boolean heightSelfFit = true;
 	// Keep the viewport pinned to the bottom of content (newest msg lines)
 	// on every draw, unless the user has dragged away from the bottom.
 	// Dragging back to the bottom re-engages the pin; resetScroll() also
@@ -327,6 +331,15 @@ public class RegionTermView extends View
 		if (this.maxVisibleRows == rows)
 			return;
 		this.maxVisibleRows = rows;
+		if (canvas != null)
+			requestLayout();
+	}
+
+	public void setHeightSelfFit(boolean enabled)
+	{
+		if (this.heightSelfFit == enabled)
+			return;
+		this.heightSelfFit = enabled;
 		if (canvas != null)
 			requestLayout();
 	}
@@ -1184,7 +1197,7 @@ public class RegionTermView extends View
 		int heightMode = MeasureSpec.getMode(heightMeasureSpec);
 		int heightLimit = MeasureSpec.getSize(heightMeasureSpec);
 		// Reserve the fixed bottom gap so the font is fit to leave room for it.
-		if (!verticalScrollEnabled && !anchorToContent
+		if (heightSelfFit && !verticalScrollEnabled && !anchorToContent
 				&& heightMode == MeasureSpec.AT_MOST && heightLimit > 0
 				&& regionRows > 0
 				&& canvas_height + bottomGapPx() > heightLimit)

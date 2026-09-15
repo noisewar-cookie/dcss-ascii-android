@@ -31,4 +31,34 @@
         <item>right</item>
         <item>off</item>
     </string-array>
+
+    <!-- Message panel visible-row picker. Order/values must stay in sync;
+         values are matched by Preferences.getMsgRows(). "default" = 7 rows
+         (5 in compact mode). -->
+    <string-array name="msgRowsDescriptions">
+        <item>Default (7, or 5 compact)</item>
+        <item>3 rows</item>
+        <item>4 rows</item>
+        <item>5 rows</item>
+        <item>6 rows</item>
+        <item>7 rows</item>
+        <item>8 rows</item>
+        <item>9 rows</item>
+        <item>10 rows</item>
+        <item>11 rows</item>
+        <item>12 rows</item>
+    </string-array>
+    <string-array name="msgRowsValues" translatable="false">
+        <item>default</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>10</item>
+        <item>11</item>
+        <item>12</item>
+    </string-array>
 </resources>

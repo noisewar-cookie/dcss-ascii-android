@@ -52,11 +52,6 @@
 	   android:title="@string/preferences_skipsplash_title"
 	   android:summary="@string/preferences_skipsplash_summary" />
 	<CheckBoxPreference
-	   android:key="crawl.wordwrap"
-	   android:defaultValue="false"
-	   android:title="@string/preferences_wordwrap_title"
-	   android:summary="@string/preferences_wordwrap_summary" />
-	<CheckBoxPreference
 	   android:key="crawl.compacthud"
 	   android:defaultValue="false"
 	   android:title="@string/preferences_compacthud_title"
@@ -82,14 +77,31 @@
 	   android:dialogTitle="@string/preferences_bevelmargin_title"
 	   android:positiveButtonText="@android:string/ok"
 	   android:negativeButtonText="@android:string/cancel" />
-	  <Preference
-		  android:key="crawl.fontface"
-		  android:title="@string/preferences_fontface_title"
-		  android:summary="@string/preferences_fontface_summary" />
 	<Preference
 	   android:key="reposition_ui"
 	   android:title="@string/preferences_reposition_ui_title"
 	   android:summary="@string/preferences_reposition_ui_summary" />
+  </PreferenceCategory>
+  <PreferenceCategory
+	  android:key="textDisplay"
+	  android:title="@string/text_display_category">
+	  <Preference
+		  android:key="crawl.fontface"
+		  android:title="@string/preferences_fontface_title"
+		  android:summary="@string/preferences_fontface_summary" />
+	<CheckBoxPreference
+	   android:key="crawl.wordwrap"
+	   android:defaultValue="false"
+	   android:title="@string/preferences_wordwrap_title"
+	   android:summary="@string/preferences_wordwrap_summary" />
+	<ListPreference
+	   android:key="crawl.msgrows"
+	   android:defaultValue="default"
+	   android:title="@string/preferences_msgrows_title"
+	   android:summary="@string/preferences_msgrows_summary"
+	   android:dialogTitle="@string/preferences_msgrows_dialogtitle"
+	   android:entries="@array/msgRowsDescriptions"
+	   android:entryValues="@array/msgRowsValues" />
   </PreferenceCategory>
   <!-- Shown only on foldables (see PreferencesActivity.gateUnfoldedPrefs). -->
   <PreferenceCategory

@@ -872,12 +872,12 @@ public class PreferencesActivity extends PreferenceActivity implements
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
                                           String key) {
         if (key.compareTo(Preferences.KEY_WORDWRAP) == 0
-                || key.compareTo(Preferences.KEY_NEWTURNMARK) == 0) {
-            // Word wrap / turn mark change DCSS options wired once at game boot
-            // (msg_max_width/height, show_newturn_mark) — same reason custom-
-            // folder changes hard-restart. The reload flag shows the
-            // "Reloading..." overlay across the relaunch. The game was already
-            // saved by GameActivity.onPause when this screen opened.
+                || key.compareTo(Preferences.KEY_NEWTURNMARK) == 0
+                || key.compareTo(Preferences.KEY_MSGROWS) == 0) {
+            // These set DCSS options wired once at boot (msg_max_width,
+            // msg_min/max_height, show_newturn_mark), so they need a relaunch.
+            // The reload flag shows the "Reloading..." overlay; the game was
+            // already saved by GameActivity.onPause when this screen opened.
             Preferences.setReloadInProgressSync(true);
             killAndRelaunch(this);
             return;

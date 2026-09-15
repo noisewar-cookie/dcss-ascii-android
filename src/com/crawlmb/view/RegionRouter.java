@@ -388,12 +388,16 @@ public class RegionRouter implements TerminalRenderer
 	private RegionTermView ngwContentView;
 	private RegionTermView ngwSubLeftView;
 	private RegionTermView ngwSubRightView;
-	// Word-wrap mode (crawl.wordwrap pref): msgView reference and its
-	// terminal row count, set by GameActivity when the pref is on. Queried
-	// by NativeWrapper.gameStart to compute the msg_max_width option before
-	// DCSS boots. null msgWordwrapView = word wrap off.
+	// Word-wrap mode (crawl.wordwrap pref): msgView reference set by
+	// GameActivity when the pref is on. Queried by NativeWrapper.gameStart to
+	// compute the msg_max_width / prose wrap-width options before DCSS boots.
+	// null msgWordwrapView = word wrap off. This is the wrap-WIDTH feature only;
+	// the message-window HEIGHT is msgWindowRows (below), set independently.
 	private RegionTermView msgWordwrapView;
-	private int msgWordwrapRows = 7;
+	// Native message-window height in terminal rows (msg_min/max_height at
+	// boot), driven by word wrap (msgHistoryRows) and/or the msg-rows pref.
+	// 0 = no override (stock DCSS window). Queried by NativeWrapper.gameStart.
+	private int msgWindowRows = 0;
 	// New turn indicator pref: when false the msg panel skips the mark
 	// column (starts at col 1) so getMsgWrapCols doesn't subtract 1.
 	private boolean newturnMark = true;
@@ -481,10 +485,15 @@ public class RegionRouter implements TerminalRenderer
 		pendingMapAnchorRow = row;
 	}
 
-	public void setMsgWordwrap(RegionTermView msgView, int msgRows)
+	public void setMsgWordwrap(RegionTermView msgView)
 	{
 		this.msgWordwrapView = msgView;
-		this.msgWordwrapRows = msgRows;
+	}
+
+	// Native message-window height (terminal rows). 0 = stock DCSS window.
+	public void setMsgWindowRows(int rows)
+	{
+		this.msgWindowRows = rows;
 	}
 
 	public void setNewturnMark(boolean enabled)
@@ -516,7 +525,7 @@ public class RegionRouter implements TerminalRenderer
 	@Override
 	public int getMsgRows()
 	{
-		return msgWordwrapView != null ? msgWordwrapRows : 7;
+		return msgWindowRows;
 	}
 
 	// Wrap cap for prose popup Texts (describe/god/hints — the wrap_text

@@ -1572,16 +1572,30 @@ public class GameActivity extends Activity
 		// text flush with the HUD panel's first column.
 		int msgStartCol = newturnMark
 				? RegionRouter.MSG_START_COL : RegionRouter.MSG_START_COL + 1;
-		int msgEndRow = wordwrap
-				? RegionRouter.MSG_START_ROW + fontConfig.msgHistoryRows
-				: RegionRouter.MSG_END_ROW;
+		// Visible message rows: a user pick (3..12) overrides the mode default
+		// (7 normal / 5 compact). A custom count grows the panel into free space
+		// above the map, then shrinks the message font to fit (never the map) —
+		// see the auto-fit listener below.
+		int msgRowsPref = Preferences.getMsgRows();
+		final boolean msgRowsCustom = msgRowsPref > 0;
+		final int msgVisibleRows = msgRowsCustom ? msgRowsPref
+				: (compactHudActive
+						? COMPACT_MSG_ROWS : fontConfig.portraitMsgVisibleRows);
+		// Native message-window height in terminal rows (0 = stock 7-row window).
+		// Word wrap extends it to msgHistoryRows for scrollback; a custom count
+		// > 7 extends it directly (so >7 unique rows without word wrap). It can't
+		// go below 7 — the layout (17 view + msg) must stay >= MIN_LINES (24), so
+		// counts <= 7 keep the stock window and the Java viewport clips to N.
+		int windowRows = wordwrap ? fontConfig.msgHistoryRows : 0;
+		if (msgRowsCustom && msgVisibleRows > 7)
+			windowRows = Math.max(windowRows, msgVisibleRows);
+		int msgEndRow = RegionRouter.MSG_START_ROW
+				+ (windowRows > 0 ? windowRows : 7);
 		RegionTermView msgView = new RegionTermView(this,
 				RegionRouter.MSG_START_ROW, msgStartCol,
 				msgEndRow, RegionRouter.MSG_END_COL);
 		msgView.setId(View.generateViewId());
 		msgView.setFontScaleMultiplier(fontConfig.portraitMsgFontScale);
-		int msgVisibleRows = compactHudActive
-				? COMPACT_MSG_ROWS : fontConfig.portraitMsgVisibleRows;
 		if (wordwrap)
 		{
 			msgView.setVerticalScrollEnabled(true);
@@ -1591,16 +1605,19 @@ public class GameActivity extends Activity
 		else
 		{
 			msgView.setHorizontalScrollEnabled(true);
-			// Cap the fixed-region panel too: vscroll + sticky-bottom keep the
-			// newest lines in the slot; horizontal scroll still handles wide
-			// lines (axis-locked per gesture).
-			if (compactHudActive)
+			// Cap the panel: vscroll + sticky-bottom keep the newest lines in
+			// the slot; horizontal scroll still handles wide lines.
+			if (compactHudActive || msgRowsCustom)
 			{
 				msgView.setVerticalScrollEnabled(true);
 				msgView.setMaxVisibleRows(msgVisibleRows);
 				msgView.setStickyScrollToBottom(true);
 			}
 		}
+		// Custom count: freeze the map's own height self-fit so it keeps its
+		// width-fit size while the message font yields to fit the rows.
+		if (msgRowsCustom)
+			mapView.setHeightSelfFit(false);
 		portraitMsgView = msgView;
 
 		StatusBarView statusBar = new StatusBarView(this);
@@ -2038,7 +2055,10 @@ public class GameActivity extends Activity
 		router.setNewgameWeaponContainer(ngwScroll);
 		router.setNewgameWeaponPanels(ngwContent, ngwSubLeft, ngwSubRight);
 		if (wordwrap)
-			router.setMsgWordwrap(msgView, fontConfig.msgHistoryRows);
+			router.setMsgWordwrap(msgView);
+		// Native msg-window height (decoupled from word wrap): drives
+		// msg_min/max_height at boot via NativeWrapper.gameStart -> getMsgRows.
+		router.setMsgWindowRows(windowRows);
 		router.setNewturnMark(newturnMark);
 		router.setFontConfig(fontConfig);
 		router.setShowLoadingMessage(getIntent().getBooleanExtra(
@@ -2263,6 +2283,35 @@ public class GameActivity extends Activity
 						lastStatusH = statusH;
 						lastMlistH = mlistH;
 						lastCompactH = compactH;
+
+						if (msgRowsCustom)
+						{
+							// Message font yields; the map never shrinks (its
+							// self-fit is frozen, so mapH is the stable width-fit
+							// height). Reserve the map plus the fixed panels, and
+							// shrink the message font only when the requested rows
+							// overflow what's left. Free space above the map is
+							// consumed first (the panel grows; no shrink here).
+							int mapNat = mapView.getMeasuredHeight();
+							int msgBudget = available - hudH - statusH
+									- mlistH - compactH - mapNat;
+							if (msgBudget <= 0)
+								return;
+							int rows = Math.min(msgView.getRegionRows(),
+									msgVisibleRows);
+							int wantH = rows * msgView.getContentRowHeight();
+							if (wantH <= 0 || wantH <= msgBudget)
+								return;
+							float curMsg = msgView.getFontScaleMultiplier();
+							if (curMsg <= MIN_FONT_SCALE)
+								return;
+							float mr = (float) msgBudget / wantH;
+							float nMsg = Math.max(MIN_FONT_SCALE, curMsg * mr);
+							if (curMsg - nMsg < MIN_SCALE_DELTA)
+								return;
+							msgView.setFontScaleMultiplier(nMsg);
+							return;
+						}
 
 						int mapTarget = available - hudH - statusH
 								- mlistH - msgH - compactH;

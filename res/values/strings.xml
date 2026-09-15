@@ -81,10 +81,13 @@
          smaller than the title's, so it needs more spaces than the title's 4
          to line up. -->
     <string name="preferences_compactbarside_summary">"      %s"</string>
+    <string name="preferences_msgrows_title">Message panel rows</string>
+    <string name="preferences_msgrows_summary">%s. Will use free space above the map first, then scale font.</string>
+    <string name="preferences_msgrows_dialogtitle">Message panel rows</string>
     <string name="preferences_newturnmark_title">New turn indicator</string>
     <string name="preferences_newturnmark_summary">Show turn markers in the message log. Restarts app.</string>
     <string name="preferences_bevelmargin_title">Edge margin</string>
-    <string name="preferences_bevelmargin_summary">Inset the game from the screen edges (−4 to 32 dp). Reopen the game to apply.</string>
+    <string name="preferences_bevelmargin_summary">Inset margin from screen edges (−4 to 32 dp). Reopen the game to apply.</string>
     <string name="preferences_orientation_title">Orientation</string>
     <string name="preferences_orientation_summary">Select screen orientation.</string>
     <string name="preferences_fontface_title">Font</string>
@@ -136,6 +139,7 @@
     <string name="preferences_hudbutton_longpress_summary">Hold to activate, taps will passthrough.</string>
 
     <string name="display_category">Display</string>
+    <string name="text_display_category">Text Display</string>
     <string name="control_category">Controls</string>
     <string name="game_category">Game</string>
     <string-array name="virtKeyActionDescriptions">

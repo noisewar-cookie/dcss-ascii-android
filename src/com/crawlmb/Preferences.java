@@ -32,6 +32,9 @@ final public class Preferences
 	// Compact-mode HP/MP vertical bars: which map edge they dock to, or off.
 	// Values SIDE_RIGHT (default) / SIDE_LEFT / SIDE_OFF.
 	public static final String KEY_COMPACTBARSIDE = "crawl.compactbarside";
+	// Message panel visible rows. "default" (7 normal / 5 compact) or "3".."12".
+	public static final String KEY_MSGROWS = "crawl.msgrows";
+	public static final String MSGROWS_DEFAULT = "default";
 	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
 	public static final String KEY_SEENPREFSOPTIONSVERSION = "crawl.seenprefsoptionsversion";
 
@@ -39,7 +42,7 @@ final public class Preferences
 	// menu (res/xml/preferences.xml). GameActivity shows a one-time "new
 	// options" toast when the stored seen-version is behind this (or absent,
 	// i.e. first install). The dcssascii_release_prep skill prompts to bump it.
-	public static final int PREFS_OPTIONS_VERSION = 2;
+	public static final int PREFS_OPTIONS_VERSION = 3;
 
 	public static final String KEY_FONTFACE = "crawl.fontface";
 	public static final String KEY_ENABLETOUCH = "crawl.enabletouch";
@@ -221,6 +224,25 @@ final public class Preferences
 	public static boolean getCompactHud()
 	{
 		return sharedPreferences.getBoolean(Preferences.KEY_COMPACTHUD, false);
+	}
+
+	// User-chosen visible message rows (3..12), or -1 for "default" (caller
+	// uses 7 normal / 5 compact). Drives the native message-window height at
+	// boot, so a change hard-relaunches the game (see PreferencesActivity).
+	public static int getMsgRows()
+	{
+		String s = sharedPreferences.getString(KEY_MSGROWS, MSGROWS_DEFAULT);
+		if (s == null || MSGROWS_DEFAULT.equals(s))
+			return -1;
+		try
+		{
+			int n = Integer.parseInt(s);
+			return Math.max(3, Math.min(12, n));
+		}
+		catch (NumberFormatException e)
+		{
+			return -1;
+		}
 	}
 
 	// Which map edge the compact HP/MP bars dock to, or off. Only meaningful

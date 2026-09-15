@@ -60,12 +60,10 @@ extern int main(int argc, char *argv[]);
 // (RegionRouter.MSG_START_ROW).
 #define GAMEPLAY_VIEW_LINES 17
 
-// Word wrap (Android preference). Set by NativeWrapper.setWordwrap before
-// initGame. android_layout_lines is read by the patched
-// crawl_view_geometry::init_geometry (viewgeom.cc.patch) to clamp the
-// gameplay layout height: 24 stock, 17 + msg rows when word wrap extends
-// the message window. The wrap width / msg rows are handed to crawl as
-// -extra-opt-first options in initGame.
+// Message layout (Android preferences), set by NativeWrapper.setWordwrap
+// before initGame. android_msg_rows = window HEIGHT, android_msg_wrap_cols =
+// wrap WIDTH (independent). android_layout_lines is read by the patched
+// init_geometry (viewgeom.cc.patch): 24 stock, else 17 + msg rows.
 // Non-static: message.cc.patch reads android_msg_wrap_cols to anchor the
 // more-prompt below the newest message instead of the window's last row;
 // ui.cc.patch reads android_prose_wrap_cols to cap the wrap width of prose
@@ -421,24 +419,24 @@ extern "C"
 	jstring Java_com_crawlmb_NativeWrapper_getCommandHelp( JNIEnv* env, jclass clz);
 };
 
-// Called on the game thread from NativeWrapper.gameStart, before initGame
-// runs main(). msgWrapCols <= 0 disables word wrap (stock 24-line layout).
+// Called on the game thread from NativeWrapper.gameStart, before initGame.
+// Two independent knobs: msgRows = message-window HEIGHT (msg_min/max_height +
+// layout lines); msgWrapCols = wrap WIDTH (msg_max_width). Either can be 0 (off)
+// without disabling the other. msgRows <= 0 keeps the stock 24-line layout.
 void Java_com_crawlmb_NativeWrapper_setWordwrap( JNIEnv* env, jobject object, jint msgWrapCols, jint msgRows, jint proseWrapCols)
 {
-	if (msgWrapCols > 0 && msgRows > 0)
-	{
-		android_msg_wrap_cols = msgWrapCols;
-		android_msg_rows = msgRows;
-		if (android_msg_rows > MENU_LINES - GAMEPLAY_VIEW_LINES)
-			android_msg_rows = MENU_LINES - GAMEPLAY_VIEW_LINES;
-		android_layout_lines = GAMEPLAY_VIEW_LINES + android_msg_rows;
-	}
-	else
-	{
-		android_msg_wrap_cols = 0;
-		android_msg_rows = 0;
-		android_layout_lines = LINES;
-	}
+	android_msg_rows = msgRows > 0 ? msgRows : 0;
+	// Floor at 7 (= LINES - view rows): layout is 17 view + msg rows, and
+	// init_geometry rejects a layout under MIN_LINES (24), so the window can't
+	// shrink below the stock 7. Smaller counts clip in Java instead.
+	if (android_msg_rows > 0 && android_msg_rows < LINES - GAMEPLAY_VIEW_LINES)
+		android_msg_rows = LINES - GAMEPLAY_VIEW_LINES;
+	if (android_msg_rows > MENU_LINES - GAMEPLAY_VIEW_LINES)
+		android_msg_rows = MENU_LINES - GAMEPLAY_VIEW_LINES;
+	android_layout_lines = android_msg_rows > 0
+		? GAMEPLAY_VIEW_LINES + android_msg_rows
+		: LINES;
+	android_msg_wrap_cols = msgWrapCols > 0 ? msgWrapCols : 0;
 	android_prose_wrap_cols = proseWrapCols > 0 ? proseWrapCols : 0;
 }
 
@@ -522,24 +520,32 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
                       (char*)"-morgue", (char*)morgueDir,
                       (char*)"-rcdir", (char*)settingsDir,
                       (char*)"-extra-opt-first", (char*)"char_set=ascii"};
-	// Word wrap: crawl wraps messages at msg_max_width natively. view_max_height
-	// pins the dungeon view at 17 rows — init_geometry grows the view BEFORE the
-	// msg window, so without it the extra layout lines shift the msg window below
-	// row 17 and break the Java split-panel rows. msg_max_height/view_max_height
-	// use -extra-opt-first so init.txt can override them; msg_max_width uses
-	// -extra-opt-LAST so the physical panel width always wins over a stale/user
-	// init.txt value (a msg_max_width wider than the panel clips messages).
-	char opt_msg_width[32], opt_msg_height[32];
+	// Message window HEIGHT: pin to exactly android_msg_rows via
+	// msg_min_height == msg_max_height (crawl clamps to [min, max]).
+	// view_max_height pins the view at 17 rows — init_geometry grows the view
+	// before the msg window, so without it the extra lines shift the msg window
+	// off the Java split-panel rows. -extra-opt-first lets init.txt override.
+	char opt_msg_height[32], opt_msg_minheight[32];
+	if (android_msg_rows > 0)
+	{
+		snprintf(opt_msg_height, sizeof(opt_msg_height),
+			"msg_max_height=%d", android_msg_rows);
+		snprintf(opt_msg_minheight, sizeof(opt_msg_minheight),
+			"msg_min_height=%d", android_msg_rows);
+		args.push_back((char*)"-extra-opt-first");
+		args.push_back(opt_msg_height);
+		args.push_back((char*)"-extra-opt-first");
+		args.push_back(opt_msg_minheight);
+		args.push_back((char*)"-extra-opt-first");
+		args.push_back((char*)"view_max_height=17");
+	}
+	// Message wrap WIDTH: -extra-opt-LAST so the physical panel width always
+	// wins over a stale init.txt value (too-wide msg_max_width clips messages).
+	char opt_msg_width[32];
 	if (android_msg_wrap_cols > 0)
 	{
 		snprintf(opt_msg_width, sizeof(opt_msg_width),
 			"msg_max_width=%d", android_msg_wrap_cols);
-		snprintf(opt_msg_height, sizeof(opt_msg_height),
-			"msg_max_height=%d", android_msg_rows);
-		args.push_back((char*)"-extra-opt-first");
-		args.push_back(opt_msg_height);
-		args.push_back((char*)"-extra-opt-first");
-		args.push_back((char*)"view_max_height=17");
 		args.push_back((char*)"-extra-opt-last");
 		args.push_back(opt_msg_width);
 	}
