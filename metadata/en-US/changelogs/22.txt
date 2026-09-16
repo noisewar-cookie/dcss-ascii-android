@@ -1,0 +1,10 @@
+Release 22 (0.34.1)
+
+New Features:
+• Message panel size is now adjustable and scales with the display.
+• Custom font size for menus and descriptions.
+
+Bug Fixes:
+• Fixed screen flash when returning to the game.
+• More consistent text wrapping and full message log.
+• Fixed a rare rendering glitch with talismans.
