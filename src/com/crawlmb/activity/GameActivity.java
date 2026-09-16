@@ -2060,6 +2060,8 @@ public class GameActivity extends Activity
 		// msg_min/max_height at boot via NativeWrapper.gameStart -> getMsgRows.
 		router.setMsgWindowRows(windowRows);
 		router.setNewturnMark(newturnMark);
+		router.setListsFontDelta(Preferences.getListsFontSize());
+		router.setDescFontDelta(Preferences.getDescFontSize());
 		router.setFontConfig(fontConfig);
 		router.setShowLoadingMessage(getIntent().getBooleanExtra(
 				SplashActivity.EXTRA_ASSETS_FRESHLY_INSTALLED, false));

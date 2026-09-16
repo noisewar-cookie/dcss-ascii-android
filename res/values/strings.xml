@@ -81,13 +81,17 @@
          smaller than the title's, so it needs more spaces than the title's 4
          to line up. -->
     <string name="preferences_compactbarside_summary">"      %s"</string>
-    <string name="preferences_msgrows_title">Message panel rows</string>
-    <string name="preferences_msgrows_summary">%s. Will use free space above the map first, then scale font.</string>
-    <string name="preferences_msgrows_dialogtitle">Message panel rows</string>
+    <string name="preferences_msgrows_title"># of Message panel rows</string>
+    <string name="preferences_msgrows_summary">%s. Uses free space above map first, then scales font.</string>
+    <string name="preferences_msgrows_dialogtitle"># of Message panel rows</string>
+    <string name="preferences_listsfontsize_title">Font size: Lists</string>
+    <string name="preferences_descfontsize_title">Font size: Descriptions</string>
+    <string name="font_size_slider_default">Default</string>
+    <string name="font_size_slider_format">%+d pt</string>
     <string name="preferences_newturnmark_title">New turn indicator</string>
     <string name="preferences_newturnmark_summary">Show turn markers in the message log. Restarts app.</string>
     <string name="preferences_bevelmargin_title">Edge margin</string>
-    <string name="preferences_bevelmargin_summary">Inset margin from screen edges (−4 to 32 dp). Reopen the game to apply.</string>
+    <string name="preferences_bevelmargin_summary">Margin adjustment (from screen edges). Reopen the game to apply.</string>
     <string name="preferences_orientation_title">Orientation</string>
     <string name="preferences_orientation_summary">Select screen orientation.</string>
     <string name="preferences_fontface_title">Font</string>

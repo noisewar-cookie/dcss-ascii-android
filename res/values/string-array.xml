@@ -36,7 +36,7 @@
          values are matched by Preferences.getMsgRows(). "default" = 7 rows
          (5 in compact mode). -->
     <string-array name="msgRowsDescriptions">
-        <item>Default (7, or 5 compact)</item>
+        <item>Default (7, 5 for compact)</item>
         <item>3 rows</item>
         <item>4 rows</item>
         <item>5 rows</item>

@@ -873,9 +873,13 @@ public class PreferencesActivity extends PreferenceActivity implements
                                           String key) {
         if (key.compareTo(Preferences.KEY_WORDWRAP) == 0
                 || key.compareTo(Preferences.KEY_NEWTURNMARK) == 0
-                || key.compareTo(Preferences.KEY_MSGROWS) == 0) {
+                || key.compareTo(Preferences.KEY_MSGROWS) == 0
+                || key.compareTo(Preferences.KEY_LISTSFONTSIZE) == 0
+                || key.compareTo(Preferences.KEY_DESCFONTSIZE) == 0) {
             // These set DCSS options wired once at boot (msg_max_width,
             // msg_min/max_height, show_newturn_mark), so they need a relaunch.
+            // Font-size deltas also feed the boot-time wordwrap cutoff, so the
+            // wrap width is recomputed at the new size on relaunch.
             // The reload flag shows the "Reloading..." overlay; the game was
             // already saved by GameActivity.onPause when this screen opened.
             Preferences.setReloadInProgressSync(true);

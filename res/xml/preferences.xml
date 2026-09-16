@@ -102,6 +102,20 @@
 	   android:dialogTitle="@string/preferences_msgrows_dialogtitle"
 	   android:entries="@array/msgRowsDescriptions"
 	   android:entryValues="@array/msgRowsValues" />
+	<com.crawlmb.FontSizeDeltaPreference
+	   android:key="crawl.listsfontsize"
+	   android:defaultValue="0"
+	   android:title="@string/preferences_listsfontsize_title"
+	   android:dialogTitle="@string/preferences_listsfontsize_title"
+	   android:positiveButtonText="@android:string/ok"
+	   android:negativeButtonText="@android:string/cancel" />
+	<com.crawlmb.FontSizeDeltaPreference
+	   android:key="crawl.descfontsize"
+	   android:defaultValue="0"
+	   android:title="@string/preferences_descfontsize_title"
+	   android:dialogTitle="@string/preferences_descfontsize_title"
+	   android:positiveButtonText="@android:string/ok"
+	   android:negativeButtonText="@android:string/cancel" />
   </PreferenceCategory>
   <!-- Shown only on foldables (see PreferencesActivity.gateUnfoldedPrefs). -->
   <PreferenceCategory
@@ -148,7 +162,7 @@
        android:summary="@string/preferences_haptic_feedback_summary"/>
 	<PreferenceScreen
 	   android:title="Hardware Key Mapping"
-	   android:summary="Configure hardware buttons on your device to perform various functions">	  
+	   android:summary="Map physical device buttons to various functions">
 	  <PreferenceScreen
 		 android:title="Display Functions"
 		 android:summary="Change display, font size, virtual keyboard">	  

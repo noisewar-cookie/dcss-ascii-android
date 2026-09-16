@@ -35,6 +35,14 @@ final public class Preferences
 	// Message panel visible rows. "default" (7 normal / 5 compact) or "3".."12".
 	public static final String KEY_MSGROWS = "crawl.msgrows";
 	public static final String MSGROWS_DEFAULT = "default";
+	// Relative font-size adjustments (points) for list screens and description
+	// popups. 0 = default; clamped to [FONTSIZE_MIN, FONTSIZE_MAX]. Consumed at
+	// boot via RegionRouter (drives both render scale and the dynamic wordwrap
+	// cutoff), so a change hard-relaunches the game.
+	public static final String KEY_LISTSFONTSIZE = "crawl.listsfontsize";
+	public static final String KEY_DESCFONTSIZE = "crawl.descfontsize";
+	public static final int FONTSIZE_MIN = -8;
+	public static final int FONTSIZE_MAX = 20;
 	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
 	public static final String KEY_SEENPREFSOPTIONSVERSION = "crawl.seenprefsoptionsversion";
 
@@ -242,6 +250,34 @@ final public class Preferences
 		catch (NumberFormatException e)
 		{
 			return -1;
+		}
+	}
+
+	// Relative font-size delta (points) for list screens, clamped to
+	// [FONTSIZE_MIN, FONTSIZE_MAX]. 0 = default. Persisted as a string by
+	// FontSizeDeltaPreference.
+	public static int getListsFontSize()
+	{
+		return getFontSizeDelta(KEY_LISTSFONTSIZE);
+	}
+
+	// Relative font-size delta (points) for description popups. See above.
+	public static int getDescFontSize()
+	{
+		return getFontSizeDelta(KEY_DESCFONTSIZE);
+	}
+
+	private static int getFontSizeDelta(String key)
+	{
+		String s = sharedPreferences.getString(key, "0");
+		try
+		{
+			int n = Integer.parseInt(s);
+			return Math.max(FONTSIZE_MIN, Math.min(FONTSIZE_MAX, n));
+		}
+		catch (NumberFormatException e)
+		{
+			return 0;
 		}
 	}
 

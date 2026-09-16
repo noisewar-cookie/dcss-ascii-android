@@ -546,12 +546,16 @@ public class RegionRouter implements TerminalRenderer
 		Typeface face = fullView.getTypeface(Preferences.getFontFace());
 		if (face == null)
 			return 0;
-		// One global wrap width covers every prose screen, so cap at the
-		// largest menu scale (fewest cols) to fit them all.
-		float scale = fontConfig.portraitDescribeFontScale;
-		scale = Math.max(scale, fontConfig.portraitReligionFontScale);
+		// One global wrap serves every prose screen, so cap at the largest
+		// effective scale (fewest cols). fontGroupMult folds in the Descriptions
+		// delta, so the cutoff tracks the rendered size at the device edge.
+		float scale = fontConfig.portraitDescribeFontScale
+				* fontGroupMult(MenuType.DESCRIBE);
+		scale = Math.max(scale, fontConfig.portraitReligionFontScale
+				* fontGroupMult(MenuType.RELIGION));
 		scale = Math.max(scale, fontConfig.portraitMainmenuFontScale);
-		scale = Math.max(scale, fontConfig.portraitDefaultFontScale);
+		scale = Math.max(scale, fontConfig.portraitDefaultFontScale
+				* fontGroupMult(MenuType.DEFAULT));
 		int refSize = GameFontShaper.widthFitTextSize(context,
 				TERMINAL_COLS, width,
 				RegionTermView.MIN_FONT_SIZE, RegionTermView.MAX_FONT_SIZE);
@@ -689,6 +693,10 @@ public class RegionRouter implements TerminalRenderer
 	private volatile int fullViewLastOverflow = -1;
 
 	private FontConfig fontConfig;
+	// Relative font-size deltas (pt) from crawl.listsfontsize / crawl.descfontsize.
+	// 0 = default. See fontGroupMult for how they map to menu types.
+	private int listsFontDelta = 0;
+	private int descFontDelta = 0;
 	private ScrollStateListener scrollStateListener;
 	private Runnable redrawRequester;
 	// One-shot, posted to the UI thread the first time DCSS paints a real
@@ -1225,6 +1233,50 @@ public class RegionRouter implements TerminalRenderer
 	public void setFontConfig(FontConfig config)
 	{
 		this.fontConfig = config;
+	}
+
+	public void setListsFontDelta(int pt)
+	{
+		this.listsFontDelta = pt;
+	}
+
+	public void setDescFontDelta(int pt)
+	{
+		this.descFontDelta = pt;
+	}
+
+	// 1pt step = 5% relative change; the [-8,+20] pref range spans ~0.6x..2.0x
+	// on top of the menu's configured scale.
+	private static float deltaToMult(int pt)
+	{
+		return 1f + pt * 0.05f;
+	}
+
+	// Relative font-size multiplier per menu type. The prose-wrapped screens
+	// (DESCRIBE, RELIGION god screen, DEFAULT menus) share one global wrap width
+	// capped in C++ before Java knows which opened, so they must scale together
+	// under the Descriptions delta. The list menus use the Lists delta; all else
+	// (main menu, char creation, level map, help, pregame) stays 1.0.
+	private float fontGroupMult(MenuType type)
+	{
+		switch (type)
+		{
+		case DESCRIBE:
+		case RELIGION:
+		case DEFAULT:
+			return deltaToMult(descFontDelta);
+		case ITEMS:
+		case SPELLS:
+		case SKILLS:
+		case OVERVIEW:
+		case HISCORES:
+		case MORGUE:
+		case MESSAGES:
+		case TRAVEL:
+			return deltaToMult(listsFontDelta);
+		default:
+			return 1f;
+		}
 	}
 
 	/** @deprecated Dead: never called, so scrollStateListener stays null. */
@@ -1947,6 +1999,7 @@ public class RegionRouter implements TerminalRenderer
 		// describe 1.75) leaves the surface blank/corrupt because scaleChanged
 		// alone stays false.
 		scale *= bothHalvesScaleFactor(type);
+		scale *= fontGroupMult(type);
 		int prevEndRow = fullView.getEndRow();
 		fullView.setRegionRows(0, endRow);
 		fullView.setAnchorToContent(type == MenuType.MAINMENU);
@@ -1976,7 +2029,8 @@ public class RegionRouter implements TerminalRenderer
 	// Returns true if the font scale multiplier on skillsView changed.
 	private boolean applySkillsConfig()
 	{
-		float scale = fontConfig.portraitSkillsFontScale;
+		float scale = fontConfig.portraitSkillsFontScale
+				* fontGroupMult(MenuType.SKILLS);
 		float prevScale = skillsView.getFontScaleMultiplier();
 		skillsView.setFontScaleMultiplier(scale);
 		skillsView.setHorizontalScrollEnabled(fontConfig.portraitSkillsScrollable);
@@ -1986,7 +2040,8 @@ public class RegionRouter implements TerminalRenderer
 
 	private boolean applyItemsConfig()
 	{
-		float scale = fontConfig.portraitItemsFontScale;
+		float scale = fontConfig.portraitItemsFontScale
+				* fontGroupMult(MenuType.ITEMS);
 		float prevScale = itemsView.getFontScaleMultiplier();
 		itemsView.setFontScaleMultiplier(scale);
 		itemsView.setHorizontalScrollEnabled(fontConfig.portraitItemsScrollable);
