@@ -31,6 +31,7 @@ import android.os.Bundle;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.style.ForegroundColorSpan;
+import android.text.style.LeadingMarginSpan;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.ContextMenu;
@@ -55,6 +56,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.os.Handler;
 import android.os.Message;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 
@@ -183,6 +188,10 @@ public class GameActivity extends Activity
 	// One-time "new preference options" modal, computed in onCreate and shown
 	// from rebuildViews once the modal shell is built (see showNewOptionsModal).
 	private boolean pendingNewOptionsModal = false;
+	// One-time release-notes modal, shown before the new-options modal. The
+	// active flag lets its onDismiss chain the new-options modal after it.
+	private boolean pendingReleaseNotesModal = false;
+	private boolean releaseNotesModalActive = false;
 	// On-screen HUD shortcut buttons (help / wiki). Recreated each
 	// rebuildViews() so they re-anchor to the HUD's current slot.
 	private HudButtonController hudButtonController = null;
@@ -272,6 +281,10 @@ public class GameActivity extends Activity
 		// seen version is persisted at show time to keep it to a single showing.
 		pendingNewOptionsModal = Preferences.getSeenPrefsOptionsVersion()
 				< Preferences.PREFS_OPTIONS_VERSION;
+
+		// Release notes: once per install/update, keyed on versionCode.
+		pendingReleaseNotesModal = Preferences.getSeenReleaseNotesVersion()
+				< getAppVersionCode();
 	}
 
 	@Override
@@ -719,7 +732,15 @@ public class GameActivity extends Activity
 			{
 				IconConfig iconConfig = IconConfig.load(getAssets());
 				modalController = new ModalOverlayController(this, screenLayout,
-						iconConfig, this::restoreKeyboardAfterReload);
+						iconConfig, () -> {
+							restoreKeyboardAfterReload();
+							// Chain the new-options modal after release notes.
+							if (releaseNotesModalActive) {
+								releaseNotesModalActive = false;
+								if (pendingNewOptionsModal)
+									showNewOptionsModal();
+							}
+						});
 				hudButtonController = new HudButtonController(this, screenLayout,
 						portraitHudView, iconConfig, portraitDirectionalView,
 						compactHudActive,
@@ -782,9 +803,14 @@ public class GameActivity extends Activity
 				schedulePendingCenterlineEntry();
 
 			// Skip while the save-restore "Reloading..." overlay owns the
-			// screen; a later clean rebuild shows it (flag stays set).
-			if (pendingNewOptionsModal && !reloadOverlayActive)
-				showNewOptionsModal();
+			// screen; a later clean rebuild shows it (flag stays set). Release
+			// notes come first; the new-options modal is chained on its dismiss.
+			if (!reloadOverlayActive) {
+				if (pendingReleaseNotesModal)
+					showReleaseNotesModal();
+				else if (pendingNewOptionsModal)
+					showNewOptionsModal();
+			}
 		}
 	}
 
@@ -872,12 +898,96 @@ public class GameActivity extends Activity
 	// monospace-aligned, so render fixed-width WITHOUT wrap and let the 2D
 	// scroll modal handle overflow — wrapping would shear the columns. Only
 	// valid mid-game; on the main menu there are no bindings to report.
+	// "What's new" modal: the newest changelog (latest_release.txt, emitted by
+	// setup.sh), shown before the new-options modal. Persists the seen
+	// versionCode on show so it appears once per install/update.
+	private void showReleaseNotesModal() {
+		if (modalController == null)
+			return;
+
+		String notes = readAssetText("docs/latest_release.txt");
+		Preferences.setSeenReleaseNotesVersion(getAppVersionCode());
+		pendingReleaseNotesModal = false;
+		if (notes == null || notes.trim().isEmpty()) {
+			// Nothing to show — don't block the chained new-options modal.
+			if (pendingNewOptionsModal)
+				showNewOptionsModal();
+			return;
+		}
+		releaseNotesModalActive = true;
+
+		float density = getResources().getDisplayMetrics().density;
+		LinearLayout box = new LinearLayout(this);
+		box.setOrientation(LinearLayout.VERTICAL);
+		int pad = Math.round(20 * density);
+		box.setPadding(pad, pad, pad, pad);
+
+		TextView tv = new TextView(this);
+		tv.setTextColor(CRAWL_LIGHTGRAY);
+		// Reduced so longer notes still fit the card.
+		tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+		// Wrap instead of stretching on wide screens.
+		tv.setMaxWidth(Math.round(300 * density));
+		tv.setText(buildReleaseNotesText(notes, tv.getPaint()));
+		box.addView(tv, new LinearLayout.LayoutParams(
+				LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
+
+		modalController.show(box, ModalOverlayController.SCROLL_NONE,
+				ModalOverlayController.SIZE_WRAP);
+	}
+
+	// Hanging indent so a bullet line wraps aligned to the text after "• ".
+	private CharSequence buildReleaseNotesText(String notes, Paint paint) {
+		int hang = Math.round(paint.measureText("• "));
+		SpannableStringBuilder sb = new SpannableStringBuilder();
+		String[] lines = notes.split("\n", -1);
+		for (int i = 0; i < lines.length; i++) {
+			int start = sb.length();
+			sb.append(lines[i]);
+			if (lines[i].startsWith("•"))
+				sb.setSpan(new LeadingMarginSpan.Standard(0, hang),
+						start, sb.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+			if (i < lines.length - 1)
+				sb.append('\n');
+		}
+		return sb;
+	}
+
+	private String readAssetText(String path) {
+		StringBuilder sb = new StringBuilder();
+		try (InputStream is = getAssets().open(path);
+				BufferedReader r = new BufferedReader(
+						new InputStreamReader(is, "UTF-8"))) {
+			String line;
+			boolean first = true;
+			while ((line = r.readLine()) != null) {
+				if (!first)
+					sb.append('\n');
+				sb.append(line);
+				first = false;
+			}
+		} catch (IOException e) {
+			return null;
+		}
+		return sb.toString();
+	}
+
+	private int getAppVersionCode() {
+		try {
+			return getPackageManager()
+					.getPackageInfo(getPackageName(), 0).versionCode;
+		} catch (PackageManager.NameNotFoundException e) {
+			return -1;
+		}
+	}
+
 	// One-time modal announcing new preference options: message text over the
 	// two-finger long-press icon in a compact centred card. Persists the seen
 	// version and clears the pending flag on show, so it appears exactly once.
 	private void showNewOptionsModal() {
 		if (modalController == null)
 			return;
+		releaseNotesModalActive = false;
 		pendingNewOptionsModal = false;
 		Preferences.setSeenPrefsOptionsVersion(
 				Preferences.PREFS_OPTIONS_VERSION);

@@ -118,6 +118,13 @@ HTML_HEAD
 HTML_TAIL
 } > "$CL_DST"
 echo "  $(ls "$CL_SRC"/*.txt | wc -l) changelog entries compiled."
+
+# Also drop the newest changelog verbatim into assets/docs/latest_release.txt.
+# GameActivity reads it for the one-time "what's new" modal on first launch
+# after an install/update. Globbed like above, so no manual step per release.
+CL_LATEST_N=$(ls "$CL_SRC" | sed -n 's/\.txt$//p' | sort -rn | head -n1)
+cp "$CL_SRC/$CL_LATEST_N.txt" "$PROJECT_DIR/assets/docs/latest_release.txt"
+echo "  latest_release.txt = changelog $CL_LATEST_N."
 echo ""
 
 # ── Step 3b3: Sync title_*.png splash images into res/drawable ──

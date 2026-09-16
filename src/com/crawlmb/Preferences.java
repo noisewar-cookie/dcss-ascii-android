@@ -45,6 +45,8 @@ final public class Preferences
 	public static final int FONTSIZE_MAX = 20;
 	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
 	public static final String KEY_SEENPREFSOPTIONSVERSION = "crawl.seenprefsoptionsversion";
+	// Highest app versionCode whose release notes the user has already seen.
+	public static final String KEY_SEENRELEASENOTESVERSION = "crawl.seenreleasenotesversion";
 
 	// Bump this by 1 in any release that adds new options to the preferences
 	// menu (res/xml/preferences.xml). GameActivity shows a one-time "new
@@ -423,6 +425,18 @@ final public class Preferences
 	public static void setSeenPrefsOptionsVersion(int value)
 	{
 		sharedPreferences.edit().putInt(KEY_SEENPREFSOPTIONSVERSION, value).apply();
+	}
+
+	// Highest app versionCode whose release-notes modal the user has seen.
+	// -1 (absent) means a fresh install that has never seen it.
+	public static int getSeenReleaseNotesVersion()
+	{
+		return sharedPreferences.getInt(KEY_SEENRELEASENOTESVERSION, -1);
+	}
+
+	public static void setSeenReleaseNotesVersion(int value)
+	{
+		sharedPreferences.edit().putInt(KEY_SEENRELEASENOTESVERSION, value).apply();
 	}
 
 	public static String getUnfoldedMapSide()
