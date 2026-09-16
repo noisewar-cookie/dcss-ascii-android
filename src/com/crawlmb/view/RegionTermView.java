@@ -72,6 +72,8 @@ public class RegionTermView extends View
 	// Guards bitmap/canvas/mirror against the drawPoint (game thread) vs
 	// onMeasure/clear (UI thread) race.
 	private final Object renderLock = new Object();
+	// While true, drawPoint updates the mirror only (see endBatch). renderLock.
+	private boolean batching = false;
 
 	public int canvas_width = 0;
 	public int canvas_height = 0;
@@ -927,7 +929,9 @@ public class RegionTermView extends View
 				cellFg[localR][localC] = fcolor;
 				cellBg[localR][localC] = bcolor;
 			}
-			drawCellLocked(localR, localC, ch, fcolor, bcolor, extendedErase);
+			// In a batch the mirror is enough; endBatch paints the whole frame.
+			if (!batching)
+				drawCellLocked(localR, localC, ch, fcolor, bcolor, extendedErase);
 		}
 	}
 
@@ -1327,6 +1331,41 @@ public class RegionTermView extends View
 			triggerGameStart = false;
 			handler.sendEmptyMessage(CrawlDialog.Action.StartGame.ordinal());
 		}
+	}
+
+	// Double-buffered transition repaint: drawPoint fills the mirror only until
+	// endBatch renders the whole frame offscreen and swaps the bitmap in one
+	// atomic ref write, so onDraw (reads `bitmap` without renderLock) never
+	// captures a half-painted transition frame. See RegionRouter.onFrame.
+	public void beginBatch()
+	{
+		synchronized (renderLock)
+		{
+			batching = true;
+		}
+	}
+
+	public void endBatch()
+	{
+		synchronized (renderLock)
+		{
+			if (!batching)
+				return;
+			batching = false;
+			if (cellChar == null || canvas_width <= 0 || canvas_height <= 0)
+				return;
+			Bitmap newBitmap = Bitmap.createBitmap(canvas_width, canvas_height,
+					Bitmap.Config.RGB_565);
+			Canvas newCanvas = new Canvas(newBitmap);
+			// Recompute bounds from scratch; stale menu-era bounds must not carry
+			// into the gameplay frame (the route overwrote every mirror cell).
+			maxContentRow = -1;
+			maxContentCol = -1;
+			canvas = newCanvas;
+			repaintAllFromMirrorLocked();
+			bitmap = newBitmap; // publish last: atomic ref write for onDraw
+		}
+		postInvalidate();
 	}
 
 	public void clear()

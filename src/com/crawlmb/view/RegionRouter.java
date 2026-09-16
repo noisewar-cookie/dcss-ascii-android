@@ -3290,6 +3290,12 @@ public class RegionRouter implements TerminalRenderer
 		skipSplitRegionsThisStorm = false;
 		skipFullViewThisStorm = false;
 
+		// Publish the double-buffered transition repaint (no-op unless beginBatch
+		// ran): the routing pass above refreshed each gameplay panel's mirror.
+		if (transition)
+			for (RegionTermView region : splitRegions)
+				region.endBatch();
+
 		// Footer compression remaps fullView rows non-bijectively (the more
 		// block moves up under short content; vacated gap/footer rows have no
 		// source). Differential per-cell routing can't clear the rows nothing
@@ -3338,18 +3344,21 @@ public class RegionRouter implements TerminalRenderer
 				|| detectedType != currentMenuType;
 		if (transition)
 		{
-			// menu -> gameplay: splitRegions still hold stale menu-era
-			// content. Clear now, on the game thread — onFrame's routing
-			// pass repaints the full gameplay frame into them right after
-			// this, and applyMode's scheduleRedrawAfterLayout covers any
-			// bitmap recreate from a scale change. The reverse direction
-			// (gameplay -> menu) is handled by skipSplitRegionsThisStorm
-			// in onFrame.
+			// menu -> gameplay: double-buffer each gameplay panel's repaint
+			// (beginBatch now, endBatch after onFrame's routing pass) so onDraw
+			// shows no half-painted map when applyMode reveals it a vsync later
+			// — the old flash, worst on release. Owned newgame panels aren't
+			// part of the gameplay frame, so clear them outright as before.
 			if (currentMode != LayoutMode.GAMEPLAY
 					&& detected == LayoutMode.GAMEPLAY)
 			{
 				for (RegionTermView region : splitRegions)
-					region.clear();
+				{
+					if (region.ownerMenuType == null)
+						region.beginBatch();
+					else
+						region.clear();
+				}
 			}
 
 			currentMode = detected;
