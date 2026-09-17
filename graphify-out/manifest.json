@@ -10,9 +10,9 @@
     "semantic_hash": "e978a7e5d8b22fb5fe3a5a93e82d0964"
   },
   "build.gradle": {
-    "mtime": 1789542105.4706707,
-    "ast_hash": "fa236e9a5f5d6dd729374554faa513a5",
-    "semantic_hash": "fa236e9a5f5d6dd729374554faa513a5"
+    "mtime": 1789624585.1177125,
+    "ast_hash": "3c79501784da5c3c74ae737b38e3bf79",
+    "semantic_hash": "3c79501784da5c3c74ae737b38e3bf79"
   },
   "gradlew": {
     "mtime": 1776494228.7899022,
@@ -95,9 +95,9 @@
     "semantic_hash": "daff9d197d7d2ea7c55b2ac9cf419622"
   },
   "src/com/crawlmb/Preferences.java": {
-    "mtime": 1789542492.124931,
-    "ast_hash": "972d6d2674d9714bc73208836cb77b9f",
-    "semantic_hash": "972d6d2674d9714bc73208836cb77b9f"
+    "mtime": 1789622303.4342072,
+    "ast_hash": "d17919153249e3bd18b97e7cdae91996",
+    "semantic_hash": "d17919153249e3bd18b97e7cdae91996"
   },
   "src/com/crawlmb/TouchDirectionRepeatPreference.java": {
     "mtime": 1783818906.831584,
@@ -125,9 +125,9 @@
     "semantic_hash": "cc79c34b25313a0eefdcaaab815a5b18"
   },
   "src/com/crawlmb/activity/GameActivity.java": {
-    "mtime": 1789538616.3286204,
-    "ast_hash": "702d7d20a4b9138e2b6ffba53ae8e50c",
-    "semantic_hash": "702d7d20a4b9138e2b6ffba53ae8e50c"
+    "mtime": 1789623548.7085617,
+    "ast_hash": "9de59e87ac629e348513754d3cbf6d0c",
+    "semantic_hash": "9de59e87ac629e348513754d3cbf6d0c"
   },
   "src/com/crawlmb/activity/HelpActivity.java": {
     "mtime": 1778744960.008869,
