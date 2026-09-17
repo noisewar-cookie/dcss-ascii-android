@@ -192,6 +192,7 @@ public class GameActivity extends Activity
 	// active flag lets its onDismiss chain the new-options modal after it.
 	private boolean pendingReleaseNotesModal = false;
 	private boolean releaseNotesModalActive = false;
+	private boolean newOptionsModalActive = false;
 	// On-screen HUD shortcut buttons (help / wiki). Recreated each
 	// rebuildViews() so they re-anchor to the HUD's current slot.
 	private HudButtonController hudButtonController = null;
@@ -276,11 +277,11 @@ public class GameActivity extends Activity
 			Preferences.setFoldableSeen(true);
 
 		// One-time nudge on first install, or the first launch after updating
-		// to a build that added preferences (PREFS_OPTIONS_VERSION bumped).
+		// to a build that added preferences (NEW_OPTIONS_MODAL_VERSION bumped).
 		// Shown as a modal from rebuildViews once the modal shell exists; the
 		// seen version is persisted at show time to keep it to a single showing.
-		pendingNewOptionsModal = Preferences.getSeenPrefsOptionsVersion()
-				< Preferences.PREFS_OPTIONS_VERSION;
+		pendingNewOptionsModal = Preferences.getSeenNewOptionsVersion()
+				< Preferences.NEW_OPTIONS_MODAL_VERSION;
 
 		// Release notes: once per install/update, keyed on versionCode.
 		pendingReleaseNotesModal = Preferences.getSeenReleaseNotesVersion()
@@ -734,11 +735,22 @@ public class GameActivity extends Activity
 				modalController = new ModalOverlayController(this, screenLayout,
 						iconConfig, () -> {
 							restoreKeyboardAfterReload();
-							// Chain the new-options modal after release notes.
+							// Persist seen-version on real dismiss, not at show time:
+							// a fold rebuild tears the modal down without this
+							// callback, so rebuildViews re-shows it until dismissed.
 							if (releaseNotesModalActive) {
 								releaseNotesModalActive = false;
+								Preferences.setSeenReleaseNotesVersion(
+										getAppVersionCode());
+								pendingReleaseNotesModal = false;
 								if (pendingNewOptionsModal)
 									showNewOptionsModal();
+							}
+							else if (newOptionsModalActive) {
+								newOptionsModalActive = false;
+								Preferences.setSeenNewOptionsVersion(
+										Preferences.NEW_OPTIONS_MODAL_VERSION);
+								pendingNewOptionsModal = false;
 							}
 						});
 				hudButtonController = new HudButtonController(this, screenLayout,
@@ -899,17 +911,17 @@ public class GameActivity extends Activity
 	// scroll modal handle overflow — wrapping would shear the columns. Only
 	// valid mid-game; on the main menu there are no bindings to report.
 	// "What's new" modal: the newest changelog (latest_release.txt, emitted by
-	// setup.sh), shown before the new-options modal. Persists the seen
-	// versionCode on show so it appears once per install/update.
+	// setup.sh), shown before the new-options modal. Seen versionCode is
+	// persisted on dismiss (not here) so a fold rebuild re-shows it.
 	private void showReleaseNotesModal() {
 		if (modalController == null)
 			return;
 
 		String notes = readAssetText("docs/latest_release.txt");
-		Preferences.setSeenReleaseNotesVersion(getAppVersionCode());
-		pendingReleaseNotesModal = false;
 		if (notes == null || notes.trim().isEmpty()) {
-			// Nothing to show — don't block the chained new-options modal.
+			// No modal to dismiss, so mark seen here; chain new-options.
+			Preferences.setSeenReleaseNotesVersion(getAppVersionCode());
+			pendingReleaseNotesModal = false;
 			if (pendingNewOptionsModal)
 				showNewOptionsModal();
 			return;
@@ -982,15 +994,13 @@ public class GameActivity extends Activity
 	}
 
 	// One-time modal announcing new preference options: message text over the
-	// two-finger long-press icon in a compact centred card. Persists the seen
-	// version and clears the pending flag on show, so it appears exactly once.
+	// two-finger long-press icon in a compact centred card. Seen version is
+	// persisted on dismiss (not here) so a fold rebuild re-shows it.
 	private void showNewOptionsModal() {
 		if (modalController == null)
 			return;
 		releaseNotesModalActive = false;
-		pendingNewOptionsModal = false;
-		Preferences.setSeenPrefsOptionsVersion(
-				Preferences.PREFS_OPTIONS_VERSION);
+		newOptionsModalActive = true;
 
 		float density = getResources().getDisplayMetrics().density;
 		LinearLayout box = new LinearLayout(this);

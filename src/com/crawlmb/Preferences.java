@@ -44,15 +44,24 @@ final public class Preferences
 	public static final int FONTSIZE_MIN = -8;
 	public static final int FONTSIZE_MAX = 20;
 	public static final String KEY_RELOADINPROGRESS = "crawl.reloadinprogress";
+	// Legacy: an arbitrary counter (max LEGACY_OPTIONS_VERSION_MAX) that
+	// numbered the new-options modal before the switch to versionCode
+	// numbering. Kept only as the migration source for the new key below.
 	public static final String KEY_SEENPREFSOPTIONSVERSION = "crawl.seenprefsoptionsversion";
+	public static final String KEY_SEENNEWOPTIONSVERSION = "crawl.seennewoptionsversion";
 	// Highest app versionCode whose release notes the user has already seen.
 	public static final String KEY_SEENRELEASENOTESVERSION = "crawl.seenreleasenotesversion";
 
-	// Bump this by 1 in any release that adds new options to the preferences
-	// menu (res/xml/preferences.xml). GameActivity shows a one-time "new
-	// options" toast when the stored seen-version is behind this (or absent,
-	// i.e. first install). The dcssascii_release_prep skill prompts to bump it.
-	public static final int PREFS_OPTIONS_VERSION = 4;
+	// versionCode (as in build.gradle) of the last release that added new
+	// options worth announcing. GameActivity shows a one-time "new options"
+	// modal when the stored seen-version is behind this (or absent, i.e. first
+	// install). Set it to the versionCode of the next release that adds
+	// options; leave it for silent patches. The dcssascii_release_prep skill
+	// prompts to update it.
+	public static final int NEW_OPTIONS_MODAL_VERSION = 22;
+	// Final value of the legacy counter (= the v22 options set). Anyone who
+	// saw that had seen v22's options, so migration maps it to versionCode 22.
+	private static final int LEGACY_OPTIONS_VERSION_MAX = 4;
 
 	public static final String KEY_FONTFACE = "crawl.fontface";
 	public static final String KEY_ENABLETOUCH = "crawl.enabletouch";
@@ -415,16 +424,27 @@ final public class Preferences
 		sharedPreferences.edit().putBoolean(KEY_FOLDABLESEEN, value).apply();
 	}
 
-	// Highest PREFS_OPTIONS_VERSION the user has already been notified about.
-	// -1 (absent) means a fresh install that has never seen the toast.
-	public static int getSeenPrefsOptionsVersion()
+	// Highest NEW_OPTIONS_MODAL_VERSION the user has already been notified
+	// about. -1 (absent) means a fresh install that has never seen the modal.
+	public static int getSeenNewOptionsVersion()
 	{
-		return sharedPreferences.getInt(KEY_SEENPREFSOPTIONSVERSION, -1);
+		if (sharedPreferences.contains(KEY_SEENNEWOPTIONSVERSION))
+			return sharedPreferences.getInt(KEY_SEENNEWOPTIONSVERSION, -1);
+		// One-time migration from the legacy arbitrary counter to versionCode
+		// numbering. EXCEPTION to the plain read: users who saw the final
+		// legacy modal (counter == max) had already seen v22's options, so map
+		// them to versionCode 22 to avoid re-showing it; anyone behind is left
+		// as unseen (-1) so they still get it. Seeded once, then read normally.
+		int legacy = sharedPreferences.getInt(KEY_SEENPREFSOPTIONSVERSION, -1);
+		int seeded = legacy >= LEGACY_OPTIONS_VERSION_MAX
+				? NEW_OPTIONS_MODAL_VERSION : -1;
+		setSeenNewOptionsVersion(seeded);
+		return seeded;
 	}
 
-	public static void setSeenPrefsOptionsVersion(int value)
+	public static void setSeenNewOptionsVersion(int value)
 	{
-		sharedPreferences.edit().putInt(KEY_SEENPREFSOPTIONSVERSION, value).apply();
+		sharedPreferences.edit().putInt(KEY_SEENNEWOPTIONSVERSION, value).apply();
 	}
 
 	// Highest app versionCode whose release-notes modal the user has seen.
