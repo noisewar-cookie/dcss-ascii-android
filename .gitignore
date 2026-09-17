@@ -32,12 +32,24 @@ releaseChecklist.md
 # Local release tooling
 prepare-release.ps1
 
-# graphify: commit graph.json + report + labels (token-costly to rebuild);
-# ignore local caches, machine paths, and free-to-regenerate artifacts.
+# graphify: commit graph.json + manifest + labels (+ .sig) only — token-costly to
+# rebuild. Ignore local caches, machine paths, and free-to-regenerate intermediates
+# (the pipeline writes these mid-run; they must never be committed).
 graphify-out/cache/
 graphify-out/.graphify_root
 graphify-out/.graphify_python
 graphify-out/.graphify_analysis.json
+graphify-out/.graphify_detect.json
+graphify-out/.graphify_extract.json
+graphify-out/.graphify_ast.json
+graphify-out/.graphify_semantic.json
+graphify-out/.graphify_semantic_new.json
+graphify-out/.graphify_cached.json
+graphify-out/.graphify_uncached.txt
+graphify-out/.graphify_incremental.json
+graphify-out/.graphify_old.json
+graphify-out/.graphify_chunk_*.json
+graphify-out/.needs_update
 graphify-out/cost.json
 graphify-out/graph.html
 graphify-out/GRAPH_REPORT.md
