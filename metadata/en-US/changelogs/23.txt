@@ -1,0 +1,4 @@
+Release 23 (0.34.1)
+
+Bug Fixes:
+• Hotfixed word-wrapping for different message panel row counts.
