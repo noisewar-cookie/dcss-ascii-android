@@ -2396,6 +2396,11 @@ public class GameActivity extends Activity
 						lastMlistH = mlistH;
 						lastCompactH = compactH;
 
+						// Re-sync the wrap width after a custom row count shrinks
+						// the msg font (smaller font = more cols; boot value would
+						// wrap early). Self-gates on game-loaded + width change.
+						gameKeyListener.nativew.updateMsgWrap();
+
 						if (msgRowsCustom)
 						{
 							// Message font yields; the map never shrinks (its
