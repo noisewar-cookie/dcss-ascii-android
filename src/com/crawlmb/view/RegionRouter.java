@@ -79,7 +79,10 @@ public class RegionRouter implements TerminalRenderer
 	// the freed rows let the map grow.
 	public static final int HUD_END_ROW_COMPACT = 4;
 	public static final int MLIST_START_ROW = 11;
-	public static final int MLIST_END_ROW = 15;
+	// DCSS prints 6 monster rows (11-16, = view height 17 - HUD_HEIGHT 11),
+	// including the "(…)" overflow marker on the last one. The panel keeps a
+	// 4-row visual slot and scrolls to the rest (GameActivity).
+	public static final int MLIST_END_ROW = 17;
 	public static final int HUD_START_COL = 37;
 	public static final int HUD_END_COL = 80;
 

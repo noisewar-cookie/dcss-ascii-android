@@ -137,6 +137,9 @@ public class GameActivity extends Activity
 	// Compact mode caps the visible message slot to this many rows, freeing the
 	// rest for the map.
 	private static final int COMPACT_MSG_ROWS = 5;
+	// Monster list visual slot. DCSS prints 6 rows into the region; the panel
+	// shows this many and drag-scrolls to the remainder.
+	private static final int MLIST_VISIBLE_ROWS = 4;
 	// Inset (dp) keeping the docked compact bars off the map half's outer edge
 	// so they don't abut the panel/hinge across the split.
 	private static final float COMPACT_BAR_OUTER_MARGIN_DP = 2f;
@@ -1679,6 +1682,10 @@ public class GameActivity extends Activity
 		mlistView.setId(View.generateViewId());
 		mlistView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
 		mlistView.setOffsetCols(fontConfig.portraitHudOffsetCols);
+		// Keep the classic slot height and drag up for the rows past it. Scroll
+		// bounds come from the drawn content, so a list that fits can't move.
+		mlistView.setVerticalScrollEnabled(true);
+		mlistView.setMaxVisibleRows(MLIST_VISIBLE_ROWS);
 
 		// Word wrap: DCSS wraps messages at the visible column count
 		// (msg_max_width, passed at game start via NativeWrapper) and the
@@ -2208,11 +2215,12 @@ public class GameActivity extends Activity
 		if (compactHudActive && portraitCompactTitle != null)
 			portraitExtraScrollTargets = new View[] {
 					ngsDesc, ngbDesc, quickControlsView, ngsScroll, ngbScroll,
-					ngwScroll, portraitCompactTitle, portraitCompactVitals };
+					ngwScroll, portraitCompactTitle, portraitCompactVitals,
+					mlistView };
 		else
 			portraitExtraScrollTargets = new View[] {
 					ngsDesc, ngbDesc, quickControlsView, ngsScroll, ngbScroll,
-					ngwScroll };
+					ngwScroll, mlistView };
 
 		final float MIN_FONT_SCALE = 0.3f;
 		final float MIN_SCALE_DELTA = 0.01f;

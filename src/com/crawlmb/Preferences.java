@@ -245,7 +245,7 @@ final public class Preferences
 		return sharedPreferences.getBoolean(Preferences.KEY_COMPACTHUD, false);
 	}
 
-	// User-chosen visible message rows (3..12), or -1 for "default" (caller
+	// User-chosen visible message rows (3..15), or -1 for "default" (caller
 	// uses 7 normal / 5 compact). Drives the native message-window height at
 	// boot, so a change hard-relaunches the game (see PreferencesActivity).
 	public static int getMsgRows()
@@ -256,7 +256,7 @@ final public class Preferences
 		try
 		{
 			int n = Integer.parseInt(s);
-			return Math.max(3, Math.min(12, n));
+			return Math.max(3, Math.min(15, n));
 		}
 		catch (NumberFormatException e)
 		{

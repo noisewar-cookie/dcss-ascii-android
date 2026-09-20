@@ -654,9 +654,15 @@ public class RegionTermView extends View
 
 	private int getContentHeightForScroll()
 	{
-		int contentH = maxContentRow >= 0
-				? (int)((maxContentRow + 1) * char_height)
-				: canvas_height;
+		// maxContentRow only ever grows (it's reset on a batch swap or clear),
+		// so bound the scroll on a fresh mirror scan — a panel whose content
+		// shrinks in place (monster list emptying out) must not keep the rows
+		// below it scrollable. < 0 = no mirror yet; fall back to the bitmap.
+		int contentH = computeContentHeight();
+		if (contentH < 0)
+			contentH = maxContentRow >= 0
+					? (int)((maxContentRow + 1) * char_height)
+					: canvas_height;
 		if (mapPanMode)
 			contentH = Math.round(contentH * contentZoom);
 		return contentH;
@@ -703,6 +709,24 @@ public class RegionTermView extends View
 				}
 			}
 			return maxCol >= 0 ? (int)((maxCol + 1) * char_width) : 0;
+		}
+	}
+
+	// Height of the drawn content, or -1 if there's no mirror to scan yet.
+	private int computeContentHeight()
+	{
+		synchronized (renderLock)
+		{
+			if (cellChar == null)
+				return -1;
+			for (int r = mirrorRows - 1; r >= 0; r--)
+			{
+				char[] row = cellChar[r];
+				for (int c = 0; c < mirrorCols; c++)
+					if (row[c] != 0 && row[c] != ' ')
+						return (int)((r + 1) * char_height);
+			}
+			return 0;
 		}
 	}
 
@@ -850,6 +874,18 @@ public class RegionTermView extends View
 				int contentH = (maxContentRow + 1) * char_height;
 				scrollOffsetY = Math.max(0, contentH - viewportH);
 			}
+		}
+		// Content can shrink under a drag offset between layout passes (the
+		// monster list emptying out while the panel is scrolled down); re-clamp
+		// so the viewport can't sit below the last drawn row. Sticky panels
+		// pin themselves above.
+		if (verticalScrollEnabled && !stickyScrollToBottom && scrollOffsetY > 0
+				&& char_height > 0 && getHeight() > 0)
+		{
+			int maxY = Math.max(0,
+					getContentHeightForScroll() - getHeight());
+			if (scrollOffsetY > maxY)
+				scrollOffsetY = maxY;
 		}
 		if (mapPanMode && contentZoom != 1.0f)
 		{

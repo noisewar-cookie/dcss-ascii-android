@@ -47,6 +47,9 @@
         <item>10 rows</item>
         <item>11 rows</item>
         <item>12 rows</item>
+        <item>13 rows</item>
+        <item>14 rows</item>
+        <item>15 rows</item>
     </string-array>
     <string-array name="msgRowsValues" translatable="false">
         <item>default</item>
@@ -60,5 +63,8 @@
         <item>10</item>
         <item>11</item>
         <item>12</item>
+        <item>13</item>
+        <item>14</item>
+        <item>15</item>
     </string-array>
 </resources>
