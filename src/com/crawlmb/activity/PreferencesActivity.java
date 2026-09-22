@@ -28,6 +28,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
+import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceCategory;
@@ -858,6 +859,12 @@ public class PreferencesActivity extends PreferenceActivity implements
             KeyMapPreference kbPref = (KeyMapPreference) pref;
             String desc = kbPref.getDescription();
             pref.setSummary(desc);
+        } else if (pref instanceof ListPreference
+                && Preferences.KEY_SCALEPRIORITY.equals(key)) {
+            // Selected mode is the title; the summary stays the fixed helper.
+            CharSequence entry = ((ListPreference) pref).getEntry();
+            if (entry != null)
+                pref.setTitle(entry);
         } else if (pref instanceof PreferenceCategory) {
             PreferenceCategory prefCat = (PreferenceCategory) pref;
             int count = prefCat.getPreferenceCount();

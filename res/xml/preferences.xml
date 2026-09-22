@@ -102,6 +102,22 @@
 	   android:dialogTitle="@string/preferences_msgrows_dialogtitle"
 	   android:entries="@array/msgRowsDescriptions"
 	   android:entryValues="@array/msgRowsValues" />
+	<ListPreference
+	   android:key="crawl.mlistrows"
+	   android:defaultValue="default"
+	   android:title="@string/preferences_mlistrows_title"
+	   android:summary="@string/preferences_mlistrows_summary"
+	   android:dialogTitle="@string/preferences_mlistrows_dialogtitle"
+	   android:entries="@array/mlistRowsDescriptions"
+	   android:entryValues="@array/mlistRowsValues" />
+	<ListPreference
+	   android:key="crawl.scalepriority"
+	   android:defaultValue="mlist"
+	   android:title="@string/preferences_scalepriority_title"
+	   android:summary="@string/preferences_scalepriority_summary"
+	   android:dialogTitle="@string/preferences_scalepriority_dialogtitle"
+	   android:entries="@array/scalePriorityDescriptions"
+	   android:entryValues="@array/scalePriorityValues" />
 	<com.crawlmb.FontSizeDeltaPreference
 	   android:key="crawl.listsfontsize"
 	   android:defaultValue="0"

@@ -1676,6 +1676,16 @@ public class GameActivity extends Activity
 		hudView.setFontScaleMultiplier(fontConfig.portraitHudFontScale);
 		hudView.setOffsetCols(fontConfig.portraitHudOffsetCols);
 
+		// Visible monster-list rows: a user pick (3..6) overrides the default 4.
+		// The native region is a fixed 6 rows, so this only widens the Java
+		// viewport and (via the auto-fit listener) scales the panel font — like
+		// the message-rows pref. A custom count grows the panel into the free
+		// space above the map, then shrinks the mlist font to fit (never the map).
+		int mlistRowsPref = Preferences.getMlistRows();
+		final boolean mlistRowsCustom = mlistRowsPref > 0;
+		final int mlistVisibleRows = mlistRowsCustom ? mlistRowsPref
+				: MLIST_VISIBLE_ROWS;
+
 		RegionTermView mlistView = new RegionTermView(this,
 				RegionRouter.MLIST_START_ROW, RegionRouter.HUD_START_COL,
 				RegionRouter.MLIST_END_ROW, RegionRouter.HUD_END_COL);
@@ -1685,7 +1695,7 @@ public class GameActivity extends Activity
 		// Keep the classic slot height and drag up for the rows past it. Scroll
 		// bounds come from the drawn content, so a list that fits can't move.
 		mlistView.setVerticalScrollEnabled(true);
-		mlistView.setMaxVisibleRows(MLIST_VISIBLE_ROWS);
+		mlistView.setMaxVisibleRows(mlistVisibleRows);
 
 		// Word wrap: DCSS wraps messages at the visible column count
 		// (msg_max_width, passed at game start via NativeWrapper) and the
@@ -1708,6 +1718,9 @@ public class GameActivity extends Activity
 		final int msgVisibleRows = msgRowsCustom ? msgRowsPref
 				: (compactHudActive
 						? COMPACT_MSG_ROWS : fontConfig.portraitMsgVisibleRows);
+		// When both panels are custom, this decides which one takes the free
+		// space above the map first (see the auto-fit listener below).
+		final boolean msgPriority = Preferences.getMsgPanelPriority();
 		// Native message-window height in terminal rows (0 = stock 7-row window).
 		// Word wrap extends it to msgHistoryRows for scrollback; a custom count
 		// > 7 extends it directly (so >7 unique rows without word wrap). It can't
@@ -1742,8 +1755,8 @@ public class GameActivity extends Activity
 			}
 		}
 		// Custom count: freeze the map's own height self-fit so it keeps its
-		// width-fit size while the message font yields to fit the rows.
-		if (msgRowsCustom)
+		// width-fit size while the message/monster font yields to fit the rows.
+		if (msgRowsCustom || mlistRowsCustom)
 			mapView.setHeightSelfFit(false);
 		portraitMsgView = msgView;
 
@@ -2326,6 +2339,75 @@ public class GameActivity extends Activity
 									compactHb += portraitCompactVitals
 											.getMeasuredHeight();
 							}
+							// Custom rows: this half has no map, so the custom
+							// panel(s) fill the space left by the fixed/Default
+							// panels. Base-font (*Hb) heights keep it idempotent
+							// (grows back on regained height); CENTER_VERTICAL
+							// gravity pads the leftover so the group stays centred.
+							if (msgRowsCustom || mlistRowsCustom)
+							{
+								float fixedHb = hudHb
+										+ statusBar.getMeasuredHeight()
+										+ compactHb;
+								if (!msgRowsCustom)
+									fixedHb += msgHb;
+								if (!mlistRowsCustom)
+									fixedHb += mlistHb;
+								float freeC = availPanel - 1f - fixedHb;
+								float tHudC = hudBase;
+								float tMlistC = curMlist;
+								float tMsgC = curMsg;
+								if (freeC > 0f)
+								{
+									if (msgRowsCustom && mlistRowsCustom)
+									{
+										boolean msgFirst = msgPriority;
+										float priHb = msgFirst ? msgHb : mlistHb;
+										float priBase = msgFirst
+												? msgBase : hudBase;
+										float secHb = msgFirst ? mlistHb : msgHb;
+										float secBase = msgFirst
+												? hudBase : msgBase;
+										// Reserve the secondary at min font so it
+										// keeps all rows; primary fits the rest.
+										float secReserve = secHb
+												* (MIN_FONT_SCALE / secBase);
+										float priScale = fitHalfScale(priBase,
+												priHb, freeC - secReserve,
+												MIN_FONT_SCALE);
+										float priH = priHb * (priScale / priBase);
+										float secScale = fitHalfScale(secBase,
+												secHb, freeC - priH,
+												MIN_FONT_SCALE);
+										if (msgFirst)
+										{
+											tMsgC = priScale;
+											tMlistC = secScale;
+										}
+										else
+										{
+											tMlistC = priScale;
+											tMsgC = secScale;
+										}
+									}
+									else if (msgRowsCustom)
+										tMsgC = fitHalfScale(msgBase, msgHb,
+												freeC, MIN_FONT_SCALE);
+									else
+										tMlistC = fitHalfScale(hudBase, mlistHb,
+												freeC, MIN_FONT_SCALE);
+								}
+								if (Math.abs(tHudC - curHud) >= MIN_SCALE_DELTA)
+									hudView.setFontScaleMultiplier(tHudC);
+								if (Math.abs(tMlistC - curMlist)
+										>= MIN_SCALE_DELTA)
+									mlistView.setFontScaleMultiplier(tMlistC);
+								if (Math.abs(tMsgC - curMsg) >= MIN_SCALE_DELTA)
+									msgView.setFontScaleMultiplier(tMsgC);
+								gameKeyListener.nativew.updateMsgWrap();
+								return;
+							}
+
 							float stackHb = hudHb + mlistHb + msgHb
 									+ statusBar.getMeasuredHeight() + compactHb;
 							float hf = stackHb > 0
@@ -2419,32 +2501,50 @@ public class GameActivity extends Activity
 						// wrap early). Self-gates on game-loaded + width change.
 						gameKeyListener.nativew.updateMsgWrap();
 
-						if (msgRowsCustom)
+						if (msgRowsCustom || mlistRowsCustom)
 						{
-							// Message font yields; the map never shrinks (its
-							// self-fit is frozen, so mapH is the stable width-fit
-							// height). Reserve the map plus the fixed panels, and
-							// shrink the message font only when the requested rows
-							// overflow what's left. Free space above the map is
-							// consumed first (the panel grows; no shrink here).
+							// Map is frozen at its width-fit height; the custom
+							// panel(s) take the space above it, shrinking their
+							// own font (never the map). Priority panel fills
+							// first, the other keeps its rows in the remainder.
 							int mapNat = mapView.getMeasuredHeight();
-							int msgBudget = available - hudH - statusH
-									- mlistH - compactH - mapNat;
-							if (msgBudget <= 0)
+							int reserved = hudH + statusH + compactH;
+							if (!msgRowsCustom)
+								reserved += msgH;
+							if (!mlistRowsCustom)
+								reserved += mlistH;
+							int freeForCustom = available - mapNat - reserved;
+							if (freeForCustom <= 0)
 								return;
-							int rows = Math.min(msgView.getRegionRows(),
-									msgVisibleRows);
-							int wantH = rows * msgView.getContentRowHeight();
-							if (wantH <= 0 || wantH <= msgBudget)
-								return;
-							float curMsg = msgView.getFontScaleMultiplier();
-							if (curMsg <= MIN_FONT_SCALE)
-								return;
-							float mr = (float) msgBudget / wantH;
-							float nMsg = Math.max(MIN_FONT_SCALE, curMsg * mr);
-							if (curMsg - nMsg < MIN_SCALE_DELTA)
-								return;
-							msgView.setFontScaleMultiplier(nMsg);
+							if (msgRowsCustom && mlistRowsCustom)
+							{
+								RegionTermView primary = msgPriority
+										? msgView : mlistView;
+								int primaryRows = msgPriority
+										? msgVisibleRows : mlistVisibleRows;
+								RegionTermView secondary = msgPriority
+										? mlistView : msgView;
+								int secondaryRows = msgPriority
+										? mlistVisibleRows : msgVisibleRows;
+								// Reserve the secondary at min font so it keeps
+								// all rows; primary fits the rest.
+								int secondaryReserve = panelRowsHeight(
+										secondary, secondaryRows, MIN_FONT_SCALE);
+								int primaryH = fitPanelRows(primary, primaryRows,
+										freeForCustom - secondaryReserve,
+										MIN_FONT_SCALE, MIN_SCALE_DELTA);
+								fitPanelRows(secondary, secondaryRows,
+										freeForCustom - primaryH,
+										MIN_FONT_SCALE, MIN_SCALE_DELTA);
+							}
+							else if (msgRowsCustom)
+								fitPanelRows(msgView, msgVisibleRows,
+										freeForCustom, MIN_FONT_SCALE,
+										MIN_SCALE_DELTA);
+							else
+								fitPanelRows(mlistView, mlistVisibleRows,
+										freeForCustom, MIN_FONT_SCALE,
+										MIN_SCALE_DELTA);
 							return;
 						}
 
@@ -2470,6 +2570,54 @@ public class GameActivity extends Activity
 				});
 
 		return router;
+	}
+
+	// Shrink (never grow) `view`'s font so `targetRows` fit `budgetPx`. Returns
+	// the resulting height so a caller can chain the next panel's budget off it
+	// this pass (the new measured height only lands next layout).
+	private static int fitPanelRows(RegionTermView view, int targetRows,
+			int budgetPx, float minScale, float minDelta)
+	{
+		int rows = Math.min(view.getRegionRows(), targetRows);
+		int rowH = view.getContentRowHeight();
+		int wantH = rows * rowH;
+		float cur = view.getFontScaleMultiplier();
+		if (wantH <= 0 || cur <= 0)
+			return Math.max(0, view.getMeasuredHeight());
+		// Already fits, or at the shrink floor: keep the current font.
+		if (wantH <= budgetPx || cur <= minScale)
+			return wantH;
+		float nScale = Math.max(minScale, cur * (float) budgetPx / wantH);
+		if (cur - nScale < minDelta)
+			return wantH;
+		view.setFontScaleMultiplier(nScale);
+		return Math.round(wantH * (nScale / cur));
+	}
+
+	// Height `view` needs for `rows` at font `scale`, from its current per-row
+	// height (scale-invariant).
+	private static int panelRowsHeight(RegionTermView view, int rows,
+			float scale)
+	{
+		float cur = view.getFontScaleMultiplier();
+		int rowH = view.getContentRowHeight();
+		if (cur <= 0 || rowH <= 0)
+			return 0;
+		int r = Math.min(view.getRegionRows(), rows);
+		return Math.round(r * rowH * (scale / cur));
+	}
+
+	// Unfolded panels-half fit: `baseHb` is the panel's height at base font for
+	// its chosen rows. Base font when it fits `budget`, shrink toward `minScale`
+	// otherwise. Never grows past base, so it's idempotent and snaps back.
+	private static float fitHalfScale(float baseScale, float baseHb,
+			float budget, float minScale)
+	{
+		if (baseHb <= 0f || budget <= 0f)
+			return minScale;
+		if (budget >= baseHb)
+			return baseScale;
+		return Math.max(minScale, baseScale * budget / baseHb);
 	}
 
 	// Views of one draggable panel unit, top to bottom. The status-lights bar

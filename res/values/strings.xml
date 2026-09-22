@@ -84,6 +84,12 @@
     <string name="preferences_msgrows_title"># of Message panel rows</string>
     <string name="preferences_msgrows_summary">%s. Uses free space above map first, then scales font.</string>
     <string name="preferences_msgrows_dialogtitle"># of Message panel rows</string>
+    <string name="preferences_mlistrows_title"># of Monster list rows</string>
+    <string name="preferences_mlistrows_summary">%s. Uses free space above map first, then scales font.</string>
+    <string name="preferences_mlistrows_dialogtitle"># of Monster list rows</string>
+    <string name="preferences_scalepriority_title">Scale: Monster list priority</string>
+    <string name="preferences_scalepriority_summary">Choose which scales first, messages or monsters list.</string>
+    <string name="preferences_scalepriority_dialogtitle">Which scales first</string>
     <string name="preferences_listsfontsize_title">Font size: Lists</string>
     <string name="preferences_descfontsize_title">Font size: Descriptions</string>
     <string name="font_size_slider_default">Default</string>

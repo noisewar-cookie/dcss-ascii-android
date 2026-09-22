@@ -35,6 +35,18 @@ final public class Preferences
 	// Message panel visible rows. "default" (7 normal / 5 compact) or "3".."12".
 	public static final String KEY_MSGROWS = "crawl.msgrows";
 	public static final String MSGROWS_DEFAULT = "default";
+	// Monster-list panel visible rows. "default" (4) or "3".."6" (6 = the native
+	// row count). Java-layout only (no native option), applied on rebuildViews.
+	public static final String KEY_MLISTROWS = "crawl.mlistrows";
+	public static final String MLISTROWS_DEFAULT = "default";
+	// Which panel scales/fills first when free vertical space is contended.
+	// "msg" = extra space fills MESSAGE rows first (classic); "mlist" (default)
+	// = the MONSTER list fills first up to its set max, then the message panel.
+	// Java-layout only, applied on rebuildViews. String-backed (not the old
+	// boolean) so the pref can be a two-choice ListPreference.
+	public static final String KEY_SCALEPRIORITY = "crawl.scalepriority";
+	public static final String SCALEPRIORITY_MSG = "msg";
+	public static final String SCALEPRIORITY_DEFAULT = "mlist";
 	// Relative font-size adjustments (points) for list screens and description
 	// popups. 0 = default; clamped to [FONTSIZE_MIN, FONTSIZE_MAX]. Consumed at
 	// boot via RegionRouter (drives both render scale and the dynamic wordwrap
@@ -262,6 +274,35 @@ final public class Preferences
 		{
 			return -1;
 		}
+	}
+
+	// User-chosen visible monster-list rows (3..6), or -1 for "default" (=4).
+	// The native monster region is a fixed 6 rows, so this is purely a Java
+	// viewport/font-scale change — applied on the next rebuildViews, no relaunch.
+	public static int getMlistRows()
+	{
+		String s = sharedPreferences.getString(KEY_MLISTROWS, MLISTROWS_DEFAULT);
+		if (s == null || MLISTROWS_DEFAULT.equals(s))
+			return -1;
+		try
+		{
+			int n = Integer.parseInt(s);
+			return Math.max(3, Math.min(6, n));
+		}
+		catch (NumberFormatException e)
+		{
+			return -1;
+		}
+	}
+
+	// True: extra vertical space fills additional message-panel rows first.
+	// False (default): the monster list fills empty rows first up to its set
+	// max, then the message panel takes the remainder.
+	public static boolean getMsgPanelPriority()
+	{
+		return SCALEPRIORITY_MSG.equals(
+				sharedPreferences.getString(KEY_SCALEPRIORITY,
+						SCALEPRIORITY_DEFAULT));
 	}
 
 	// Relative font-size delta (points) for list screens, clamped to

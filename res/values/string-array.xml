@@ -67,4 +67,34 @@
         <item>14</item>
         <item>15</item>
     </string-array>
+
+    <!-- Monster-list visible-row picker. Order/values must stay in sync;
+         values are matched by Preferences.getMlistRows(). "default" = 4 rows;
+         6 is the native row count (the whole list). -->
+    <string-array name="mlistRowsDescriptions">
+        <item>Default (4)</item>
+        <item>3 rows</item>
+        <item>4 rows</item>
+        <item>5 rows</item>
+        <item>6 rows</item>
+    </string-array>
+    <string-array name="mlistRowsValues" translatable="false">
+        <item>default</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+    </string-array>
+
+    <!-- Scale-contention priority picker. Order/values must stay in sync;
+         values are matched by Preferences.getMsgPanelPriority()
+         (SCALEPRIORITY_MSG). The selected entry is shown as the pref title. -->
+    <string-array name="scalePriorityDescriptions">
+        <item>Scale: Message panel priority</item>
+        <item>Scale: Monster list priority</item>
+    </string-array>
+    <string-array name="scalePriorityValues" translatable="false">
+        <item>msg</item>
+        <item>mlist</item>
+    </string-array>
 </resources>
