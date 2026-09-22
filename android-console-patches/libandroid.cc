@@ -52,7 +52,7 @@ extern int main(int argc, char *argv[]);
 
 
 #define LINES 24
-#define MENU_LINES 48
+#define MENU_LINES 72
 #define COLS 80
 
 // Rows of the gameplay dungeon view (terminal rows 0..16); the message

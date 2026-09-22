@@ -163,9 +163,9 @@ public class FontConfig
         this.compactMpBarColor         = getColor(props, "compact_mp_bar_color", 0xFF305FE8);
         this.mpBarColor                = getColor(props, "mp_bar_color", this.compactMpBarColor);
         this.portraitMsgFontScale      = getFloat(props, "portrait_msg_font_scale", 1.5f);
-        // Clamped: min 7 preserves the classic window, max 31 keeps the msg
-        // window inside the 48-row terminal (rows 17..47).
-        this.msgHistoryRows            = Math.max(7, Math.min(31, getInt(props, "msg_history_rows", 14)));
+        // Clamped: min 7 preserves the classic window, max 55 keeps the msg
+        // window inside the 72-row terminal (rows 17..71).
+        this.msgHistoryRows            = Math.max(7, Math.min(55, getInt(props, "msg_history_rows", 14)));
         this.portraitMsgVisibleRows    = Math.max(1, getInt(props, "portrait_msg_visible_rows", 7));
         this.landscapeFontScale        = getFloat(props, "landscape_font_scale", 1.0f);
 

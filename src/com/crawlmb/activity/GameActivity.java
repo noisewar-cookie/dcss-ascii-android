@@ -1624,9 +1624,11 @@ public class GameActivity extends Activity
 		gamePanel.addView(skillsView, new FrameLayout.LayoutParams(
 				LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
-		// 112 rows: 48-row terminal × 2 columns folded into one column,
-		// plus spacer rows inserted before help-screen section headings.
-		RegionTermView itemsView = new RegionTermView(this, 0, 0, 112, 80);
+		// Terminal × 2 columns folded into one column, plus spacer rows
+		// inserted before help-screen section headings. Scales with the
+		// grid height (fold output is bounded by 2×FRAME_ROWS + footer).
+		RegionTermView itemsView = new RegionTermView(
+				this, 0, 0, 2 * TerminalRenderer.FRAME_ROWS + 16, 80);
 		itemsView.setFontScaleMultiplier(fontConfig.portraitItemsFontScale);
 		itemsView.setHorizontalScrollEnabled(fontConfig.portraitItemsScrollable);
 		itemsView.setVerticalScrollEnabled(fontConfig.portraitItemsVScrollable);

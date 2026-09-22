@@ -7,7 +7,7 @@ public interface TerminalRenderer
 {
 	// Terminal grid dimensions of the frame protocol. Must match
 	// MENU_LINES / COLS in libandroid.cc.
-	int FRAME_ROWS = 48;
+	int FRAME_ROWS = 72;
 	int FRAME_COLS = 80;
 
 	boolean onGameStart();
