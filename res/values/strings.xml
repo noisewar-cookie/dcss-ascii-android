@@ -23,6 +23,10 @@
     <string name="splash_version_label">v%1$d (%2$s)</string>
     <string name="preferences_changelog_title">Changelog</string>
     <string name="preferences_changelog_summary">See what\'s new in each release.</string>
+    <string name="preferences_changelog_title_versioned">Changelog: v%1$d (%2$s)</string>
+    <string name="preferences_info_title">Info</string>
+    <string name="preferences_info_summary">How do I work this?</string>
+    <string name="preferences_help_summary">Show the control keys.</string>
     <string name="backup_save_directory">Backup save directory</string>
     <string name="backup_morgue_directory">Backup morgue directory</string>
     <string name="restore_save_directory">Restore save directory</string>

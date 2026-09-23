@@ -4,7 +4,7 @@
 	<PreferenceCategory android:title="@string/menu_help">
 		<Preference
 			android:title="@string/menu_help"
-			android:summary="How do I work this?"
+			android:summary="@string/preferences_help_summary"
 			android:key="help"/>
 		<CheckBoxPreference
 			android:key="crawl.skipcontrolsinfo"
@@ -433,5 +433,9 @@
             android:key="changelog"
             android:title="@string/preferences_changelog_title"
             android:summary="@string/preferences_changelog_summary" />
+        <Preference
+            android:key="info"
+            android:title="@string/preferences_info_title"
+            android:summary="@string/preferences_info_summary" />
     </PreferenceCategory>
 </PreferenceScreen>

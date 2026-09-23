@@ -24,6 +24,8 @@ import android.app.ProgressDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -716,16 +718,36 @@ public class PreferencesActivity extends PreferenceActivity implements
         }
     }
 
+    // Returns to GameActivity, which opens the in-game help modal on seeing
+    // the extra (see GameActivity.onActivityResult).
     private void setHelpIntent() {
-        Preference helpPreference = findPreference("help");
-        Intent helpIntent = new Intent(this, HelpActivity.class);
-        helpPreference.setIntent(helpIntent);
+        findPreference("help").setOnPreferenceClickListener(
+                new Preference.OnPreferenceClickListener() {
+                    @Override
+                    public boolean onPreferenceClick(Preference pref) {
+                        Intent result = new Intent();
+                        result.putExtra("showHelpModal", true);
+                        setResult(RESULT_OK, result);
+                        finish();
+                        return true;
+                    }
+                });
+        findPreference("info").setIntent(new Intent(this, HelpActivity.class));
     }
 
     private void setChangelogIntent() {
         Preference changelogPreference = findPreference("changelog");
         Intent changelogIntent = new Intent(this, ChangelogActivity.class);
         changelogPreference.setIntent(changelogIntent);
+        try {
+            PackageInfo info = getPackageManager()
+                    .getPackageInfo(getPackageName(), 0);
+            changelogPreference.setTitle(getString(
+                    R.string.preferences_changelog_title_versioned,
+                    info.versionCode, info.versionName));
+        } catch (PackageManager.NameNotFoundException e) {
+            // Keep the plain title.
+        }
     }
 
     private void setCharacterFilesIntent() {

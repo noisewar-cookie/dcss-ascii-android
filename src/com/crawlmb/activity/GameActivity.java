@@ -187,6 +187,8 @@ public class GameActivity extends Activity
 	// Fold centerline editor (see CenterlineController). Requested from
 	// PreferencesActivity via the "repositionCenterline" result extra.
 	private boolean pendingCenterlineEntry = false;
+	// Help modal requested from PreferencesActivity ("showHelpModal" extra).
+	private boolean pendingHelpModal = false;
 	private CenterlineController centerlineController = null;
 	// One-time "new preference options" modal, computed in onCreate and shown
 	// from rebuildViews once the modal shell is built (see showNewOptionsModal).
@@ -513,6 +515,8 @@ public class GameActivity extends Activity
             		pendingGridOverlayEntry = true;
             	if (data.getBooleanExtra("repositionCenterline", false))
             		pendingCenterlineEntry = true;
+            	if (data.getBooleanExtra("showHelpModal", false))
+            		pendingHelpModal = true;
             }
         }
     }
@@ -3328,6 +3332,11 @@ public class GameActivity extends Activity
 
 		if (pendingCenterlineEntry)
 			schedulePendingCenterlineEntry();
+
+		if (pendingHelpModal) {
+			pendingHelpModal = false;
+			showHelpModal();
+		}
 
 		// A compact-HUD / bar-side toggle applied live instead of restarting
 		// (PreferencesActivity.onSharedPreferenceChanged). onStart's

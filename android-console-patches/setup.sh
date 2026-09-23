@@ -98,8 +98,10 @@ body { background:#000; color:#cfcfcf; font-family:sans-serif;
 h1 { color:#e0b64c; font-size:20px; margin:6px 0 18px; }
 .entry { border-bottom:1px solid #2a2a2a; padding:0 0 14px; margin:0 0 14px; }
 .entry:last-child { border-bottom:none; }
-pre { white-space:pre-wrap; word-wrap:break-word; font-family:monospace;
-      font-size:14px; line-height:1.45; margin:0; }
+.txt { word-wrap:break-word; font-family:monospace;
+       font-size:14px; line-height:1.45; }
+.txt div { white-space:pre-wrap; }
+.b { padding-left:2ch; text-indent:-2ch; }
 </style>
 </head>
 <body>
@@ -108,9 +110,15 @@ HTML_HEAD
     for n in $(ls "$CL_SRC" | sed -n 's/\.txt$//p' | sort -rn); do
         f="$CL_SRC/$n.txt"
         [ -f "$f" ] || continue
-        echo '<div class="entry"><pre>'
-        sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$f"
-        echo '</pre></div>'
+        # 1-4 are duplicates of 5 (the first release's notes).
+        [ "$n" -ge 5 ] || continue
+        # One div per line so "• " bullets get a hanging indent on wrap.
+        echo '<div class="entry txt">'
+        sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
+            -e 's/^• .*/<div class="b">&<\/div>/' -e t \
+            -e 's/^$/<br>/' -e t \
+            -e 's/.*/<div>&<\/div>/' "$f"
+        echo '</div>'
     done
     cat <<'HTML_TAIL'
 </body>
