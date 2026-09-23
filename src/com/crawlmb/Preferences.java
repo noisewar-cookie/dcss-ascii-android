@@ -148,6 +148,19 @@ final public class Preferences
 	public static final float GRID_LINE_PADDING = 1f / 36f;
 	public static final float[] GRID_LINE_DEFAULTS =
 			{ 1f / 3f, 2f / 3f, 1f / 3f, 2f / 3f };
+	// Floating grid: the 9-grid lives in a box ("l,t,r,b" fractions of the
+	// touch region) with its own dividers (fractions of the box); taps outside
+	// the box are dead. The flag picks which config is live in-game. Each key
+	// takes the same .left/.right suffixes as KEY_GRIDLINES in UNFOLDED.
+	public static final String KEY_GRIDFLOAT = "crawl.gridfloat";
+	public static final String KEY_GRIDLINES_FLOAT = "crawl.gridlines.float";
+	public static final String KEY_GRIDRECT = "crawl.gridrect";
+	// Default box = the whole region, so a fresh float grid matches docked.
+	public static final float[] GRID_RECT_DEFAULTS = { 0f, 0f, 1f, 1f };
+	// In-game visibility (0-100 %) of the floating grid's frame and dividers;
+	// one value for every region.
+	public static final String KEY_GRIDOPACITY = "crawl.gridopacity";
+	public static final int GRID_OPACITY_DEFAULT = 20;
 
     private static final String KEYBOARD_LAYOUT_COUNT = "layout_count";
     public static final String KEYBOARD_LAYOUT_CURRENT = "layout_current";
@@ -620,11 +633,6 @@ final public class Preferences
 		return getGridLines();
 	}
 
-	public static void setGridLines(float[] lines)
-	{
-		setGridLines(null, lines);
-	}
-
 	public static void setGridLines(String side, float[] lines)
 	{
 		String key = SIDE_LEFT.equals(side) ? KEY_GRIDLINES_LEFT
@@ -671,6 +679,110 @@ final public class Preferences
 			}
 		}
 		return GRID_LINE_DEFAULTS.clone();
+	}
+
+	private static String gridSideKey(String base, String side)
+	{
+		return SIDE_LEFT.equals(side) ? base + ".left"
+				: SIDE_RIGHT.equals(side) ? base + ".right" : base;
+	}
+
+	// Parsed float lines/rects keyed by pref key (tap hot path). Callers must
+	// not mutate the returned arrays.
+	private static final Map<String, float[]> gridFloatCache = new HashMap<>();
+
+	public static boolean isGridFloat(String side)
+	{
+		return sharedPreferences.getBoolean(
+				gridSideKey(KEY_GRIDFLOAT, side), false);
+	}
+
+	public static void setGridFloat(String side, boolean floating)
+	{
+		sharedPreferences.edit().putBoolean(
+				gridSideKey(KEY_GRIDFLOAT, side), floating).apply();
+	}
+
+	public static int getGridOpacity()
+	{
+		int v = sharedPreferences.getInt(KEY_GRIDOPACITY, GRID_OPACITY_DEFAULT);
+		return Math.max(0, Math.min(100, v));
+	}
+
+	public static void setGridOpacity(int percent)
+	{
+		sharedPreferences.edit().putInt(KEY_GRIDOPACITY, percent).apply();
+	}
+
+	public static float[] getGridFloatLines(String side)
+	{
+		String key = gridSideKey(KEY_GRIDLINES_FLOAT, side);
+		float[] lines = gridFloatCache.get(key);
+		if (lines == null)
+		{
+			lines = parseGridLines(sharedPreferences.getString(key, ""));
+			gridFloatCache.put(key, lines);
+		}
+		return lines;
+	}
+
+	public static void setGridFloatLines(String side, float[] lines)
+	{
+		putGridFloatArray(gridSideKey(KEY_GRIDLINES_FLOAT, side), lines);
+	}
+
+	// Validated {l, t, r, b} box, else GRID_RECT_DEFAULTS. Minimum size is a
+	// px rule enforced by the editor, not here.
+	public static float[] getGridFloatRect(String side)
+	{
+		String key = gridSideKey(KEY_GRIDRECT, side);
+		float[] rect = gridFloatCache.get(key);
+		if (rect == null)
+		{
+			rect = parseGridRect(sharedPreferences.getString(key, ""));
+			gridFloatCache.put(key, rect);
+		}
+		return rect;
+	}
+
+	public static void setGridFloatRect(String side, float[] rect)
+	{
+		putGridFloatArray(gridSideKey(KEY_GRIDRECT, side), rect);
+	}
+
+	private static void putGridFloatArray(String key, float[] values)
+	{
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < values.length; i++)
+		{
+			if (i > 0)
+				sb.append(',');
+			sb.append(values[i]);
+		}
+		sharedPreferences.edit().putString(key, sb.toString()).apply();
+		gridFloatCache.put(key, values.clone());
+	}
+
+	private static float[] parseGridRect(String stored)
+	{
+		String[] parts = stored.split(",");
+		if (parts.length == 4)
+		{
+			float[] rect = new float[4];
+			try
+			{
+				for (int i = 0; i < 4; i++)
+					rect[i] = Float.parseFloat(parts[i]);
+				if (rect[0] >= 0f && rect[0] < rect[2] && rect[2] <= 1f
+						&& rect[1] >= 0f && rect[1] < rect[3]
+						&& rect[3] <= 1f)
+					return rect;
+			}
+			catch (NumberFormatException ignored)
+			{
+			}
+		}
+		return GRID_RECT_DEFAULTS.clone();
 	}
 
 	private static boolean isPanelPermutation(String[] order)

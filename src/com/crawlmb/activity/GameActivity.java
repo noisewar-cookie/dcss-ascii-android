@@ -179,7 +179,7 @@ public class GameActivity extends Activity
 	private boolean pendingRepositionEntry = false;
 	private RepositionController repositionController = null;
 	private UnfoldedRepositionController unfoldedRepositionController = null;
-	// Reposition Grid Overlay mode (see GridOverlayController). Requested
+	// Customize Grid Overlay mode (see GridOverlayController). Requested
 	// from PreferencesActivity via the "repositionGrid" result extra;
 	// entered after a layout pass has sized the keyboard for the button bar.
 	private boolean pendingGridOverlayEntry = false;
@@ -2916,20 +2916,28 @@ public class GameActivity extends Activity
 				new GridOverlayController.Callbacks()
 				{
 					@Override
-					public void onSave(float[] lines)
+					public void onSave(String[] sides, float[][] lines,
+							float[][] rects, boolean floating, int opacity)
 					{
 						gridOverlayController = null;
-						Preferences.setGridLines(lines);
+						for (int i = 0; i < sides.length; i++)
+						{
+							if (floating)
+							{
+								Preferences.setGridFloatLines(sides[i],
+										lines[i]);
+								Preferences.setGridFloatRect(sides[i],
+										rects[i]);
+							}
+							else
+								Preferences.setGridLines(sides[i], lines[i]);
+							Preferences.setGridFloat(sides[i], floating);
+						}
+						if (floating)
+							Preferences.setGridOpacity(opacity);
+						if (portraitDirectionalView != null)
+							portraitDirectionalView.invalidate();
 						// Nothing layout-visible changes — no rebuild needed.
-						restoreKeyboardAfterReload();
-					}
-
-					@Override
-					public void onSaveUnfolded(float[] left, float[] right)
-					{
-						gridOverlayController = null;
-						Preferences.setGridLines(Preferences.SIDE_LEFT, left);
-						Preferences.setGridLines(Preferences.SIDE_RIGHT, right);
 						restoreKeyboardAfterReload();
 					}
 
@@ -2961,13 +2969,26 @@ public class GameActivity extends Activity
 			}
 			else
 				leftReserve = rightReserve = kb; // Both: keyboard full width
-			gridOverlayController.setUnfolded(
+			gridOverlayController.setHalves(
 					new int[] { 0, foldPosture.rightStart },
 					new int[] { foldPosture.leftWidth,
 							foldPosture.totalWidth - foldPosture.rightStart },
 					new int[] { leftReserve, rightReserve },
 					new String[] { Preferences.SIDE_LEFT,
 							Preferences.SIDE_RIGHT });
+		}
+		else if (halfActive && foldPosture != null && kbConfine)
+		{
+			// HALF: one editor over the content half, matching the touch
+			// view's single half band (addDirectionalKeyView), with the
+			// keyboard under it.
+			int kb = (portraitKeyboardView != null)
+					? portraitKeyboardView.getHeight() : 0;
+			gridOverlayController.setHalves(
+					new int[] { kbHalfLeft ? 0 : foldPosture.rightStart },
+					new int[] { kbHalfWidth },
+					new int[] { kb },
+					new String[] { null });
 		}
 		gridOverlayController.enter();
 	}
@@ -3183,6 +3204,8 @@ public class GameActivity extends Activity
 					new int[] { 0 },
 					new String[] { null });
 		configureDirectionalView(view, hapticFeedbackEnabled);
+		if (portraitFontConfig != null)
+			view.setGridColor(portraitFontConfig.repositionHighlightColor);
 		screenLayout.addView(view);
 		portraitDirectionalView = view;
 		// Raise the keyboard above the now full-height overlay so its half keeps

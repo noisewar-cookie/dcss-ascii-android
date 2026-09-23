@@ -1,6 +1,8 @@
 package com.crawlmb.keyboard;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.view.GestureDetector;
 import android.view.HapticFeedbackConstants;
 import android.view.ScaleGestureDetector;
@@ -51,6 +53,10 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	// each half reads its own gridlines. Null entry / null array = the single
 	// global config (HALF mode, non-fold).
 	private String[] foldHalfSides = null;
+
+	// Floating grid frame + dividers, drawn at the saved opacity (no handles).
+	private final Paint gridLinePaint = new Paint();
+	private final Paint gridBorderPaint = new Paint();
 
 	// Map pinch-zoom (portrait): stepped levels [-1..2], one step per pinch
 	// gesture. Session-only — resets on rewire. The factor at each level is
@@ -141,6 +147,20 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		scaleGestureDetector = new ScaleGestureDetector(context, this);
 		this.keyListener = keyListener;
 		touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+		float density = context.getResources().getDisplayMetrics().density;
+		float stroke = Math.max(4, Math.round(2 * density));
+		gridLinePaint.setStyle(Paint.Style.STROKE);
+		gridLinePaint.setStrokeWidth(stroke);
+		gridBorderPaint.setStyle(Paint.Style.STROKE);
+		gridBorderPaint.setStrokeWidth(stroke * 1.5f);
+		setGridColor(0xFFFFFF00);
+	}
+
+	public void setGridColor(int color)
+	{
+		gridLinePaint.setColor(color);
+		gridBorderPaint.setColor(color);
+		invalidate();
 	}
 	
 	public void setPassThroughListener(PassThroughListener onGestureListener)
@@ -198,6 +218,7 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		this.foldHalfWidths = widths;
 		this.foldHalfReserves = reserves;
 		this.foldHalfSides = sides;
+		invalidate();
 	}
 
 	// Update one half's keyboard reserve once the keyboard has measured
@@ -206,7 +227,59 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	{
 		if (foldHalfReserves != null && index >= 0
 				&& index < foldHalfReserves.length)
+		{
 			foldHalfReserves[index] = reservePx;
+			invalidate();
+		}
+	}
+
+	@Override
+	protected void onDraw(Canvas canvas)
+	{
+		super.onDraw(canvas);
+		// Taps are ignored with touch directionals off, so don't show a grid.
+		if (!Preferences.getEnableTouch())
+			return;
+		int alpha = Math.round(Preferences.getGridOpacity() * 2.55f);
+		if (alpha <= 0)
+			return;
+		gridLinePaint.setAlpha(alpha);
+		gridBorderPaint.setAlpha(alpha);
+		if (foldHalfStarts == null)
+		{
+			drawFloatGrid(canvas, -1, 0, getWidth(), getHeight());
+			return;
+		}
+		for (int i = 0; i < foldHalfStarts.length; i++)
+		{
+			int reserve = foldHalfReserves != null ? foldHalfReserves[i] : 0;
+			drawFloatGrid(canvas, i, foldHalfStarts[i], foldHalfWidths[i],
+					getHeight() - reserve);
+		}
+	}
+
+	// Same region → box mapping as gridColumn/gridRow.
+	private void drawFloatGrid(Canvas canvas, int half, float left,
+			float width, float height)
+	{
+		float[] rect = floatRectForHalf(half);
+		if (rect == null || width <= 0 || height <= 0)
+			return;
+		float l = left + rect[0] * width;
+		float t = rect[1] * height;
+		float r = left + rect[2] * width;
+		float b = rect[3] * height;
+		float inset = gridBorderPaint.getStrokeWidth() / 2f;
+		canvas.drawRect(l + inset, t + inset, r - inset, b - inset,
+				gridBorderPaint);
+		float[] lines = linesForHalf(half);
+		for (int i = 0; i < 2; i++)
+		{
+			float x = l + lines[i] * (r - l);
+			canvas.drawLine(x, t, x, b, gridLinePaint);
+			float y = t + lines[i + 2] * (b - t);
+			canvas.drawLine(l, y, r, y, gridLinePaint);
+		}
 	}
 
 	// Which fold half local-x falls in, or -1 for the hinge gap / outside any
@@ -328,14 +401,15 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		}
 		if (!Preferences.getEnableTouch())
 			return false;
-		performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
 
 		int half = currentHalf(event.getX());
 		int c = gridColumn(event.getX(), half);
 		int r = gridRow(event.getY(), half);
 
-		if (c < 0)
-			return true; // tap in the hinge gap / dead half
+		// Hinge gap / dead half / outside the floating box: no key, no buzz.
+		if (c < 0 || r < 0)
+			return true;
+		performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
 
 		// On the newgame species/background screens the upstream menu is
 		// a 3-col grid but we render it as a stacked single-column list,
@@ -361,18 +435,36 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		return halfIndexForX(x);
 	}
 
-	// Divider config for a region: the half's own (UNFOLDED per-side) config,
-	// else the single global one (HALF, non-fold).
+	// Config side for a region: the half's own (UNFOLDED per-side) config,
+	// else null = the single global one (HALF, non-fold).
+	private String sideForHalf(int half)
+	{
+		if (half >= 0 && foldHalfSides != null)
+			return foldHalfSides[half];
+		return null;
+	}
+
+	// Live divider config: the floating box's own lines when float is active.
 	private float[] linesForHalf(int half)
 	{
-		if (half >= 0 && foldHalfSides != null && foldHalfSides[half] != null)
-			return Preferences.getGridLines(foldHalfSides[half]);
-		return Preferences.getGridLines();
+		String side = sideForHalf(half);
+		if (Preferences.isGridFloat(side))
+			return Preferences.getGridFloatLines(side);
+		return Preferences.getGridLines(side);
+	}
+
+	// Floating box {l, t, r, b} as region fractions, or null when docked.
+	private float[] floatRectForHalf(int half)
+	{
+		String side = sideForHalf(half);
+		return Preferences.isGridFloat(side)
+				? Preferences.getGridFloatRect(side) : null;
 	}
 
 	// 9-grid column/row from the user-configurable divider lines (fractions of
-	// the region's bounds). When two dividers coincide the middle band is
-	// zero-width and unreachable — that's the intended 2x2 collapse.
+	// the region's bounds, or of the floating box). When two dividers coincide
+	// the middle band is zero-width and unreachable — the intended 2x2
+	// collapse. -1 = outside the floating box (dead).
 	private int gridColumn(float x, int half)
 	{
 		float[] lines = linesForHalf(half);
@@ -383,6 +475,13 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			return -1; // hinge gap / dead half — ignore
 		else
 			fx = (x - foldHalfStarts[half]) / (float) foldHalfWidths[half];
+		float[] rect = floatRectForHalf(half);
+		if (rect != null)
+		{
+			if (fx < rect[0] || fx >= rect[2])
+				return -1;
+			fx = (fx - rect[0]) / (rect[2] - rect[0]);
+		}
 		return fx < lines[0] ? 0 : fx < lines[1] ? 1 : 2;
 	}
 
@@ -397,6 +496,13 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			int reserve = foldHalfReserves != null ? foldHalfReserves[half] : 0;
 			int usable = getHeight() - reserve;
 			fy = usable > 0 ? y / usable : y / getHeight();
+		}
+		float[] rect = floatRectForHalf(half);
+		if (rect != null)
+		{
+			if (fy < rect[1] || fy >= rect[3])
+				return -1;
+			fy = (fy - rect[1]) / (rect[3] - rect[1]);
 		}
 		return fy < lines[2] ? 0 : fy < lines[3] ? 1 : 2;
 	}
@@ -457,7 +563,7 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		int half = currentHalf(event.getX());
 		int c = gridColumn(event.getX(), half);
 		int r = gridRow(event.getY(), half);
-		if (c < 0 || isNewgameColumnIgnored(c))
+		if (c < 0 || r < 0 || isNewgameColumnIgnored(c))
 			return;
 		int cell = (2 - r) * 3 + c + 1;
 		touchRepeatInterval = Preferences.getTouchDirectionRepeat();
