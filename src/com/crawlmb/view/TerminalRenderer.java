@@ -44,6 +44,13 @@ public interface TerminalRenderer
 	// don't care (e.g. landscape TermView).
 	default void setMessageHistoryMode(boolean active) {}
 
+	// Full Ctrl+P log as LOG_COLS-wide row-major cells, sent just before the
+	// popup shows; drawn natively so history isn't capped at the grid height.
+	default void setMessageHistory(char[] chars, int[] fg, int[] bg) {}
+
+	// Scroll keys while the native log is up; true = consumed.
+	default boolean handleMessageLogKey(int key) { return false; }
+
 	// Called from libandroid.cc (via NativeWrapper) at entry/exit of the
 	// character-log popup opened from the High Scores menu. RegionRouter
 	// uses this to classify the popup as MenuType.MORGUE and hold that

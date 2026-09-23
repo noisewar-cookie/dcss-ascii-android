@@ -1,30 +1,32 @@
 diff --git a/crawl-ref/source/message.cc b/crawl-ref/source/message.cc
 --- a/crawl-ref/source/message.cc
 +++ b/crawl-ref/source/message.cc
-@@ -2261,11 +2261,19 @@
-     buffer.append_store(load_msgs);
+@@ -2256,8 +2256,19 @@
      clear_messages(); // check for Options.message_clear
  }
-
-+// Android: widens fullView from rows 0..28 to the full 48-row terminal for
-+// the duration of the Ctrl+P message history popup. Without this the
-+// scroller's FS_START_AT_END places the newest messages at terminal rows
-+// past 28, which fullView's default region clips off (latest invisible,
-+// older rows shown). Defined in libandroid.cc.
+ 
+-static void _replay_messages_core(formatted_scroller &hist)
++// Android: widens fullView to the full terminal while the history popup is
++// up, else FS_START_AT_END puts the newest lines past its default region.
++// Defined in libandroid.cc.
 +extern "C" void android_message_history_mode(bool active);
++// Android: hands the whole history to Java, which draws it in fullView so it
++// scrolls past the terminal's height (the scroller only shows one page).
++// Defined in libandroid.cc.
++void android_message_history_content(const formatted_string &text);
 +
- static void _replay_messages_core(formatted_scroller &hist)
++static void _replay_messages_core(formatted_scroller &hist,
++                                  bool native_log = false)
  {
 +    android_message_history_mode(true);
      flush_prev_message();
-
+ 
      const store_t msgs = buffer.get_store();
-     formatted_string lines;
-     for (int i = 0; i < msgs.size(); ++i)
-@@ -2268,8 +2276,18 @@
+@@ -2268,9 +2279,19 @@
              string text = msgs[i].full_text();
              if (!text.size())
                  continue;
+-            linebreak_string(text, cgetsize(GOTO_CRT).x - 1);
 +            // Ctrl+P / startup history renders in fullView at the prose font
 +            // scale (same view + scale as prose popups), so cap its wrap to the
 +            // prose width minus the 1-col prefix glyph — else lines overrun.
@@ -35,19 +37,36 @@ diff --git a/crawl-ref/source/message.cc b/crawl-ref/source/message.cc
 +            {
 +                wrap_w = android_prose_wrap_cols - 1;
 +            }
--            linebreak_string(text, cgetsize(GOTO_CRT).x - 1);
 +            linebreak_string(text, wrap_w);
              vector<formatted_string> parts;
 -            formatted_string::parse_string_to_multiple(text, parts, 80);
 +            formatted_string::parse_string_to_multiple(text, parts, wrap_w);
              for (unsigned int j = 0; j < parts.size(); ++j)
              {
-@@ -2293,7 +2301,8 @@
+                 prefix_type p = prefix_type::none;
+@@ -2286,8 +2307,15 @@
+             }
          }
-
+ 
++    // Parsed exactly as formatted_scroller::show() hands it to its Text.
++    if (native_log)
++    {
++        android_message_history_content(
++            formatted_string::parse_string(lines.to_colour_string(LIGHTGRAY)));
++    }
      hist.add_formatted_string(lines);
      hist.show();
 +    android_message_history_mode(false);
  }
-
+ 
  void replay_messages()
+@@ -2295,7 +2323,8 @@
+     formatted_scroller hist(FS_START_AT_END | FS_PREWRAPPED_TEXT);
+     hist.set_more();
+ 
+-    _replay_messages_core(hist);
++    // Native log only here: the startup log's title/more rows aren't in it.
++    _replay_messages_core(hist, true);
+ }
+ 
+ void replay_messages_during_startup()

@@ -505,6 +505,19 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			// inventory) and over the level map panel (where fullView is
 			// registered as a scroll target).
 			startGridHold(event);
+			// Jump-to-newest pill: hand the whole gesture to the panel now so
+			// the tap isn't eaten as a 9-grid direction key.
+			if (activeForwardTarget instanceof RegionTermView)
+			{
+				int[] loc = new int[2];
+				activeForwardTarget.getLocationOnScreen(loc);
+				if (((RegionTermView) activeForwardTarget).isJumpHit(
+						event.getRawX() - loc[0], event.getRawY() - loc[1]))
+				{
+					cancelGridHold();
+					forwardingToTarget = true;
+				}
+			}
 		}
 
 		// A second finger means a pinch/two-finger gesture, never a 9-grid

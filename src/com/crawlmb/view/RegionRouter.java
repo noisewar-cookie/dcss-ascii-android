@@ -457,6 +457,68 @@ public class RegionRouter implements TerminalRenderer
 	public void setMessageHistoryMode(boolean active)
 	{
 		messageHistoryMode = active;
+		if (!active)
+		{
+			messageLogChars = null;
+			if (fullView != null)
+				fullView.setLogContent(null, null, null);
+		}
+	}
+
+	// Whole Ctrl+P log, drawn natively by fullView in MESSAGES. Static for the
+	// same reason as messageHistoryMode; chars written last, read first.
+	private static volatile char[] messageLogChars;
+	private static volatile int[] messageLogFg;
+	private static volatile int[] messageLogBg;
+
+	@Override
+	public void setMessageHistory(char[] chars, int[] fg, int[] bg)
+	{
+		messageLogFg = fg;
+		messageLogBg = bg;
+		messageLogChars = chars;
+		// Re-opened without a menu-type change: applyFullConfig won't rerun.
+		if (fullView != null)
+			fullView.post(() -> {
+				if (lastAppliedMenuType == MenuType.MESSAGES
+						&& messageLogChars == chars)
+					fullView.setLogContent(chars, fg, bg);
+			});
+	}
+
+	// Mirrors formatted_scroller's scroll keys; Enter/Esc still close it.
+	@Override
+	public boolean handleMessageLogKey(int key)
+	{
+		RegionTermView v = fullView;
+		if (!messageHistoryMode || v == null || !v.hasLogContent())
+			return false;
+		int page = v.visibleLogRows();
+		switch (key)
+		{
+		case ' ': case '+': case '>': case '\'':
+		case 0522: case 0540: // KEY_NPAGE, KEY_C3
+			v.scrollLogRows(page);
+			return true;
+		case '-': case '<': case ';':
+		case 0523: case 0535: // KEY_PPAGE, KEY_A3
+			v.scrollLogRows(-page);
+			return true;
+		case 0402: // KEY_DOWN
+			v.scrollLogRows(1);
+			return true;
+		case 0403: // KEY_UP
+			v.scrollLogRows(-1);
+			return true;
+		case 0406: case 0534: // KEY_HOME, KEY_A1
+			v.scrollLogRows(Integer.MIN_VALUE);
+			return true;
+		case 0550: case 0537: // KEY_END, KEY_C1
+			v.scrollLogRows(Integer.MAX_VALUE);
+			return true;
+		default:
+			return false;
+		}
 	}
 
 	// Set true by libandroid.cc → NativeWrapper.setCharacterLogMode() while
@@ -2026,6 +2088,11 @@ public class RegionRouter implements TerminalRenderer
 		// viewport size are both available.
 		if (type == MenuType.MESSAGES)
 			fullView.requestScrollToBottom();
+		char[] log = messageLogChars;
+		if (type == MenuType.MESSAGES && log != null)
+			fullView.setLogContent(log, messageLogFg, messageLogBg);
+		else
+			fullView.setLogContent(null, null, null);
 		return prevScale != scale || prevEndRow != endRow;
 	}
 

@@ -39,9 +39,8 @@ public class FontConfig
     // above; defaults to the same value.
     public final int mpBarColor;
     public final float portraitMsgFontScale;
-    // Word-wrap mode only (crawl.wordwrap pref): terminal rows given to the
-    // DCSS message window (msg history retained for scrollback) and how many
-    // of them the msg panel shows on screen at once.
+    // Terminal rows given to the DCSS message window for scrollback (word wrap
+    // or custom msg rows) and how many the msg panel shows at once.
     public final int msgHistoryRows;
     public final int portraitMsgVisibleRows;
     public final float landscapeFontScale;
@@ -165,7 +164,7 @@ public class FontConfig
         this.portraitMsgFontScale      = getFloat(props, "portrait_msg_font_scale", 1.5f);
         // Clamped: min 7 preserves the classic window, max 55 keeps the msg
         // window inside the 72-row terminal (rows 17..71).
-        this.msgHistoryRows            = Math.max(7, Math.min(55, getInt(props, "msg_history_rows", 14)));
+        this.msgHistoryRows            = Math.max(7, Math.min(55, getInt(props, "msg_history_rows", 55)));
         this.portraitMsgVisibleRows    = Math.max(1, getInt(props, "portrait_msg_visible_rows", 7));
         this.landscapeFontScale        = getFloat(props, "landscape_font_scale", 1.0f);
 

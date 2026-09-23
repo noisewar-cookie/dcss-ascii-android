@@ -31,6 +31,7 @@
 #include "libutil.h"
 #include "options.h"
 #include "files.h"
+#include "format.h"
 #include "state.h"
 #include "unicode.h"
 #include "view.h"
@@ -49,6 +50,8 @@ extern int main(int argc, char *argv[]);
 // Log template is as follows:
 // __android_log_write(ANDROID_LOG_ERROR, "Tag", "Error here");//Or ANDROID_LOG_INFO, ...
 #include <setjmp.h>
+#include <algorithm>
+#include <vector>
 
 
 #define LINES 24
@@ -174,6 +177,7 @@ static jmethodID NativeWrapper_getch;
 static jmethodID NativeWrapper_frameUpdate;
 static jmethodID NativeWrapper_updateStatusLights;
 static jmethodID NativeWrapper_setMessageHistoryMode;
+static jmethodID NativeWrapper_setMessageHistory;
 static jmethodID NativeWrapper_setCharacterLogMode;
 static jmethodID NativeWrapper_showCharacterFile;
 static jmethodID NativeWrapper_notifyGameSaved;
@@ -257,6 +261,8 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"updateStatusLights", "(Ljava/lang/String;[I)V");
 	NativeWrapper_setMessageHistoryMode = e->GetMethodID(NativeWrapperClass,
 		"setMessageHistoryMode", "(Z)V");
+	NativeWrapper_setMessageHistory = e->GetMethodID(NativeWrapperClass,
+		"setMessageHistory", "([C[I[I)V");
 	NativeWrapper_setCharacterLogMode = e->GetMethodID(NativeWrapperClass,
 		"setCharacterLogMode", "(Z)V");
 	NativeWrapper_showCharacterFile = e->GetMethodID(NativeWrapperClass,
@@ -277,6 +283,7 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		&& NativeWrapper_frameUpdate
 		&& NativeWrapper_updateStatusLights
 		&& NativeWrapper_setMessageHistoryMode
+		&& NativeWrapper_setMessageHistory
 		&& NativeWrapper_setCharacterLogMode
 		&& NativeWrapper_showCharacterFile
 		&& NativeWrapper_notifyGameSaved
@@ -920,6 +927,28 @@ void crawl_quit(const char* msg)
 }
 
 void clear_to_end_of_line();
+
+// Apply a brand (highlight/reverse) to a cell's ARGB fg/bg. Shared by addChar
+// and the native message log so both colour cells identically.
+static void _brand_colours(unsigned br, int &fg, int &bg)
+{
+	if (br == CHATTR_NORMAL)
+		return;
+	if ((br & CHATTR_ATTRMASK) == CHATTR_HILITE)
+	{
+		COLOURS bgcolour = (COLOURS) macro_colour((br & CHATTR_COLMASK) >> 8);
+		bg = colourMap[bgcolour];
+	}
+	if ((br & CHATTR_ATTRMASK) == CHATTR_REVERSE)
+	{
+		int temp = fg;
+		fg = bg;
+		bg = temp;
+	}
+	if (fg == bg)
+		fg = colourMap[BLACK];
+}
+
 void addChar(wchar_t c)
 {
  	if (c == '\n')
@@ -936,26 +965,7 @@ void addChar(wchar_t c)
  	// Need to determine colours depending on brand
  	int fg = foregroundColour;
  	int bg = backgroundColour;
- 	if (brand != CHATTR_NORMAL)
- 	{
- 		if ((brand & CHATTR_ATTRMASK) == CHATTR_HILITE)
- 		{
- 			COLOURS bgcolour = (COLOURS) macro_colour((brand & CHATTR_COLMASK) >> 8);
- 			bg = colourMap[bgcolour];
- 		}
-
- 		if ((brand & CHATTR_ATTRMASK) == CHATTR_REVERSE)
- 		{
- 			int temp = fg;
- 			fg = bg;
- 			bg = temp;
- 		}
-
- 		if (fg == bg)
- 		{
- 			fg = colourMap[BLACK];
- 		}
- 	}
+ 	_brand_colours(brand, fg, bg);
 
  	// Apply changes to terminalChar, if they apply
  	bool isDirty = false;
@@ -1140,6 +1150,80 @@ void textbackground(int col)
 	COLOURS bgcolour = (COLOURS) macro_colour(col & 0x00ff);
 	brand = get_brand(col);
 	backgroundColour = colourMap[bgcolour];
+}
+
+// Whole Ctrl+P history (from patched _replay_messages_core) flattened to
+// COLS-wide cells the way fs_op::display + addChar would draw them, for Java to
+// draw past the grid height. Unwritten cells stay 0. Game-thread only.
+void android_message_history_content(const formatted_string &text)
+{
+	if (env == NULL || NativeWrapperObj == NULL)
+		return;
+	int rows = 1;
+	for (const auto &op : text.ops)
+		if (op.type == FSOP_TEXT)
+			rows += std::count(op.text.begin(), op.text.end(), '\n');
+	const int cells = rows * COLS;
+	std::vector<jchar> chs(cells, 0);
+	std::vector<jint> fgs(cells, 0);
+	std::vector<jint> bgs(cells, 0);
+	int fg = colourMap[LIGHTGREY];
+	int bg = colourMap[BLACK];
+	unsigned br = CHATTR_NORMAL;
+	int row = 0, col = 0;
+	for (const auto &op : text.ops)
+	{
+		if (op.type == FSOP_COLOUR && op.colour < NUM_TERM_COLOURS)
+		{
+			fg = colourMap[(COLOURS) macro_colour(op.colour & 0x00ff)];
+			br = get_brand(op.colour);
+		}
+		else if (op.type == FSOP_BG && op.colour < NUM_TERM_COLOURS)
+		{
+			bg = colourMap[(COLOURS) macro_colour(op.colour & 0x00ff)];
+			br = get_brand(op.colour);
+		}
+		else if (op.type == FSOP_TEXT)
+		{
+			char32_t c;
+			const char *bp = op.text.c_str();
+			while (int s = utf8towc(&c, bp))
+			{
+				bp += s;
+				if (c == '\n')
+				{
+					++row;
+					col = 0;
+					continue;
+				}
+				// Text::_render chops each line to the region width.
+				if (col >= COLS)
+					continue;
+				int cfg = fg, cbg = bg;
+				_brand_colours(br, cfg, cbg);
+				const int i = row * COLS + col++;
+				chs[i] = (jchar) c;
+				fgs[i] = cfg;
+				bgs[i] = cbg;
+			}
+		}
+	}
+	jcharArray jchars = env->NewCharArray(cells);
+	jintArray jfg = env->NewIntArray(cells);
+	jintArray jbg = env->NewIntArray(cells);
+	if (jchars && jfg && jbg)
+	{
+		env->SetCharArrayRegion(jchars, 0, cells, chs.data());
+		env->SetIntArrayRegion(jfg, 0, cells, fgs.data());
+		env->SetIntArrayRegion(jbg, 0, cells, bgs.data());
+		env->CallVoidMethod(NativeWrapperObj, NativeWrapper_setMessageHistory,
+			jchars, jfg, jbg);
+	}
+	if (env->ExceptionCheck())
+		env->ExceptionClear();
+	if (jchars) env->DeleteLocalRef(jchars);
+	if (jfg) env->DeleteLocalRef(jfg);
+	if (jbg) env->DeleteLocalRef(jbg);
 }
 
 

@@ -128,12 +128,10 @@ mp_bar_color=305FE8
 # Terminal region: 80 cols x 7 rows  (terminal cols 0-79, rows 17-23)
 portrait_msg_font_scale=1.7
 
-# Word wrap mode only (Preferences > Display > Word wrap). When enabled, the
-# DCSS message window is extended to msg_history_rows terminal rows (7-31) so
-# wrapped lines scroll back instead of being lost; the panel shows
-# portrait_msg_visible_rows of them on screen (bottom-aligned, drag up to see
-# older lines).
-msg_history_rows=14
+# With word wrap or a custom Message rows count, the DCSS message window is
+# extended to msg_history_rows terminal rows (7-55) for scrollback; the panel
+# shows portrait_msg_visible_rows of them (drag up for older lines).
+msg_history_rows=55
 portrait_msg_visible_rows=7
 
 # Landscape: full terminal

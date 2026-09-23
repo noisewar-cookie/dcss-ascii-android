@@ -5,8 +5,11 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Display;
 import android.view.GestureDetector;
@@ -19,6 +22,7 @@ import android.view.WindowManager;
 import com.crawlmb.CrawlDialog;
 import com.crawlmb.CustomFontManager;
 import com.crawlmb.Preferences;
+import com.crawlmb.R;
 
 import java.util.Hashtable;
 
@@ -157,6 +161,28 @@ public class RegionTermView extends View
 	private float mapZoomMax = 1.5f;
 	private float mapZoomInSensitivity = 1.0f;
 	private float mapZoomOutSensitivity = 0.75f;
+
+	// Log mode (Ctrl+P history): paint visible rows from these row-major cells
+	// instead of the bitmap, so history isn't capped at the grid. null = off.
+	private static final int LOG_COLS = 80; // libandroid.cc COLS
+	private volatile char[] logChars;
+	private int[] logFg;
+	private int[] logBg;
+	private int logRows = 0;
+	private int logMaxCol = -1;
+	// Log mode pins to the newest line like the msg panel; restored on exit.
+	private boolean stickyBeforeLog = false;
+
+	// Scrollbar + jump-to-newest pill: msg panel, and fullView in log mode.
+	private boolean scrollIndicators = false;
+	private static final long SCROLLBAR_FADE_MS = 2000;
+	private boolean scrollbarDragging = false;
+	private long scrollbarFadeStart = -1;
+	private Paint overlayPaint;
+	private Drawable jumpIcon;
+	private final RectF jumpRect = new RectF();
+	private boolean jumpVisible = false;
+	private boolean jumpPressed = false;
 
 	public RegionTermView(Context context, int startRow, int startCol, int endRow, int endCol)
 	{
@@ -352,6 +378,16 @@ public class RegionTermView extends View
 		this.stickyUserAway = false;
 	}
 
+	public void setScrollIndicators(boolean enabled)
+	{
+		this.scrollIndicators = enabled;
+	}
+
+	public boolean isJumpHit(float x, float y)
+	{
+		return jumpVisible && jumpRect.contains(x, y);
+	}
+
 	// Visible terminal columns at the current font size — sizes the DCSS
 	// word-wrap width to what the panel shows. Uses the precise float char
 	// width so sub-pixel accumulation over many columns doesn't overcount.
@@ -387,6 +423,81 @@ public class RegionTermView extends View
 	public void requestScrollToBottom()
 	{
 		pendingScrollToBottom = true;
+	}
+
+	// Enter/leave log mode (null chars = leave). Opens at the newest line.
+	public void setLogContent(char[] chars, int[] fg, int[] bg)
+	{
+		synchronized (renderLock)
+		{
+			if (chars == logChars)
+				return;
+			logFg = fg;
+			logBg = bg;
+			logRows = 0;
+			logMaxCol = -1;
+			if (chars != null)
+			{
+				// Trim the trailing blank rows the scroller pads with.
+				int rows = chars.length / LOG_COLS;
+				for (int r = 0; r < rows; r++)
+				{
+					for (int c = LOG_COLS - 1; c >= 0; c--)
+					{
+						char ch = chars[r * LOG_COLS + c];
+						if (ch != 0 && ch != ' ')
+						{
+							logRows = r + 1;
+							if (c > logMaxCol)
+								logMaxCol = c;
+							break;
+						}
+					}
+				}
+				pendingScrollToBottom = true;
+				if (logChars == null)
+					stickyBeforeLog = stickyScrollToBottom;
+				stickyScrollToBottom = true;
+				stickyUserAway = false;
+			}
+			else if (logChars != null)
+			{
+				stickyScrollToBottom = stickyBeforeLog;
+				stickyUserAway = false;
+			}
+			logChars = chars;
+		}
+		post(() -> { requestLayout(); invalidate(); });
+	}
+
+	public boolean hasLogContent()
+	{
+		return logChars != null;
+	}
+
+	// Scroll the log by whole rows; MIN/MAX_VALUE jump to top/bottom.
+	public void scrollLogRows(int rows)
+	{
+		if (logChars == null || char_height <= 0)
+			return;
+		int maxY = Math.max(0, getContentHeightForScroll() - getHeight());
+		long target = rows == Integer.MIN_VALUE ? 0
+				: rows == Integer.MAX_VALUE ? maxY
+				: (long) scrollOffsetY + (long) rows * char_height;
+		int newY = (int) Math.max(0, Math.min(maxY, target));
+		stickyUserAway = newY < maxY;
+		scrollOffsetY = newY;
+		// Flash the scrollbar as a drag release would.
+		scrollbarFadeStart = SystemClock.uptimeMillis();
+		postInvalidate(); // key path may be off the UI thread
+	}
+
+	// Whole rows fully visible in the viewport (page size for page keys).
+	public int visibleLogRows()
+	{
+		if (char_height <= 0)
+			return 1;
+		return Math.max(1, getHeight() / char_height);
 	}
 
 	// Single-shot: next onDraw with metrics + laid-out viewport centers
@@ -493,6 +604,7 @@ public class RegionTermView extends View
 						}
 						if (scrollV)
 						{
+							scrollbarDragging = overlaysActive();
 							int maxY = Math.max(0,
 									getContentHeightForScroll() - getHeight());
 							int newY = Math.max(0,
@@ -530,12 +642,36 @@ public class RegionTermView extends View
 		if (isScrollEnabled() && scrollDetector != null)
 		{
 			int action = event.getActionMasked();
+			// The jump pill owns any gesture that starts on it. A DOWN whose
+			// eventTime != downTime is DirectionalTouchView's post-slop
+			// synthetic DOWN for a drag, which must scroll, not press.
+			if (action == MotionEvent.ACTION_DOWN)
+				jumpPressed = event.getEventTime() == event.getDownTime()
+						&& isJumpHit(event.getX(), event.getY());
+			if (jumpPressed)
+			{
+				if (action == MotionEvent.ACTION_UP)
+				{
+					jumpPressed = false;
+					if (jumpRect.contains(event.getX(), event.getY()))
+						jumpToNewest();
+				}
+				else if (action == MotionEvent.ACTION_CANCEL)
+					jumpPressed = false;
+				return true;
+			}
 			if (action == MotionEvent.ACTION_UP
 					|| action == MotionEvent.ACTION_CANCEL)
 			{
 				lockedAxis = AXIS_NONE;
 				axisAccumX = 0;
 				axisAccumY = 0;
+				if (scrollbarDragging)
+				{
+					scrollbarDragging = false;
+					scrollbarFadeStart = SystemClock.uptimeMillis();
+					invalidate();
+				}
 			}
 			scrollDetector.onTouchEvent(event);
 			return true;
@@ -694,6 +830,8 @@ public class RegionTermView extends View
 	{
 		synchronized (renderLock)
 		{
+			if (logChars != null)
+				return (int)((logMaxCol + 1) * char_width);
 			if (cellChar == null)
 				return canvas_width;
 			int maxCol = -1;
@@ -717,6 +855,8 @@ public class RegionTermView extends View
 	{
 		synchronized (renderLock)
 		{
+			if (logChars != null)
+				return (int)(logRows * char_height);
 			if (cellChar == null)
 				return -1;
 			for (int r = mirrorRows - 1; r >= 0; r--)
@@ -812,13 +952,15 @@ public class RegionTermView extends View
 	{
 		if (bitmap == null)
 			return;
+		boolean logMode = logChars != null;
 		if (pendingScrollToBottom && verticalScrollEnabled
-				&& char_height > 0 && maxContentRow >= 0)
+				&& char_height > 0 && (maxContentRow >= 0 || logMode))
 		{
 			int viewportH = getHeight();
 			if (viewportH > 0)
 			{
-				int contentH = (maxContentRow + 1) * char_height;
+				int contentH = logMode ? getContentHeightForScroll()
+						: (maxContentRow + 1) * char_height;
 				int maxY = Math.max(0, contentH - viewportH);
 				scrollOffsetY = maxY;
 				pendingScrollToBottom = false;
@@ -865,13 +1007,16 @@ public class RegionTermView extends View
 		}
 		// Continuous variant of the snap above: keep the newest content row
 		// bottom-aligned as new lines arrive, unless the user dragged away.
+		// Log mode re-pins every draw, so a late font/height change after the
+		// open-time snap can't leave the newest lines below the viewport.
 		if (stickyScrollToBottom && !stickyUserAway && verticalScrollEnabled
-				&& char_height > 0 && maxContentRow >= 0)
+				&& char_height > 0 && (maxContentRow >= 0 || logMode))
 		{
 			int viewportH = getHeight();
 			if (viewportH > 0)
 			{
-				int contentH = (maxContentRow + 1) * char_height;
+				int contentH = logMode ? getContentHeightForScroll()
+						: (maxContentRow + 1) * char_height;
 				scrollOffsetY = Math.max(0, contentH - viewportH);
 			}
 		}
@@ -886,6 +1031,12 @@ public class RegionTermView extends View
 					getContentHeightForScroll() - getHeight());
 			if (scrollOffsetY > maxY)
 				scrollOffsetY = maxY;
+		}
+		if (logMode)
+		{
+			drawLog(canvas);
+			drawScrollOverlays(canvas);
+			return;
 		}
 		if (mapPanMode && contentZoom != 1.0f)
 		{
@@ -936,6 +1087,117 @@ public class RegionTermView extends View
 		{
 			canvas.drawBitmap(bitmap, drawOffsetX - scrollOffsetX,
 					drawOffsetY - scrollOffsetY, null);
+		}
+		drawScrollOverlays(canvas);
+	}
+
+	private boolean overlaysActive()
+	{
+		return verticalScrollEnabled && (scrollIndicators || logChars != null);
+	}
+
+	// Scrollbar (drag only, fades after release) + jump-to-newest pill.
+	private void drawScrollOverlays(Canvas c)
+	{
+		jumpVisible = false;
+		int viewH = getHeight();
+		if (!overlaysActive() || viewH <= 0)
+			return;
+		int contentH = getContentHeightForScroll();
+		int maxY = contentH - viewH;
+		if (maxY <= 0)
+			return;
+		float dp = getResources().getDisplayMetrics().density;
+		if (overlayPaint == null)
+			overlayPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		int right = getWidth() - rightReservePx;
+
+		float alpha = 1f;
+		if (!scrollbarDragging)
+		{
+			alpha = scrollbarFadeStart < 0 ? 0f
+					: 1f - (SystemClock.uptimeMillis()
+							- scrollbarFadeStart) / (float) SCROLLBAR_FADE_MS;
+			if (alpha > 0f)
+				postInvalidateOnAnimation();
+			else
+				scrollbarFadeStart = -1;
+		}
+		if (alpha > 0f)
+		{
+			float barW = 4 * dp;
+			float thumbH = Math.max(24 * dp, viewH * (float) viewH / contentH);
+			thumbH = Math.min(thumbH, viewH);
+			float frac = Math.max(0f, Math.min(1f, scrollOffsetY / (float) maxY));
+			float thumbTop = (viewH - thumbH) * frac;
+			overlayPaint.setColor(Color.argb(Math.round(64 * alpha), 255, 255, 255));
+			c.drawRect(right - barW, 0, right, viewH, overlayPaint);
+			overlayPaint.setColor(Color.argb(Math.round(204 * alpha), 255, 255, 255));
+			c.drawRect(right - barW, thumbTop, right, thumbTop + thumbH,
+					overlayPaint);
+		}
+
+		if (scrollOffsetY >= maxY)
+			return;
+		if (jumpIcon == null)
+			jumpIcon = getContext().getDrawable(R.drawable.ic_jump_bottom);
+		float pillH = 20 * dp;
+		float pillW = 36 * dp;
+		float cx = (leftReservePx + right) / 2f;
+		float bottom = viewH - 4 * dp;
+		jumpRect.set(cx - pillW / 2, bottom - pillH, cx + pillW / 2, bottom);
+		overlayPaint.setColor(0xFF404040);
+		c.drawRoundRect(jumpRect, pillH / 2, pillH / 2, overlayPaint);
+		int icon = Math.round(16 * dp);
+		int il = Math.round(cx - icon / 2f);
+		int it = Math.round(jumpRect.centerY() - icon / 2f);
+		jumpIcon.setBounds(il, it, il + icon, it + icon);
+		jumpIcon.draw(c);
+		jumpVisible = true;
+	}
+
+	private void jumpToNewest()
+	{
+		int maxY = Math.max(0, getContentHeightForScroll() - getHeight());
+		scrollOffsetY = maxY;
+		stickyUserAway = false;
+		invalidate();
+	}
+
+	// Same cell geometry as drawCellLocked blitted at the bitmap's offset.
+	private void drawLog(Canvas c)
+	{
+		synchronized (renderLock)
+		{
+			char[] chars = logChars;
+			if (chars == null || char_height <= 0)
+				return;
+			int left = drawOffsetX - scrollOffsetX;
+			int top = drawOffsetY - scrollOffsetY;
+			back.setColor(Color.BLACK);
+			c.drawRect(left, 0, left + canvas_width, getHeight(), back);
+			int first = Math.max(0, -top / char_height);
+			int last = Math.min(logRows - 1, (getHeight() - top) / char_height);
+			float baseline = char_height - fore.descent();
+			for (int r = first; r <= last; r++)
+			{
+				float y = top + r * char_height;
+				for (int col = 0; col < LOG_COLS; col++)
+				{
+					int i = r * LOG_COLS + col;
+					char ch = chars[i];
+					if (ch == 0)
+						continue;
+					float x = left + col * char_width;
+					back.setColor(logBg[i]);
+					c.drawRect(x, y, x + char_width, y + char_height, back);
+					if (ch != ' ')
+					{
+						fore.setColor(logFg[i]);
+						c.drawText(chars, i, 1, x, y + baseline, fore);
+					}
+				}
+			}
 		}
 	}
 
@@ -1318,8 +1580,9 @@ public class RegionTermView extends View
 		{
 			int parentLimit = MeasureSpec.getSize(heightMeasureSpec);
 			int mode = MeasureSpec.getMode(heightMeasureSpec);
+			int logH = logChars != null ? logRows * char_height : 0;
 			if (mode != MeasureSpec.UNSPECIFIED && parentLimit > 0
-					&& canvas_height > parentLimit)
+					&& Math.max(canvas_height, logH) > parentLimit)
 			{
 				reportedHeight = parentLimit;
 			}
@@ -1333,7 +1596,8 @@ public class RegionTermView extends View
 					reportedHeight = cap;
 			}
 			// Re-clamp existing offset against the new viewport size.
-			int contentH = maxContentRow >= 0
+			int contentH = logChars != null ? logH
+					: maxContentRow >= 0
 					? (int)((maxContentRow + 1) * char_height)
 					: canvas_height;
 			int maxY = Math.max(0, contentH - reportedHeight);

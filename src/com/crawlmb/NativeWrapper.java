@@ -288,6 +288,23 @@ public class NativeWrapper
 		}
 	}
 
+	// Called from libandroid.cc with the whole Ctrl+P log.
+	public void setMessageHistory(char[] chars, int[] fg, int[] bg)
+	{
+		synchronized (display_lock)
+		{
+			if (renderer != null)
+				renderer.setMessageHistory(chars, fg, bg);
+		}
+	}
+
+	// No display_lock: the native thread can hold it while blocked on keys.
+	public boolean consumeMessageLogKey(int key)
+	{
+		TerminalRenderer r = renderer;
+		return r != null && r.handleMessageLogKey(key);
+	}
+
 	// Called from libandroid.cc at entry and exit of the character-log
 	// popup opened from the High Scores menu. Forwarded to the renderer so
 	// RegionRouter can classify the popup as MenuType.MORGUE and hold that

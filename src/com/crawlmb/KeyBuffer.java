@@ -44,6 +44,9 @@ public class KeyBuffer
 	public void add(int key)
 	{
 		// Log.d("Crawl", "KebBuffer.add:"+key);
+		// Native Ctrl+P log scrolls in Java; the popup never sees these.
+		if (nativew != null && nativew.consumeMessageLogKey(key))
+			return;
 		synchronized (keybuffer)
 		{
 			ctrl_key_overload = false;

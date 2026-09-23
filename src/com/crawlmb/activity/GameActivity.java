@@ -1724,11 +1724,11 @@ public class GameActivity extends Activity
 		// space above the map first (see the auto-fit listener below).
 		final boolean msgPriority = Preferences.getMsgPanelPriority();
 		// Native message-window height in terminal rows (0 = stock 7-row window).
-		// Word wrap extends it to msgHistoryRows for scrollback; a custom count
-		// > 7 extends it directly (so >7 unique rows without word wrap). It can't
-		// go below 7 — the layout (17 view + msg) must stay >= MIN_LINES (24), so
-		// counts <= 7 keep the stock window and the Java viewport clips to N.
-		int windowRows = wordwrap ? fontConfig.msgHistoryRows : 0;
+		// Word wrap or a custom count extends it to msgHistoryRows for
+		// scrollback. Not compact HUD: it applies live, but this is boot-wired.
+		// Never below 7 — the layout (17 view + msg) must stay >= MIN_LINES.
+		int windowRows = wordwrap || msgRowsCustom
+				? fontConfig.msgHistoryRows : 0;
 		if (msgRowsCustom && msgVisibleRows > 7)
 			windowRows = Math.max(windowRows, msgVisibleRows);
 		int msgEndRow = RegionRouter.MSG_START_ROW
@@ -1738,6 +1738,7 @@ public class GameActivity extends Activity
 				msgEndRow, RegionRouter.MSG_END_COL);
 		msgView.setId(View.generateViewId());
 		msgView.setFontScaleMultiplier(fontConfig.portraitMsgFontScale);
+		msgView.setScrollIndicators(true);
 		if (wordwrap)
 		{
 			msgView.setVerticalScrollEnabled(true);
