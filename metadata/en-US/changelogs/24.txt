@@ -1,0 +1,7 @@
+Release 24 (0.34.1)
+
+New Features:
+• Controls overlay grid can now be resized and repositioned.
+• Message panel histories greatly extended, with new UI.
+• Monster list rows are now customizable.
+• Dungeon map view now shows whole floor.
