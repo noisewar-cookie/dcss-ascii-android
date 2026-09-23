@@ -70,7 +70,7 @@ final public class Preferences
 	// install). Set it to the versionCode of the next release that adds
 	// options; leave it for silent patches. The dcssascii_release_prep skill
 	// prompts to update it.
-	public static final int NEW_OPTIONS_MODAL_VERSION = 22;
+	public static final int NEW_OPTIONS_MODAL_VERSION = 24;
 	// Final value of the legacy counter (= the v22 options set). Anyone who
 	// saw that had seen v22's options, so migration maps it to versionCode 22.
 	private static final int LEGACY_OPTIONS_VERSION_MAX = 4;
