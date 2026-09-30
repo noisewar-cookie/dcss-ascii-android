@@ -437,5 +437,10 @@
             android:key="info"
             android:title="@string/preferences_info_title"
             android:summary="@string/preferences_info_summary" />
+        <CheckBoxPreference
+            android:key="crawl.settingsbuttonenabled"
+            android:defaultValue="true"
+            android:title="@string/preferences_settingsbutton_title"
+            android:summary="@string/preferences_settingsbutton_summary" />
     </PreferenceCategory>
 </PreferenceScreen>

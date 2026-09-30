@@ -182,6 +182,7 @@ final public class Preferences
 	private static final String KEY_HELPBUTTONENABLED = "crawl.helpbuttonenabled";
 	private static final String KEY_WIKIBUTTONENABLED = "crawl.wikibuttonenabled";
 	private static final String KEY_HUDBUTTONLONGPRESS = "crawl.hudbuttonlongpress";
+	public static final String KEY_SETTINGSBUTTONENABLED = "crawl.settingsbuttonenabled";
 
     private static SharedPreferences sharedPreferences;
 	private static int fontSize = 17;
@@ -975,6 +976,11 @@ final public class Preferences
 	// tap falls through to the touch controls beneath them. Default off.
 	public static boolean getHudButtonLongpressEnabled(){
 		return sharedPreferences.getBoolean(KEY_HUDBUTTONLONGPRESS, false);
+	}
+
+	// Settings cog on the message panel (SettingsButtonController). Default on.
+	public static boolean getSettingsButtonEnabled(){
+		return sharedPreferences.getBoolean(KEY_SETTINGSBUTTONENABLED, true);
 	}
 
 	// Repeat interval (ms) for held 9-grid direction taps. 0 disables the

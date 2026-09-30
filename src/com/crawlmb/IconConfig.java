@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
-// On-screen shortcut buttons (help / wiki) and modal overlay tunables. Loaded
+// On-screen shortcut buttons (help / wiki / settings) and modal overlay tunables. Loaded
 // from assets/icon_config.txt; mirrors FontConfig's parse-with-defaults model
 // so a missing or malformed file falls back to sane values.
 public class IconConfig
@@ -18,6 +18,8 @@ public class IconConfig
     public final float hudButtonOpacity;
     public final float hudButtonRowSpan;
     public final int hudButtonMarginDp;
+    public final float settingsButtonSizeDp;
+    public final int settingsButtonMarginDp;
     public final int modalPaddingPercent;
     public final int modalBorderColor;
     public final int modalBorderWidthDp;
@@ -28,6 +30,8 @@ public class IconConfig
                 getFloat(props, "hud_button_opacity", 0.6f)));
         this.hudButtonRowSpan    = Math.max(0.5f, getFloat(props, "hud_button_row_span", 2.0f));
         this.hudButtonMarginDp   = Math.max(0, getInt(props, "hud_button_margin_dp", 4));
+        this.settingsButtonSizeDp   = Math.max(0f, getFloat(props, "settings_button_size_dp", 0f));
+        this.settingsButtonMarginDp = Math.max(0, getInt(props, "settings_button_margin_dp", 2));
         // Clamp: keep the modal from collapsing to nothing (40% per side = 20%
         // of the UI left visible).
         this.modalPaddingPercent = Math.max(0, Math.min(40,

@@ -36,11 +36,22 @@ import android.preference.PreferenceActivity;
 import android.preference.PreferenceCategory;
 import android.preference.PreferenceGroup;
 import android.preference.PreferenceScreen;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.util.Log;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.crawlmb.CustomFolderSync;
 import com.crawlmb.EditConfigFilePreference;
+import com.crawlmb.IconConfig;
 import com.crawlmb.Paths;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
@@ -85,6 +96,8 @@ public class PreferencesActivity extends PreferenceActivity implements
                 findViewById(android.R.id.content));
 
         setHelpIntent();
+
+        setSettingsButtonListener();
 
         setChangelogIntent();
 
@@ -733,6 +746,62 @@ public class PreferencesActivity extends PreferenceActivity implements
                     }
                 });
         findPreference("info").setIntent(new Intent(this, HelpActivity.class));
+    }
+
+    // Turning the settings cog off shows how to reach this screen without it.
+    private void setSettingsButtonListener() {
+        findPreference(Preferences.KEY_SETTINGSBUTTONENABLED)
+                .setOnPreferenceChangeListener((pref, newValue) -> {
+                    if (!(Boolean) newValue)
+                        showSettingsButtonDisabledDialog();
+                    return true;
+                });
+    }
+
+    // Styled like GameActivity's new-options modal card: message over the
+    // two-finger long-press icon. Tap anywhere to dismiss.
+    private void showSettingsButtonDisabledDialog() {
+        float density = getResources().getDisplayMetrics().density;
+        IconConfig cfg = IconConfig.load(getAssets());
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER_HORIZONTAL);
+        int pad = Math.round(20 * density);
+        box.setPadding(pad, pad, pad, pad);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xFF0A0A0A);
+        bg.setStroke(Math.max(1, Math.round(cfg.modalBorderWidthDp * density)),
+                cfg.modalBorderColor);
+        box.setBackground(bg);
+        box.setOnClickListener(v -> dialog.dismiss());
+
+        TextView tv = new TextView(this);
+        tv.setText(R.string.settingsbutton_disabled_message);
+        tv.setTextColor(0xFFC0C0C0);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        tv.setGravity(Gravity.CENTER);
+        tv.setMaxWidth(Math.round(240 * density));
+        box.addView(tv, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(R.drawable.ic_two_finger_longpress);
+        icon.setAdjustViewBounds(true);
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
+                Math.round(110 * density), ViewGroup.LayoutParams.WRAP_CONTENT);
+        ilp.topMargin = Math.round(16 * density);
+        box.addView(icon, ilp);
+
+        dialog.setContentView(box);
+        if (dialog.getWindow() != null)
+            dialog.getWindow().setBackgroundDrawable(
+                    new ColorDrawable(Color.TRANSPARENT));
+        dialog.setCanceledOnTouchOutside(true);
+        dialog.show();
     }
 
     private void setChangelogIntent() {

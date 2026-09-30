@@ -26,6 +26,9 @@
     <string name="preferences_changelog_title_versioned">Changelog: v%1$d (%2$s)</string>
     <string name="preferences_info_title">Info</string>
     <string name="preferences_info_summary">How do I work this?</string>
+    <string name="preferences_settingsbutton_title">Show settings button</string>
+    <string name="preferences_settingsbutton_summary">In-game app preferences button (this menu).</string>
+    <string name="settingsbutton_disabled_message">Use two-finger long press to reach this menu in the future.</string>
     <string name="preferences_help_summary">Show the control keys.</string>
     <string name="backup_save_directory">Backup save directory</string>
     <string name="backup_morgue_directory">Backup morgue directory</string>

@@ -95,6 +95,7 @@ import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
 import com.crawlmb.view.HudButtonController;
+import com.crawlmb.view.SettingsButtonController;
 import com.crawlmb.view.ModalOverlayController;
 import com.crawlmb.view.RepositionController;
 import com.crawlmb.view.UnfoldedRepositionController;
@@ -189,6 +190,9 @@ public class GameActivity extends Activity
 	private boolean pendingCenterlineEntry = false;
 	// Help modal requested from PreferencesActivity ("showHelpModal" extra).
 	private boolean pendingHelpModal = false;
+	// Set on launching Preferences, cleared on resume: a double-tap on the
+	// settings cog lands before this activity pauses and would stack two.
+	private boolean preferencesLaunching = false;
 	private CenterlineController centerlineController = null;
 	// One-time "new preference options" modal, computed in onCreate and shown
 	// from rebuildViews once the modal shell is built (see showNewOptionsModal).
@@ -476,7 +480,6 @@ public class GameActivity extends Activity
 
 	@Override
 	public boolean onMenuItemSelected(int featureId, MenuItem item) {
-		Intent intent;
 		switch (item.getNumericShortcut()) {
 		case '1':// Change keyboard transparency
 			View transparencySliderView = findViewById(R.id.transparencySliderView);
@@ -485,9 +488,7 @@ public class GameActivity extends Activity
 			}
 			break;
 		case '2':// Preferences
-			intent = new Intent(this, PreferencesActivity.class);
-			intent.putExtra("gameInProgress", NativeWrapper.gameInProgress());
-			startActivityForResult(intent, PREFERENCES_FINISHED);
+			openPreferences();
 			break;
 		case '5':// Quit
 			finish();
@@ -499,6 +500,30 @@ public class GameActivity extends Activity
 		return super.onMenuItemSelected(featureId, item);
 	}
 	
+	private void openPreferences() {
+		if (preferencesLaunching)
+			return;
+		preferencesLaunching = true;
+		Intent intent = new Intent(this, PreferencesActivity.class);
+		intent.putExtra("gameInProgress", NativeWrapper.gameInProgress());
+		startActivityForResult(intent, PREFERENCES_FINISHED);
+	}
+
+	// True while a reposition / grid / centerline editor or modal owns the
+	// screen; the on-screen shortcut buttons hide meanwhile.
+	private boolean isAnyOverlayActive() {
+		return (repositionController != null
+				&& repositionController.isActive())
+			|| (unfoldedRepositionController != null
+				&& unfoldedRepositionController.isActive())
+			|| (gridOverlayController != null
+				&& gridOverlayController.isActive())
+			|| (centerlineController != null
+				&& centerlineController.isActive())
+			|| (modalController != null
+				&& modalController.isActive());
+	}
+
 	@Override
 	protected void onActivityResult(int requestCode, int resultCode,
             Intent data) {
@@ -779,16 +804,7 @@ public class GameActivity extends Activity
 							}
 							@Override
 							public boolean isOverlayActive() {
-								return (repositionController != null
-										&& repositionController.isActive())
-									|| (unfoldedRepositionController != null
-										&& unfoldedRepositionController.isActive())
-									|| (gridOverlayController != null
-										&& gridOverlayController.isActive())
-									|| (centerlineController != null
-										&& centerlineController.isActive())
-									|| (modalController != null
-										&& modalController.isActive());
+								return isAnyOverlayActive();
 							}
 							@Override
 							public void onHelpTapped() {
@@ -799,6 +815,24 @@ public class GameActivity extends Activity
 								showWikiModal();
 							}
 						});
+				if (portraitMsgView != null)
+					new SettingsButtonController(this, screenLayout,
+							portraitMsgView, iconConfig,
+							new SettingsButtonController.Callbacks()
+							{
+								@Override
+								public boolean isEnabled() {
+									return Preferences.getSettingsButtonEnabled();
+								}
+								@Override
+								public boolean isOverlayActive() {
+									return isAnyOverlayActive();
+								}
+								@Override
+								public void onTapped() {
+									openPreferences();
+								}
+							});
 			}
 			else
 			{
@@ -3340,6 +3374,7 @@ public class GameActivity extends Activity
 	protected void onResume() {
 		// Log.d("Crawl", "onResume");
 		super.onResume();
+		preferencesLaunching = false;
 
 		setScreen();
 
