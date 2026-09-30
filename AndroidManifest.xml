@@ -7,8 +7,9 @@
          getExternalFilesDir(), and saves stay in app-private internal. -->
 
     <!-- Network: only for the in-game wiki button's WebView (the modal that
-         loads dcss.roguelikes.gg). Normal install-time permission, no runtime
-         prompt. The rest of the app is fully offline. -->
+         loads dcss.roguelikes.gg or crawl.chaosforge.org). Normal
+         install-time permission, no runtime prompt. The rest of the app is
+         fully offline. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Compile SDK specified in build.gradle -->
@@ -22,6 +23,7 @@
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher"
         android:name=".CrawlApplication"
         android:theme="@style/Theme.Crawl"

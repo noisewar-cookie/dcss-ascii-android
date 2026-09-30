@@ -97,4 +97,17 @@
         <item>msg</item>
         <item>mlist</item>
     </string-array>
+
+    <!-- Wiki button source picker. Order/values must stay in sync; values are
+         matched by Preferences.getWikiSource(). -->
+    <string-array name="wikiSourceDescriptions">
+        <item>None</item>
+        <item>Ashenzari\'s Archive</item>
+        <item>Crawl Wiki</item>
+    </string-array>
+    <string-array name="wikiSourceValues" translatable="false">
+        <item>none</item>
+        <item>ashenzari</item>
+        <item>crawlwiki</item>
+    </string-array>
 </resources>

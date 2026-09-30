@@ -153,8 +153,9 @@
     <string name="preferences_longpress_alt_summary">Long-press a key to type the alt key.</string>
     <string name="preferences_helpbutton_title">Show help button</string>
     <string name="preferences_helpbutton_summary">In-game help button to show keys / controls.</string>
-    <string name="preferences_wikibutton_title">Show wiki button</string>
-    <string name="preferences_wikibutton_summary">In-game wiki button to view Ashenzari\'s Archive.</string>
+    <string name="preferences_wikibutton_title">Wiki button</string>
+    <string name="preferences_wikibutton_summary">%s. In-game button to open the chosen wiki.</string>
+    <string name="preferences_wikibutton_dialogtitle">Wiki button</string>
     <string name="preferences_hudbutton_longpress_title">Long-press help/wiki buttons</string>
     <string name="preferences_hudbutton_longpress_summary">Hold to activate, taps will passthrough.</string>
 

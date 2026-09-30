@@ -796,7 +796,8 @@ public class GameActivity extends Activity
 							}
 							@Override
 							public boolean isWikiEnabled() {
-								return Preferences.getWikiButtonEnabled();
+								return !Preferences.WIKISOURCE_NONE.equals(
+										Preferences.getWikiSource());
 							}
 							@Override
 							public boolean isLongpressMode() {
@@ -1166,35 +1167,47 @@ public class GameActivity extends Activity
 				Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
 	}
 
-	// Landing page: the Ashenzaris_Archive quick-reference (also the target of
-	// WIKI_JUMP_JS's "Character Attributes" jump).
-	private static final String WIKI_LANDING_URL =
-			"https://dcss.roguelikes.gg/wiki/Ashenzaris_Archive";
+	// A wiki the button can open (Preferences.getWikiSource()). Both landing
+	// pages have the "Character Attributes" section WIKI_JUMP_JS targets.
+	private static final class WikiSite {
+		final String landingUrl;
+		final String allowPrefix;
+		final String css;
+		WikiSite(String landingUrl, String allowPrefix, String css) {
+			this.landingUrl = landingUrl;
+			this.allowPrefix = allowPrefix;
+			this.css = css;
+		}
+	}
 
-	// Allowlist base: any content page under the wiki. Taps to URLs outside this
-	// prefix (external sites, the hamburger's "Play DCSS" links) are blocked;
-	// see wikiBlockReason, which also blocks the Special: namespace within it.
-	private static final String WIKI_ALLOW_PREFIX =
-			"https://dcss.roguelikes.gg/wiki/";
+	// Set on the UI thread when the modal opens; each WebView captures it.
+	private WikiSite wikiSite;
+
+	private static WikiSite wikiSiteFor(String source) {
+		if (Preferences.WIKISOURCE_CRAWLWIKI.equals(source))
+			return WIKI_CRAWLWIKI;
+		return WIKI_ASHENZARI;
+	}
 
 	// Shown in place of the page when the load fails (no network etc.). The
 	// modal shell can't scroll a WebView (it scrolls itself), so this is a
 	// self-contained dark page the WebView renders directly.
-	private static final String WIKI_OFFLINE_HTML =
-			"<!DOCTYPE html><html><head><meta name='viewport' "
-			+ "content='width=device-width, initial-scale=1'>"
-			+ "<style>html,body{height:100%;margin:0;background:#0a0a0a;"
-			+ "color:#e0e0e0;font-family:sans-serif}"
-			+ "div{position:absolute;top:50%;left:0;right:0;"
-			+ "transform:translateY(-50%);padding:0 24px;text-align:center}"
-			+ "a{color:#8f9fff}</style></head><body><div>"
-			+ "<h2>Wiki unavailable</h2>"
-			+ "<p>Couldn't load the DCSS wiki. Check your internet "
-			+ "connection and try again.</p>"
-			+ "<p>" + WIKI_LANDING_URL + "</p>"
-			+ "</div></body></html>";
+	private static String wikiOfflineHtml(String landingUrl) {
+		return "<!DOCTYPE html><html><head><meta name='viewport' "
+				+ "content='width=device-width, initial-scale=1'>"
+				+ "<style>html,body{height:100%;margin:0;background:#0a0a0a;"
+				+ "color:#e0e0e0;font-family:sans-serif}"
+				+ "div{position:absolute;top:50%;left:0;right:0;"
+				+ "transform:translateY(-50%);padding:0 24px;text-align:center}"
+				+ "a{color:#8f9fff}</style></head><body><div>"
+				+ "<h2>Wiki unavailable</h2>"
+				+ "<p>Couldn't load the DCSS wiki. Check your internet "
+				+ "connection and try again.</p>"
+				+ "<p>" + landingUrl + "</p>"
+				+ "</div></body></html>";
+	}
 
-	// Viewport meta forced into every main-frame HTML response (see
+	// Both sites. Viewport meta forced into every main-frame HTML response (see
 	// rewriteMainFrame). initial-scale=0.8 must be present at first parse — not
 	// applied as a post-load mutation — or the visual zoom and the touch
 	// hit-test regions desync and link taps miss. width=device-width keeps the
@@ -1203,7 +1216,8 @@ public class GameActivity extends Activity
 			"<meta name=\"viewport\" content=\"width=device-width, "
 			+ "initial-scale=0.8, minimum-scale=0.25, maximum-scale=5\">";
 
-	// Injected into every main-frame HTML response (see rewriteMainFrame).
+	// Ashenzari's Archive stylesheet (dcss.roguelikes.gg, Citizen skin) — not
+	// used for Crawl Wiki.
 	// Rule 1: wide blocks — data tables (spell/species pages), <pre> — otherwise
 	// get clipped at the viewport edge with no way to reach the cut-off columns;
 	// making each a block-level scroll box lets it pan horizontally on its own
@@ -1222,7 +1236,7 @@ public class GameActivity extends Activity
 	// text; links keep their theme colour. Saturated data cells (aptitude
 	// grid #33FF66/#99CCFF/...) and the coloured info banners (#fc6/#e0fae0)
 	// have their own dark text and stay readable, so they're left alone.
-	private static final String WIKI_WIDE_CSS =
+	private static final String WIKI_ASHENZARI_CSS =
 			"<style>table,pre{display:block !important;max-width:100% !important;"
 			+ "overflow-x:auto !important;-webkit-overflow-scrolling:touch}"
 			+ ".jquery-tablesorter th.headerSort,"
@@ -1237,16 +1251,95 @@ public class GameActivity extends Activity
 			+ "{color:#d8d8d8 !important}"
 			+ "</style>";
 
-	// Matches the UA-rendered surfaces (default page background, scrollbars,
-	// form controls) to the forced night theme and avoids a light flash before
-	// the site CSS paints. The site's own dark styling is driven by the theme
-	// class (see forceCitizenDark), not this.
+	// Crawl Wiki stylesheet (crawl.chaosforge.org) — not used for Ashenzari's
+	// Archive. WIKI_CW_* and cwLightBg below only build WIKI_CRAWLWIKI_CSS.
+	// Desktop-only Vector skin, so
+	// this supplies the mobile layout (chrome hidden, side margins dropped,
+	// infoboxes unfloated, wide blocks scroll) and a dark theme. Inline
+	// near-white boxes go dark; saturated ones keep their colour with dark
+	// text, and must come after with the :not() form to outrank the near-white
+	// rules — the landing nests its coloured portals in a white table.
+	private static final String[] WIKI_CW_LIGHT_BGS = {"#f5faff", "#fbfbfb",
+			"#f9f9f9", "#e8f4fa", "background-color:white",
+			"background-color: white"};
+
+	// Crawl Wiki CSS helper: comma-joined prefix + [style*='<bg>' i] + suffix
+	// over WIKI_CW_LIGHT_BGS.
+	private static String cwLightBg(String prefix, String suffix) {
+		StringBuilder sb = new StringBuilder();
+		for (String bg : WIKI_CW_LIGHT_BGS) {
+			if (sb.length() > 0)
+				sb.append(',');
+			sb.append(prefix).append("[style*='").append(bg).append("' i]")
+					.append(suffix);
+		}
+		return sb.toString();
+	}
+
+	// Crawl Wiki: any inline-background box that isn't near-white.
+	private static final String WIKI_CW_SATURATED_BG =
+			".mw-parser-output [style*='background' i]:not("
+			+ cwLightBg("", "") + ")";
+
+	private static final String WIKI_CRAWLWIKI_CSS =
+			"<style>#mw-navigation,#mw-page-base,#mw-head-base,#footer,"
+			+ "#siteNotice,.mw-jump,.mw-editsection{display:none !important}"
+			+ "#content{margin:0 !important;padding:12px !important;"
+			+ "border:0 !important}"
+			+ "#bodyContent,#firstHeading{margin-right:0 !important}"
+			+ "html,body,#content{background:#101218 !important;"
+			+ "color:#d8d8d8 !important}"
+			+ "h1,h2,h3,h4,h5,h6{color:#f0f0f0 !important;"
+			+ "border-color:#333 !important}"
+			+ "#siteSub{display:block !important}"
+			+ "#siteSub,.tocnumber{color:#999 !important}"
+			+ "a,a:visited{color:#8f9fff !important}"
+			+ "a.new,a.new:visited{color:#ff8a8a !important}"
+			+ "pre,code,.toc,.catlinks,.thumbinner,table.wikitable,"
+			+ "table.prettytable{background:#1c1c1c !important;"
+			+ "color:#d8d8d8 !important;border-color:#444 !important}"
+			+ "table.wikitable th,table.prettytable th{"
+			+ "background:#2a2a2a !important;color:#e8e8e8 !important}"
+			+ "table.wikitable td,table.prettytable td,table.wikitable th,"
+			+ "table.prettytable th{border-color:#444 !important}"
+			+ "table,pre{display:block !important;max-width:100% !important;"
+			+ "overflow-x:auto !important;-webkit-overflow-scrolling:touch}"
+			+ ".mw-parser-output div[style*='float' i],"
+			+ ".mw-parser-output table[style*='float' i]{float:none !important;"
+			+ "margin-left:0 !important;margin-right:0 !important}"
+			+ cwLightBg(".mw-parser-output ", "")
+			+ "{background:#1c1c1c !important}"
+			+ cwLightBg(".mw-parser-output ", "") + ","
+			+ cwLightBg(".mw-parser-output ", " *:not(a)")
+			+ "{color:#d8d8d8 !important}"
+			+ cwLightBg(".mw-parser-output ", " a")
+			+ "{color:#8f9fff !important}"
+			+ WIKI_CW_SATURATED_BG + "," + WIKI_CW_SATURATED_BG + " *:not(a)"
+			+ "{color:#111 !important}"
+			+ WIKI_CW_SATURATED_BG + " a{color:#0b3d91 !important}"
+			+ ".mw-parser-output [style*='#b30009' i]{color:#ff6b6b !important}"
+			+ ".mw-parser-output [style*='#005afa' i]{color:#7ea6ff !important}"
+			+ "</style>";
+
+	private static final WikiSite WIKI_ASHENZARI = new WikiSite(
+			"https://dcss.roguelikes.gg/wiki/Ashenzaris_Archive",
+			"https://dcss.roguelikes.gg/wiki/", WIKI_ASHENZARI_CSS);
+	// http only: the site serves no HTTPS. Cleartext is allowed for this host
+	// alone by res/xml/network_security_config.xml.
+	private static final WikiSite WIKI_CRAWLWIKI = new WikiSite(
+			"http://crawl.chaosforge.org/Crawl_Wiki",
+			"http://crawl.chaosforge.org/", WIKI_CRAWLWIKI_CSS);
+
+	// Both sites. Matches the UA-rendered surfaces (default page background,
+	// scrollbars, form controls) to the dark theme and avoids a light flash
+	// before the site CSS paints. The page's own dark styling comes from
+	// forceCitizenDark (Ashenzari) or WIKI_CRAWLWIKI_CSS (Crawl Wiki).
 	private static final String WIKI_DARK_META =
 			"<meta name=\"color-scheme\" content=\"dark\">";
 
-	// Runs once after the first load: jump to the "Character Attributes" section.
-	// It's a styled <div>, not a heading, so match by exact text on any element
-	// and retry briefly while the Citizen skin reflows.
+	// Both sites. Runs once after the landing page loads: jump to the
+	// "Character Attributes" section. It's not always a heading, so match by
+	// exact text on any element and retry briefly while the skin reflows.
 	private static final String WIKI_JUMP_JS =
 			"(function(){var n=0;function j(){var a=document.querySelectorAll("
 			+ "'div,span,h1,h2,h3,h4,p,strong,b,td,th,a');var t=null;"
@@ -1259,10 +1352,11 @@ public class GameActivity extends Activity
 	private void showWikiModal() {
 		if (modalController == null)
 			return;
+		wikiSite = wikiSiteFor(Preferences.getWikiSource());
 		wikiBackStack.clear();
-		wikiBackStack.push(WIKI_LANDING_URL);
+		wikiBackStack.push(wikiSite.landingUrl);
 		wikiModalActive = true;
-		currentWikiWebView = createWikiWebView(WIKI_LANDING_URL);
+		currentWikiWebView = createWikiWebView(wikiSite.landingUrl);
 		// The WebView paints black until its first page loads (a network round
 		// trip); overlay a centered placeholder that its load callbacks clear.
 		FrameLayout container = new FrameLayout(this);
@@ -1302,6 +1396,7 @@ public class GameActivity extends Activity
 	// every navigation becomes a first load.
 	@android.annotation.SuppressLint("SetJavaScriptEnabled")
 	private WebView createWikiWebView(String url) {
+		final WikiSite site = wikiSite;
 		WebView web = new WebView(this);
 		web.setBackgroundColor(Color.BLACK); // avoid white flash before paint
 		WebSettings s = web.getSettings();
@@ -1314,23 +1409,23 @@ public class GameActivity extends Activity
 		s.setLoadWithOverviewMode(true);
 		s.setBuiltInZoomControls(true);
 		s.setDisplayZoomControls(false);
-		// Dark mode comes from the site's OWN night theme (forced on in
-		// rewriteMainFrame), not from WebView force-dark — keep algorithmic
-		// darkening OFF. Force-dark ran a per-image classifier that inverted
-		// low-colour tiles (spell/weapon icons) at random; the site's designed
-		// dark theme shows every tile as authored.
+		// Dark mode comes from the page itself — Ashenzari's own night theme
+		// (forced on in rewriteMainFrame) or Crawl Wiki's WIKI_CRAWLWIKI_CSS —
+		// not from WebView force-dark, so keep algorithmic darkening OFF.
+		// Force-dark ran a per-image classifier that inverted low-colour tiles
+		// (spell/weapon icons) at random.
 		if (WebViewFeature.isFeatureSupported(
 				WebViewFeature.ALGORITHMIC_DARKENING))
 			WebSettingsCompat.setAlgorithmicDarkeningAllowed(s, false);
 		web.setWebViewClient(new WebViewClient() {
 			private boolean failed = false;
-			private boolean jumped = !WIKI_LANDING_URL.equals(url);
+			private boolean jumped = !site.landingUrl.equals(url);
 			private void fallback(WebView v) {
 				if (failed)
 					return;
 				failed = true;
 				setWikiLoadingVisible(false);
-				v.loadDataWithBaseURL(null, WIKI_OFFLINE_HTML,
+				v.loadDataWithBaseURL(null, wikiOfflineHtml(site.landingUrl),
 						"text/html", "utf-8", null);
 			}
 			// Rewrite the viewport meta in the raw HTML of every top-level
@@ -1342,7 +1437,7 @@ public class GameActivity extends Activity
 			@Override
 			public android.webkit.WebResourceResponse shouldInterceptRequest(
 					WebView v, WebResourceRequest req) {
-				return rewriteMainFrame(req);
+				return rewriteMainFrame(req, site);
 			}
 			// Route user-initiated top-level navigations into a fresh WebView
 			// (see method header). Server redirects (isRedirect) stay in place so
@@ -1355,7 +1450,7 @@ public class GameActivity extends Activity
 				String u = req.getUrl().toString();
 				if (!u.startsWith("http"))
 					return false;
-				String block = wikiBlockReason(u);
+				String block = wikiBlockReason(u, site);
 				if (block != null) {
 					Toast.makeText(GameActivity.this, block,
 							Toast.LENGTH_SHORT).show();
@@ -1392,11 +1487,11 @@ public class GameActivity extends Activity
 	// Special: namespace (login, account creation, utility pages) and
 	// edit/history/raw action links. Returns a toast message when blocked, or
 	// null when allowed.
-	private String wikiBlockReason(String url) {
+	private String wikiBlockReason(String url, WikiSite site) {
 		String lower = url.toLowerCase(Locale.ROOT);
-		if (!lower.startsWith(WIKI_ALLOW_PREFIX.toLowerCase(Locale.ROOT)))
+		if (!lower.startsWith(site.allowPrefix.toLowerCase(Locale.ROOT)))
 			return "That link leaves the DCSS wiki.";
-		if (lower.contains("/wiki/special:") || lower.contains("title=special:")
+		if (lower.contains("/special:") || lower.contains("title=special:")
 				|| lower.contains("action=") || lower.contains("veaction="))
 			return "This page isn't available in-app.";
 		return null;
@@ -1433,7 +1528,7 @@ public class GameActivity extends Activity
 	// Anything we don't handle (subresources, non-GET, non-HTML, errors) returns
 	// null and the WebView loads it the normal way.
 	private android.webkit.WebResourceResponse rewriteMainFrame(
-			WebResourceRequest req) {
+			WebResourceRequest req, WikiSite site) {
 		if (req == null || !req.isForMainFrame()
 				|| !"GET".equalsIgnoreCase(req.getMethod()))
 			return null;
@@ -1472,7 +1567,7 @@ public class GameActivity extends Activity
 				in = new java.util.zip.GZIPInputStream(in);
 			String html = readAll(in, charset);
 			String modified = injectHeadHtml(
-					injectViewport(html), WIKI_DARK_META + WIKI_WIDE_CSS);
+					injectViewport(html), WIKI_DARK_META + site.css);
 			modified = forceCitizenDark(modified);
 			return new android.webkit.WebResourceResponse("text/html", charset,
 					new java.io.ByteArrayInputStream(
@@ -1529,6 +1624,7 @@ public class GameActivity extends Activity
 		return html;
 	}
 
+	// Ashenzari's Archive only; a no-op on Crawl Wiki pages (no such class).
 	// The wiki (Citizen skin) serves anonymous users the light theme
 	// (skin-theme-clientpref-day on <html>); its clientPrefs() only overrides
 	// that from a stored localStorage pref we never set, so it stays light.

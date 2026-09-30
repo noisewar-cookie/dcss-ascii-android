@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Crawl Wiki (wiki button) is served over http only; allow cleartext for
+     that host alone. Everything else keeps the platform default (HTTPS). -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">crawl.chaosforge.org</domain>
+    </domain-config>
+</network-security-config>

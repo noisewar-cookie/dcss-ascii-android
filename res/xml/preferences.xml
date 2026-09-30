@@ -16,11 +16,14 @@
 			android:defaultValue="true"
 			android:title="@string/preferences_helpbutton_title"
 			android:summary="@string/preferences_helpbutton_summary"/>
-		<CheckBoxPreference
-			android:key="crawl.wikibuttonenabled"
-			android:defaultValue="true"
+		<ListPreference
+			android:key="crawl.wikisource"
+			android:defaultValue="ashenzari"
 			android:title="@string/preferences_wikibutton_title"
-			android:summary="@string/preferences_wikibutton_summary"/>
+			android:summary="@string/preferences_wikibutton_summary"
+			android:dialogTitle="@string/preferences_wikibutton_dialogtitle"
+			android:entries="@array/wikiSourceDescriptions"
+			android:entryValues="@array/wikiSourceValues"/>
 		<CheckBoxPreference
 			android:key="crawl.hudbuttonlongpress"
 			android:defaultValue="false"

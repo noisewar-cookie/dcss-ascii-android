@@ -180,7 +180,12 @@ final public class Preferences
 	private static final String KEY_LONGPRESSENABLED = "crawl.longpressenabled";
 	private static final String KEY_TOUCHDIRECTIONREPEAT = "crawl.touchdirectionrepeat";
 	private static final String KEY_HELPBUTTONENABLED = "crawl.helpbuttonenabled";
+	// Legacy boolean, superseded by KEY_WIKISOURCE; read only for migration.
 	private static final String KEY_WIKIBUTTONENABLED = "crawl.wikibuttonenabled";
+	private static final String KEY_WIKISOURCE = "crawl.wikisource";
+	public static final String WIKISOURCE_NONE = "none";
+	public static final String WIKISOURCE_ASHENZARI = "ashenzari";
+	public static final String WIKISOURCE_CRAWLWIKI = "crawlwiki";
 	private static final String KEY_HUDBUTTONLONGPRESS = "crawl.hudbuttonlongpress";
 	public static final String KEY_SETTINGSBUTTONENABLED = "crawl.settingsbuttonenabled";
 
@@ -200,6 +205,21 @@ final public class Preferences
 		resources = res;
 
 		keymapper = new KeyMapper(sharedPreferences);
+		migrateWikiSource();
+	}
+
+	// Carry the old on/off wiki toggle into the source picker once.
+	private static void migrateWikiSource()
+	{
+		if (sharedPreferences.contains(KEY_WIKISOURCE)
+				|| !sharedPreferences.contains(KEY_WIKIBUTTONENABLED))
+			return;
+		boolean on = sharedPreferences.getBoolean(KEY_WIKIBUTTONENABLED, true);
+		sharedPreferences.edit()
+				.putString(KEY_WIKISOURCE,
+						on ? WIKISOURCE_ASHENZARI : WIKISOURCE_NONE)
+				.remove(KEY_WIKIBUTTONENABLED)
+				.apply();
 	}
 
 	public static Resources getResources()
@@ -968,8 +988,9 @@ final public class Preferences
 		return sharedPreferences.getBoolean(KEY_HELPBUTTONENABLED, true);
 	}
 
-	public static boolean getWikiButtonEnabled(){
-		return sharedPreferences.getBoolean(KEY_WIKIBUTTONENABLED, true);
+	// WIKISOURCE_* value; WIKISOURCE_NONE hides the wiki button.
+	public static String getWikiSource(){
+		return sharedPreferences.getString(KEY_WIKISOURCE, WIKISOURCE_ASHENZARI);
 	}
 
 	// When on, the HUD shortcut buttons require a long-press to fire; a short
