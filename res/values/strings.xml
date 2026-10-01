@@ -122,10 +122,8 @@
     <string name="reposition_save">Save</string>
     <string name="reposition_reset">Reset</string>
     <string name="reposition_cancel">Exit</string>
-    <string name="reposition_float_on">Float: On</string>
-    <string name="reposition_float_off">Float: Off</string>
-    <string name="reposition_fill_on">Fill: On</string>
-    <string name="reposition_fill_off">Fill: Off</string>
+    <string name="reposition_float">Float</string>
+    <string name="reposition_fill">Fill</string>
     <string name="reposition_opacity">Line: %1$d%%</string>
     <string name="reposition_fill_opacity">Fill: %1$d%%</string>
     <string name="reposition_theme">Themes</string>
@@ -330,6 +328,7 @@
     <string name="please_select_a_character">Please select a character</string>
     <string name="dialog_change_character_message">Choose A New Key</string>
     <string name="transparency_slider_title">Drag to set transparency</string>
+    <string name="transparency_reset">Reset to default</string>
 
     <!-- Font picker -->
     <string name="font_picker_title">Font</string>

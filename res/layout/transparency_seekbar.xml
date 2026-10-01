@@ -4,13 +4,13 @@
     android:id="@+id/transparencySliderView"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@android:color/white"
+    android:background="@color/crawl_surface"
     android:visibility="gone"
     android:padding="20dp">
     <TextView
         android:id="@+id/transparency_title"
         android:text="@string/transparency_slider_title"
-        android:textColor="@android:color/black"
+        android:textColor="@color/crawl_text"
         android:layout_alignParentTop="true"
         android:layout_centerHorizontal="true"
         android:layout_width="wrap_content"
@@ -23,4 +23,12 @@
         android:layout_below="@id/transparency_title"
         android:max="255"
         />
+    <Button
+        android:id="@+id/transparency_reset"
+        android:text="@string/transparency_reset"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/transparency_seekbar"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="8dp"/>
 </RelativeLayout>

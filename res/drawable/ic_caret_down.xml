@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menu-button caret. Selector rather than drawableTint (API 23+) so it
+     dims with the button on API 21. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false">
+        <vector android:width="16dp" android:height="16dp"
+            android:viewportWidth="24" android:viewportHeight="24">
+            <path android:fillColor="@color/crawl_text_disabled"
+                android:pathData="M7,10l5,5 5,-5z" />
+        </vector>
+    </item>
+    <item>
+        <vector android:width="16dp" android:height="16dp"
+            android:viewportWidth="24" android:viewportHeight="24">
+            <path android:fillColor="@color/crawl_text_dim"
+                android:pathData="M7,10l5,5 5,-5z" />
+        </vector>
+    </item>
+</selector>

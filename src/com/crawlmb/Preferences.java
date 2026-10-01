@@ -909,8 +909,11 @@ final public class Preferences
 		return fontSize = value;
 	}
 
+	public static final int DEFAULT_KEYBOARD_TRANSPARENCY = 140;
+
 	public static int getKeyboardTransparency(){
-		return sharedPreferences.getInt(Preferences.KEY_KEYBOARDTRANSPARENCY, 140);
+		return sharedPreferences.getInt(Preferences.KEY_KEYBOARDTRANSPARENCY,
+				DEFAULT_KEYBOARD_TRANSPARENCY);
 	}
 
 	// Edge margin in dp, relative to device-adaptive baseline. Range: -16..64.

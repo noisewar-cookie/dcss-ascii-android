@@ -9,7 +9,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="#FF202020"
+    android:background="@color/crawl_surface"
     android:gravity="center_vertical"
     android:paddingLeft="8dp"
     android:paddingRight="8dp">
@@ -21,18 +21,20 @@
         android:visibility="gone">
         <Button
             android:id="@+id/reposition_float"
+            android:text="@string/reposition_float"
             style="@style/RepositionToggleButton"/>
         <Button
             android:id="@+id/reposition_fill"
+            android:text="@string/reposition_fill"
             style="@style/RepositionToggleButton"/>
         <Button
             android:id="@+id/reposition_theme"
             android:text="@string/reposition_theme"
-            style="@style/RepositionToggleButton"/>
+            style="@style/RepositionMenuButton"/>
         <Button
             android:id="@+id/reposition_arrows"
             android:text="@string/reposition_arrows"
-            style="@style/RepositionToggleButton"/>
+            style="@style/RepositionMenuButton"/>
     </LinearLayout>
     <LinearLayout
         android:id="@+id/reposition_opacity_row"
@@ -77,23 +79,14 @@
         <Button
             android:id="@+id/reposition_save"
             android:text="@string/reposition_save"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_margin="4dp"/>
+            style="@style/RepositionBarButton.Primary"/>
         <Button
             android:id="@+id/reposition_reset"
             android:text="@string/reposition_reset"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_margin="4dp"/>
+            style="@style/RepositionBarButton"/>
         <Button
             android:id="@+id/reposition_cancel"
             android:text="@string/reposition_cancel"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_margin="4dp"/>
+            style="@style/RepositionBarButton"/>
     </LinearLayout>
 </LinearLayout>

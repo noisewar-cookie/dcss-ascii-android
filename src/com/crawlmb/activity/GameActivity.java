@@ -489,6 +489,9 @@ public class GameActivity extends Activity
 		case '1':// Change keyboard transparency
 			View transparencySliderView = findViewById(R.id.transparencySliderView);
 			if (transparencySliderView != null){
+				// Shortcut buttons are added to screenLayout later; keep the
+				// slider above them.
+				transparencySliderView.bringToFront();
 				transparencySliderView.setVisibility(View.VISIBLE);
 			}
 			break;
@@ -778,6 +781,14 @@ public class GameActivity extends Activity
 				SeekBar transparencySeekbar = (SeekBar) transparencySliderView.findViewById(R.id.transparency_seekbar);
 				transparencySeekbar.setProgress(Preferences.getKeyboardTransparency());
 				transparencySeekbar.setOnSeekBarChangeListener(virtualKeyboard.virtualKeyboardView);
+				// setProgress isn't fromUser, so the keyboard listener ignores it.
+				transparencySliderView.findViewById(R.id.transparency_reset)
+						.setOnClickListener(v -> {
+							transparencySeekbar.setProgress(
+									Preferences.DEFAULT_KEYBOARD_TRANSPARENCY);
+							virtualKeyboard.virtualKeyboardView.setKeyAlphaLevel(
+									Preferences.DEFAULT_KEYBOARD_TRANSPARENCY);
+						});
 
 				if (VERSION.SDK_INT >= VERSION_CODES.HONEYCOMB) {
 					invalidateOptionsMenu();

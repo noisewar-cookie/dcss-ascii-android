@@ -17,7 +17,7 @@
         android:paddingEnd="12dp"
         android:paddingTop="6dp"
         android:paddingBottom="6dp"
-        android:background="#FF1A1A1A">
+        android:background="@color/crawl_surface">
 
         <TextView
             android:layout_width="0dp"
@@ -35,11 +35,10 @@
             android:minWidth="0dp"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
+            android:minHeight="0dp"
             android:text="@string/font_import"
-            android:textColor="#FF000000"
             android:textSize="13sp"
-            android:textAllCaps="false"
-            android:background="@android:color/white" />
+            style="@style/Widget.Crawl.Button" />
     </LinearLayout>
 
     <!-- Shared preview rendered in the selected font -->
@@ -83,7 +82,7 @@
         android:paddingEnd="12dp"
         android:paddingTop="6dp"
         android:paddingBottom="6dp"
-        android:background="#FF1A1A1A"
+        android:background="@color/crawl_surface"
         android:visibility="gone">
 
         <Button
@@ -93,12 +92,10 @@
             android:minWidth="0dp"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
+            android:minHeight="0dp"
             android:text="@string/font_exit"
-            android:textColor="#FFBBBBBB"
-            android:textSize="14sp"
-            android:textAllCaps="false"
-            android:background="#FF333333"
-            android:layout_marginEnd="8dp" />
+            android:layout_marginEnd="8dp"
+            style="@style/Widget.Crawl.Button" />
 
         <Button
             android:id="@+id/btn_apply"
@@ -107,11 +104,9 @@
             android:minWidth="0dp"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
+            android:minHeight="0dp"
             android:text="@string/font_apply"
-            android:textColor="#FF000000"
-            android:textSize="14sp"
-            android:textAllCaps="false"
-            android:background="@android:color/white" />
+            style="@style/Widget.Crawl.Button.Primary" />
     </LinearLayout>
 
 </LinearLayout>

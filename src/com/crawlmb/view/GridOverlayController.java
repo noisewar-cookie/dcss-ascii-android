@@ -213,10 +213,8 @@ public class GridOverlayController
 	// Style controls only apply to the floating grid.
 	private void updateToggles()
 	{
-		floatButton.setText(floating ? R.string.reposition_float_on
-				: R.string.reposition_float_off);
-		fillButton.setText(style.fill ? R.string.reposition_fill_on
-				: R.string.reposition_fill_off);
+		floatButton.setActivated(floating);
+		fillButton.setActivated(style.fill);
 		fillButton.setEnabled(floating);
 		themeButton.setEnabled(floating);
 		arrowsButton.setEnabled(floating);

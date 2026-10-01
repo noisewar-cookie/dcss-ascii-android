@@ -25,6 +25,15 @@
 
     <style name="Theme.Crawl" parent="@android:style/Theme.NoTitleBar.Fullscreen">
         <item name="android:windowBackground">@android:color/black</item>
+        <!-- Classic parent keeps window/inset behaviour; colorControl* feed
+             the Material SeekBar/EditText drawables. -->
+        <item name="android:buttonStyle">@style/Widget.Crawl.Button</item>
+        <item name="android:seekBarStyle">@style/Widget.Crawl.SeekBar</item>
+        <item name="android:alertDialogTheme">@style/ThemeOverlay.Crawl.Dialog</item>
+        <item name="android:colorAccent">@color/crawl_accent</item>
+        <item name="android:colorControlNormal">@color/crawl_text_dim</item>
+        <item name="android:colorControlActivated">@color/crawl_accent</item>
+        <item name="android:colorControlHighlight">@color/crawl_ripple</item>
         <!--<item name="colorPrimary">@color/primary</item>-->
         <!--<item name="colorPrimaryDark">@color/primary_dark</item>-->
         <!--<item name="colorAccent">@color/accent</item>-->
@@ -46,9 +55,47 @@
         <!--<item name="android:toolbarStyle" tools:targetApi="lollipop">@style/ToolbarStyle</item>-->
         <!--<item name="toolbarStyle">@style/ToolbarStyle</item>-->
     </style>
+    <!-- ===== Crawl UI skin. Colors are tokens in colors.xml. ===== -->
+
+    <!-- AlertDialogs, ListPreference pickers and the 2-finger context menu
+         (Android shows context menus as an AlertDialog). -->
+    <style name="ThemeOverlay.Crawl.Dialog" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_bg_crawl</item>
+        <item name="android:colorBackground">@color/crawl_surface</item>
+        <item name="android:colorAccent">@color/crawl_accent</item>
+        <item name="android:colorControlNormal">@color/crawl_text_dim</item>
+        <item name="android:colorControlActivated">@color/crawl_accent</item>
+        <item name="android:colorControlHighlight">@color/crawl_ripple</item>
+        <item name="android:textColorPrimary">@color/crawl_text</item>
+        <item name="android:textColorSecondary">@color/crawl_text_dim</item>
+        <item name="android:buttonStyle">@style/Widget.Crawl.Button</item>
+        <item name="android:seekBarStyle">@style/Widget.Crawl.SeekBar</item>
+    </style>
+
+    <!-- Toggle buttons are plain Widget.Crawl.Button driven by
+         setActivated(); the activated state is in btn_crawl.xml. -->
+    <style name="Widget.Crawl.Button" parent="@android:style/Widget.Button">
+        <item name="android:background">@drawable/btn_crawl</item>
+        <item name="android:textColor">@color/crawl_button_text</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">40dp</item>
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">12dp</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
+    </style>
+    <style name="Widget.Crawl.Button.Primary">
+        <item name="android:background">@drawable/btn_crawl_primary</item>
+        <item name="android:textColor">@color/crawl_text_on_accent</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Widget.Crawl.SeekBar" parent="@android:style/Widget.Material.SeekBar" />
+
     <!-- Grid overlay editor bar (reposition_buttons.xml). Four toggles share
          one row, so padding and text are trimmed to keep them on one line. -->
-    <style name="RepositionToggleButton">
+    <style name="RepositionToggleButton" parent="Widget.Crawl.Button">
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item>
@@ -59,14 +106,30 @@
         <item name="android:textSize">13sp</item>
         <item name="android:singleLine">true</item>
     </style>
+    <!-- Opens a picker: caret at the right edge. -->
+    <style name="RepositionMenuButton" parent="RepositionToggleButton">
+        <item name="android:drawableEnd">@drawable/ic_caret_down</item>
+        <item name="android:paddingLeft">4dp</item>
+    </style>
+    <style name="RepositionBarButton" parent="Widget.Crawl.Button">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_margin">4dp</item>
+    </style>
+    <style name="RepositionBarButton.Primary">
+        <item name="android:background">@drawable/btn_crawl_primary</item>
+        <item name="android:textColor">@color/crawl_text_on_accent</item>
+        <item name="android:textStyle">bold</item>
+    </style>
     <style name="RepositionOpacityLabel">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_margin">4dp</item>
         <item name="android:minEms">5</item>
-        <item name="android:textColor">#FFFFFFFF</item>
+        <item name="android:textColor">@color/crawl_text</item>
     </style>
-    <style name="RepositionOpacitySeek">
+    <style name="RepositionOpacitySeek" parent="Widget.Crawl.SeekBar">
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item>

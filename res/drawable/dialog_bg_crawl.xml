@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:inset="16dp">
+    <shape android:shape="rectangle">
+        <corners android:radius="8dp" />
+        <solid android:color="@color/crawl_surface" />
+        <stroke android:width="2dp" android:color="@color/crawl_frame" />
+    </shape>
+</inset>

@@ -1814,7 +1814,7 @@ public class CrawlKeyboardView extends View implements View.OnClickListener, See
         }
     }
 
-    private void setKeyAlphaLevel(int keyAlphaLevel) {
+    public void setKeyAlphaLevel(int keyAlphaLevel) {
         if (keyAlphaLevel > 255 || keyAlphaLevel == this.keyAlphaLevel){
             return;
         }
