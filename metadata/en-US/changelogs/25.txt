@@ -1,0 +1,8 @@
+Release 25 (0.34.1)
+
+New Features:
+• Controls overlay can now be reskinned with themes.
+• New shortcut to launch preferences.
+• Crawl Wiki added as new wiki source option.
+• Preferences UI style updated.
+
