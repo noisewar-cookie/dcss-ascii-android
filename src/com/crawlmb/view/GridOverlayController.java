@@ -1,12 +1,14 @@
 package com.crawlmb.view;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.Drawable;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -39,10 +41,10 @@ public class GridOverlayController
 	public interface Callbacks
 	{
 		// Per editor: its config side (null = single-screen/HALF), lines and,
-		// when floating, its box (+ the shared opacity). Only the shown mode
-		// is saved; it also becomes the live mode in-game.
+		// when floating, its box (+ the shared style). Only the shown mode is
+		// saved; it also becomes the live mode in-game.
 		void onSave(String[] sides, float[][] lines, float[][] rects,
-				boolean floating, int opacity);
+				boolean floating, GridSkin.Style style);
 		void onExit(boolean restoreIme);
 	}
 
@@ -54,7 +56,9 @@ public class GridOverlayController
 	private static final long BAR_FADE_MS = 150;
 	private static final int BACKGROUND_COLOR = 0xFF000000;
 	private static final int LINE_ALPHA = 0x80;
-	private static final int BOX_FILL_ALPHA = 0x20;
+	// Editor-only faint grid for the None theme, so the dividers stay
+	// findable.
+	private static final int NONE_HINT_ALPHA = 0x40;
 	private static final float SNAP_THRESHOLD =
 			Preferences.GRID_LINE_SNAP_STEP * 0.35f;
 
@@ -70,6 +74,7 @@ public class GridOverlayController
 	private final View keyboardView;
 	private final int bottomInset;
 	private final int highlightColor;
+	private final float opacityExponent;
 	private final Callbacks callbacks;
 	private final float density;
 
@@ -83,10 +88,20 @@ public class GridOverlayController
 	private FrameLayout gridRoot;
 	private View bar;
 	private Button floatButton;
+	private Button fillButton;
+	private Button themeButton;
+	private Button arrowsButton;
 	private View opacityRow;
 	private TextView opacityLabel;
 	private SeekBar opacitySeek;
-	private int opacity;
+	private View colorSwatch;
+	private View fillRow;
+	private TextView fillLabel;
+	private SeekBar fillSeek;
+	private View fillSwatch;
+	private final GridSkin.Style style = new GridSkin.Style();
+	// Height the editors leave to the bar; the bar itself may grow past it
+	// (extra rows overlap the editor bottom, see barTop).
 	private int barHeight;
 	private boolean barHidden = false;
 	private boolean floating = false;
@@ -95,13 +110,14 @@ public class GridOverlayController
 
 	public GridOverlayController(Activity activity,
 			RelativeLayout screenLayout, View keyboardView, int bottomInset,
-			int highlightColor, Callbacks callbacks)
+			int highlightColor, float opacityExponent, Callbacks callbacks)
 	{
 		this.activity = activity;
 		this.screenLayout = screenLayout;
 		this.keyboardView = keyboardView;
 		this.bottomInset = bottomInset;
 		this.highlightColor = highlightColor;
+		this.opacityExponent = opacityExponent;
 		this.callbacks = callbacks;
 		this.density = activity.getResources().getDisplayMetrics().density;
 	}
@@ -132,7 +148,7 @@ public class GridOverlayController
 		// for both.
 		floating = Preferences.isGridFloat(
 				halfSides != null ? halfSides[0] : null);
-		opacity = Preferences.getGridOpacity();
+		Preferences.loadGridStyle(style, highlightColor);
 		hideSystemIme();
 		buildUi();
 	}
@@ -161,7 +177,7 @@ public class GridOverlayController
 		}
 		boolean savedFloating = floating;
 		teardown();
-		callbacks.onSave(sides, lines, rects, savedFloating, opacity);
+		callbacks.onSave(sides, lines, rects, savedFloating, style);
 	}
 
 	private void reset()
@@ -169,14 +185,17 @@ public class GridOverlayController
 		for (EditorView ev : editors)
 			ev.resetCurrentMode();
 		if (floating)
-			opacitySeek.setProgress(Preferences.GRID_OPACITY_DEFAULT);
+		{
+			style.reset(highlightColor);
+			applyStyleToBar();
+		}
 		showBar(true);
 	}
 
 	private void toggleFloat()
 	{
 		floating = !floating;
-		updateFloatButton();
+		updateToggles();
 		for (EditorView ev : editors)
 		{
 			ev.resetDrag();
@@ -184,18 +203,95 @@ public class GridOverlayController
 		}
 	}
 
-	private void updateFloatButton()
+	private void toggleFill()
+	{
+		style.fill = !style.fill;
+		updateToggles();
+		invalidateEditors();
+	}
+
+	// Style controls only apply to the floating grid.
+	private void updateToggles()
 	{
 		floatButton.setText(floating ? R.string.reposition_float_on
 				: R.string.reposition_float_off);
+		fillButton.setText(style.fill ? R.string.reposition_fill_on
+				: R.string.reposition_fill_off);
+		fillButton.setEnabled(floating);
+		themeButton.setEnabled(floating);
+		arrowsButton.setEnabled(floating);
 		opacityRow.setVisibility(floating ? View.VISIBLE : View.GONE);
+		fillRow.setVisibility(floating && style.fill ? View.VISIBLE
+				: View.GONE);
 	}
 
-	private void setOpacity(int percent)
+	private void applyStyleToBar()
 	{
-		opacity = percent;
+		opacitySeek.setProgress(style.lineOpacity);
+		fillSeek.setProgress(style.fillOpacity);
+		setOpacityLabels();
+		setSwatch(colorSwatch, style.lineColor);
+		setSwatch(fillSwatch, style.fillColor);
+		updateToggles();
+		invalidateEditors();
+	}
+
+	private interface IntSink
+	{
+		void set(int value);
+	}
+
+	private void showChoicePicker(int titleRes, int namesRes, int current,
+			IntSink sink)
+	{
+		new AlertDialog.Builder(activity)
+				.setTitle(titleRes)
+				.setSingleChoiceItems(namesRes, current, (dialog, which) ->
+				{
+					sink.set(which);
+					invalidateEditors();
+					dialog.dismiss();
+				})
+				.show();
+	}
+
+	private void showColorPicker(int titleRes, int current, IntSink sink)
+	{
+		ColorPickerView picker = new ColorPickerView(activity, current);
+		FrameLayout wrap = new FrameLayout(activity);
+		int pad = Math.round(16 * density);
+		wrap.setPadding(pad, pad, pad, 0);
+		wrap.addView(picker);
+		new AlertDialog.Builder(activity)
+				.setTitle(titleRes)
+				.setView(wrap)
+				.setPositiveButton(android.R.string.ok,
+						(d, w) -> sink.set(picker.getColor()))
+				.setNeutralButton(R.string.reposition_color_default,
+						(d, w) -> sink.set(highlightColor))
+				.setNegativeButton(android.R.string.cancel, null)
+				.show();
+	}
+
+	private void setSwatch(View swatch, int color)
+	{
+		GradientDrawable d = new GradientDrawable();
+		d.setColor(color | 0xFF000000);
+		d.setStroke(Math.max(1, Math.round(density)), 0xFFFFFFFF);
+		d.setCornerRadius(4 * density);
+		swatch.setBackground(d);
+	}
+
+	private void setOpacityLabels()
+	{
 		opacityLabel.setText(activity.getString(R.string.reposition_opacity,
-				percent));
+				style.lineOpacity));
+		fillLabel.setText(activity.getString(
+				R.string.reposition_fill_opacity, style.fillOpacity));
+	}
+
+	private void invalidateEditors()
+	{
 		for (EditorView ev : editors)
 			ev.invalidate();
 	}
@@ -237,7 +333,8 @@ public class GridOverlayController
 		}
 		else
 		{
-			// Float toggle, action buttons, opacity slider.
+			// Toggle row, action buttons, line slider; the fill slider row
+			// grows the bar past this.
 			barBottomPad = bottomInset;
 			barHeight = (int) (3 * BAR_HEIGHT_DP * density) + barBottomPad;
 		}
@@ -297,49 +394,88 @@ public class GridOverlayController
 		bar.setPadding(bar.getPaddingLeft(), bar.getPaddingTop(),
 				bar.getPaddingRight(), barBottomPad);
 		bar.setClickable(true);
+		bar.setMinimumHeight(barHeight);
 		int[] span = barHorizontalSpan();
 		FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
 				span == null ? ViewGroup.LayoutParams.MATCH_PARENT : span[1],
-				barHeight, Gravity.BOTTOM);
+				ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
 		if (span != null)
 			p.leftMargin = span[0];
 		gridRoot.addView(bar, p);
 
+		bar.findViewById(R.id.reposition_float_row)
+				.setVisibility(View.VISIBLE);
 		floatButton = bar.findViewById(R.id.reposition_float);
-		floatButton.setVisibility(View.VISIBLE);
+		fillButton = bar.findViewById(R.id.reposition_fill);
+		themeButton = bar.findViewById(R.id.reposition_theme);
+		arrowsButton = bar.findViewById(R.id.reposition_arrows);
 		opacityRow = bar.findViewById(R.id.reposition_opacity_row);
 		opacityLabel = bar.findViewById(R.id.reposition_opacity_label);
 		opacitySeek = bar.findViewById(R.id.reposition_opacity);
-		setOpacity(opacity);
-		opacitySeek.setProgress(opacity);
-		opacitySeek.setOnSeekBarChangeListener(
-				new SeekBar.OnSeekBarChangeListener()
+		colorSwatch = bar.findViewById(R.id.reposition_color);
+		fillRow = bar.findViewById(R.id.reposition_fill_row);
+		fillLabel = bar.findViewById(R.id.reposition_fill_label);
+		fillSeek = bar.findViewById(R.id.reposition_fill_opacity);
+		fillSwatch = bar.findViewById(R.id.reposition_fill_color);
+		applyStyleToBar();
+		opacitySeek.setOnSeekBarChangeListener(seekListener(false));
+		fillSeek.setOnSeekBarChangeListener(seekListener(true));
+		colorSwatch.setOnClickListener(v -> showColorPicker(
+				R.string.reposition_color, style.lineColor, c ->
 				{
-					@Override
-					public void onProgressChanged(SeekBar sb, int progress,
-							boolean fromUser)
-					{
-						setOpacity(progress);
-					}
-
-					@Override
-					public void onStartTrackingTouch(SeekBar sb)
-					{
-					}
-
-					@Override
-					public void onStopTrackingTouch(SeekBar sb)
-					{
-					}
-				});
-		updateFloatButton();
+					style.lineColor = c;
+					setSwatch(colorSwatch, c);
+					invalidateEditors();
+				}));
+		fillSwatch.setOnClickListener(v -> showColorPicker(
+				R.string.reposition_fill_color, style.fillColor, c ->
+				{
+					style.fillColor = c;
+					setSwatch(fillSwatch, c);
+					invalidateEditors();
+				}));
 		floatButton.setOnClickListener(v -> toggleFloat());
+		fillButton.setOnClickListener(v -> toggleFill());
+		themeButton.setOnClickListener(v -> showChoicePicker(
+				R.string.reposition_theme, R.array.grid_theme_names,
+				style.theme, t -> style.theme = t));
+		arrowsButton.setOnClickListener(v -> showChoicePicker(
+				R.string.reposition_arrows, R.array.grid_arrow_names,
+				style.arrows, a -> style.arrows = a));
 		bar.findViewById(R.id.reposition_save)
 				.setOnClickListener(v -> save());
 		bar.findViewById(R.id.reposition_reset)
 				.setOnClickListener(v -> reset());
 		bar.findViewById(R.id.reposition_cancel)
 				.setOnClickListener(v -> exit(true));
+	}
+
+	private SeekBar.OnSeekBarChangeListener seekListener(final boolean fill)
+	{
+		return new SeekBar.OnSeekBarChangeListener()
+		{
+			@Override
+			public void onProgressChanged(SeekBar sb, int progress,
+					boolean fromUser)
+			{
+				if (fill)
+					style.fillOpacity = progress;
+				else
+					style.lineOpacity = progress;
+				setOpacityLabels();
+				invalidateEditors();
+			}
+
+			@Override
+			public void onStartTrackingTouch(SeekBar sb)
+			{
+			}
+
+			@Override
+			public void onStopTrackingTouch(SeekBar sb)
+			{
+			}
+		};
 	}
 
 	// null = full width; one reserved half = bar over that half only.
@@ -410,6 +546,9 @@ public class GridOverlayController
 		private final Paint borderPaint = new Paint();
 		private final Paint fillPaint = new Paint();
 		private final Paint iconBgPaint = new Paint();
+		private final GridSkin skin;
+		// Theme this frame draws with (None swaps in the editor hint).
+		private int drawTheme;
 		private final Drawable handleIcon;
 		private final Drawable moveIcon;
 
@@ -426,8 +565,6 @@ public class GridOverlayController
 			float stroke = Math.max(4, Math.round(2 * density));
 			linePaint.setStyle(Paint.Style.STROKE);
 			linePaint.setStrokeWidth(stroke);
-			linePaint.setColor(
-					(highlightColor & 0x00FFFFFF) | (LINE_ALPHA << 24));
 			// Additive: coincident lines stack to full opacity.
 			linePaint.setXfermode(
 					new PorterDuffXfermode(PorterDuff.Mode.ADD));
@@ -437,10 +574,8 @@ public class GridOverlayController
 					context.getResources().getDisplayMetrics()));
 			borderPaint.setStyle(Paint.Style.STROKE);
 			borderPaint.setStrokeWidth(stroke * 1.5f);
-			borderPaint.setColor(highlightColor);
-			fillPaint.setColor(
-					(highlightColor & 0x00FFFFFF) | (BOX_FILL_ALPHA << 24));
 			iconBgPaint.setColor(BACKGROUND_COLOR);
+			skin = new GridSkin(context, borderPaint, linePaint);
 			handleIcon = tinted(context, R.drawable.ic_grid_handle);
 			moveIcon = tinted(context, R.drawable.ic_grid_move);
 		}
@@ -566,23 +701,34 @@ public class GridOverlayController
 			if (aw <= 0 || ah <= 0)
 				return;
 			float[] lines = lines();
-			// Floating lines/frame preview the in-game opacity; fill, labels
-			// and handles are editor-only.
-			int opacityAlpha = Math.round(opacity * 2.55f);
-			linePaint.setAlpha(floating ? opacityAlpha : LINE_ALPHA);
-			borderPaint.setAlpha(opacityAlpha);
+			// Floating previews the in-game style; labels and handles are
+			// editor-only and keep the highlight color so they read on any
+			// grid color. Docked has no frame, theme, fill or arrows.
+			int lineAlpha = GridSkin.opacityAlpha(style.lineOpacity,
+					opacityExponent);
+			linePaint.setColor(floating ? style.lineColor : highlightColor);
+			linePaint.setAlpha(floating ? lineAlpha : LINE_ALPHA);
+			borderPaint.setColor(style.lineColor);
+			borderPaint.setAlpha(lineAlpha);
+			fillPaint.setColor(style.fillColor);
+			fillPaint.setAlpha(GridSkin.opacityAlpha(style.fillOpacity,
+					opacityExponent));
+			Paint fill = floating && style.fill ? fillPaint : null;
+			drawTheme = floating ? style.theme : GridSkin.DEFAULT;
+			if (drawTheme == GridSkin.NONE)
+			{
+				drawTheme = GridSkin.DEFAULT;
+				linePaint.setAlpha(NONE_HINT_ALPHA);
+				borderPaint.setAlpha(NONE_HINT_ALPHA);
+				fill = null;
+			}
 			// Grid content stays off the bar; the box frame and handles don't.
 			canvas.save();
 			canvas.clipRect(0, 0, getWidth(), barTop());
+			skin.drawContent(canvas, drawTheme, area, lines, fill);
 			if (floating)
-				canvas.drawRect(area, fillPaint);
-			for (int i = 0; i < 2; i++)
-			{
-				float x = area.left + lines[i] * aw;
-				canvas.drawLine(x, area.top, x, area.bottom, linePaint);
-				float y = area.top + lines[i + 2] * ah;
-				canvas.drawLine(area.left, y, area.right, y, linePaint);
-			}
+				skin.drawArrows(canvas, style.arrows, style.theme, area, lines,
+						style.lineColor, lineAlpha);
 			// Pair on opposite sides; second shows distance from far edge.
 			drawVLabel(canvas, lines[0], true);
 			drawVLabel(canvas, lines[1], false);
@@ -595,9 +741,7 @@ public class GridOverlayController
 
 		private void drawBoxFrame(Canvas canvas)
 		{
-			float inset = borderPaint.getStrokeWidth() / 2f;
-			canvas.drawRect(area.left + inset, area.top + inset,
-					area.right - inset, area.bottom - inset, borderPaint);
+			skin.drawFrame(canvas, drawTheme, area, lines());
 			float[] xs = handleCenters(area.left, area.right);
 			float[] ys = handleCenters(area.top, area.bottom);
 			float size = HANDLE_DP * density;

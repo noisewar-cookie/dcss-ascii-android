@@ -3,6 +3,8 @@ package com.crawlmb;
 import android.content.res.AssetManager;
 import android.util.Log;
 
+import com.crawlmb.view.GridSkin;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
@@ -55,6 +57,8 @@ public class FontConfig
     public final int portraitQuickControlsFontColor;
     // Border/highlight color of the "Reposition In-Game UI" mode.
     public final int repositionHighlightColor;
+    // Floating grid opacity slider curve: alpha = (slider/100)^exponent.
+    public final float gridOpacityExponent;
     // Crawl keyboard long-press hint superscripts: color and opacity (0-1,
     // absolute — independent of the keyboard transparency slider).
     public final int keyboardHintColor;
@@ -180,6 +184,9 @@ public class FontConfig
         // menu prompts including "Enter your name:".
         this.portraitQuickControlsFontColor  = getColor(props, "portrait_quickcontrols_font_color", 0xFFC0C0C0);
         this.repositionHighlightColor  = getColor(props, "reposition_highlight_color", 0xFFFFFF00);
+        this.gridOpacityExponent       = Math.max(0.25f, Math.min(5f,
+                getFloat(props, "grid_opacity_exponent",
+                        GridSkin.DEFAULT_OPACITY_EXPONENT)));
         this.keyboardHintColor         = getColor(props, "keyboard_hint_color", 0xFFAAAAAA);
         this.keyboardHintOpacity       = Math.max(0f, Math.min(1f,
                 getFloat(props, "keyboard_hint_opacity", 0.75f)));

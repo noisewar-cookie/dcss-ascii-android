@@ -134,6 +134,28 @@ public class PreferencesActivity extends PreferenceActivity implements
         applyCompactLayout(getPreferenceScreen());
 
         tunePreferenceListScrolling();
+
+        restoreListPosition();
+    }
+
+    // Reopened by GameActivity after a customization editor: land back on
+    // the row the user tapped (extras from putListPosition).
+    private void restoreListPosition() {
+        final int pos = getIntent().getIntExtra(EXTRA_LIST_POS, -1);
+        if (pos < 0)
+            return;
+        final int top = getIntent().getIntExtra(EXTRA_LIST_TOP, 0);
+        final android.widget.ListView list = getListView();
+        if (list != null)
+            list.post(() -> list.setSelectionFromTop(pos, top));
+    }
+
+    private void putListPosition(Intent result) {
+        android.widget.ListView list = getListView();
+        if (list == null || list.getChildCount() == 0)
+            return;
+        result.putExtra(EXTRA_LIST_POS, list.getFirstVisiblePosition());
+        result.putExtra(EXTRA_LIST_TOP, list.getChildAt(0).getTop());
     }
 
     // Smooth out fast scrolling on the legacy PreferenceActivity ListView.
@@ -182,6 +204,10 @@ public class PreferencesActivity extends PreferenceActivity implements
                 applyCompactLayout((PreferenceGroup) p);
         }
     }
+
+    // List scroll position, round-tripped through GameActivity.
+    public static final String EXTRA_LIST_POS = "prefsListPos";
+    public static final String EXTRA_LIST_TOP = "prefsListTop";
 
     // Tap a backup/restore preference -> launch a single-file SAF picker
     // (ACTION_CREATE_DOCUMENT for backup, ACTION_OPEN_DOCUMENT for restore).
@@ -846,6 +872,7 @@ public class PreferencesActivity extends PreferenceActivity implements
     // split layout would section the DCSS main menu.
     private void setRepositionUiClickListener() {
         Preference repositionPreference = findPreference("reposition_ui");
+        repositionPreference.setIcon(tintedIcon(R.drawable.ic_pref_layout));
         if (!getIntent().getBooleanExtra("gameInProgress", false)) {
             repositionPreference.setEnabled(false);
             repositionPreference.setSummary(
@@ -858,6 +885,7 @@ public class PreferencesActivity extends PreferenceActivity implements
                     public boolean onPreferenceClick(Preference pref) {
                         Intent result = new Intent();
                         result.putExtra("repositionUi", true);
+                        putListPosition(result);
                         setResult(RESULT_OK, result);
                         finish();
                         return true;
@@ -869,12 +897,15 @@ public class PreferencesActivity extends PreferenceActivity implements
     // seeing the extra (see GameActivity.onActivityResult). Always enabled —
     // the editor is a blank screen that doesn't touch the game panels.
     private void setRepositionGridClickListener() {
-        findPreference("reposition_grid").setOnPreferenceClickListener(
+        Preference gridPreference = findPreference("reposition_grid");
+        gridPreference.setIcon(tintedIcon(R.drawable.ic_pref_grid));
+        gridPreference.setOnPreferenceClickListener(
                 new Preference.OnPreferenceClickListener() {
                     @Override
                     public boolean onPreferenceClick(Preference pref) {
                         Intent result = new Intent();
                         result.putExtra("repositionGrid", true);
+                        putListPosition(result);
                         setResult(RESULT_OK, result);
                         finish();
                         return true;

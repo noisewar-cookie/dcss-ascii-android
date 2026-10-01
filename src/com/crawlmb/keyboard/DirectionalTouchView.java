@@ -3,6 +3,7 @@ package com.crawlmb.keyboard;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.view.GestureDetector;
 import android.view.HapticFeedbackConstants;
 import android.view.ScaleGestureDetector;
@@ -14,6 +15,7 @@ import com.crawlmb.keylistener.GameKeyListener;
 import com.crawlmb.PassThroughListener;
 import com.crawlmb.Preferences;
 import com.crawlmb.keylistener.KeyListener;
+import com.crawlmb.view.GridSkin;
 import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
 
@@ -54,9 +56,18 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 	// global config (HALF mode, non-fold).
 	private String[] foldHalfSides = null;
 
-	// Floating grid frame + dividers, drawn at the saved opacity (no handles).
+	// Floating grid frame, dividers, fill and arrows at the saved style (no
+	// handles).
 	private final Paint gridLinePaint = new Paint();
 	private final Paint gridBorderPaint = new Paint();
+	private final Paint gridFillPaint = new Paint();
+	private final GridSkin gridSkin;
+	private final GridSkin.Style gridStyle = new GridSkin.Style();
+	private final RectF gridBox = new RectF();
+	private int gridLineAlpha;
+	// Used when the user hasn't picked a grid color.
+	private int gridDefaultColor = 0xFFFFFF00;
+	private float gridOpacityExponent = GridSkin.DEFAULT_OPACITY_EXPONENT;
 
 	// Map pinch-zoom (portrait): stepped levels [-1..2], one step per pinch
 	// gesture. Session-only — resets on rewire. The factor at each level is
@@ -153,13 +164,13 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		gridLinePaint.setStrokeWidth(stroke);
 		gridBorderPaint.setStyle(Paint.Style.STROKE);
 		gridBorderPaint.setStrokeWidth(stroke * 1.5f);
-		setGridColor(0xFFFFFF00);
+		gridSkin = new GridSkin(context, gridBorderPaint, gridLinePaint);
 	}
 
-	public void setGridColor(int color)
+	public void setGridStyle(int defaultColor, float opacityExponent)
 	{
-		gridLinePaint.setColor(color);
-		gridBorderPaint.setColor(color);
+		gridDefaultColor = defaultColor;
+		gridOpacityExponent = opacityExponent;
 		invalidate();
 	}
 	
@@ -240,11 +251,19 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		// Taps are ignored with touch directionals off, so don't show a grid.
 		if (!Preferences.getEnableTouch())
 			return;
-		int alpha = Math.round(Preferences.getGridOpacity() * 2.55f);
-		if (alpha <= 0)
+		Preferences.loadGridStyle(gridStyle, gridDefaultColor);
+		gridLineAlpha = GridSkin.opacityAlpha(gridStyle.lineOpacity,
+				gridOpacityExponent);
+		int fillAlpha = gridStyle.fill ? GridSkin.opacityAlpha(
+				gridStyle.fillOpacity, gridOpacityExponent) : 0;
+		if (gridLineAlpha <= 0 && fillAlpha <= 0)
 			return;
-		gridLinePaint.setAlpha(alpha);
-		gridBorderPaint.setAlpha(alpha);
+		gridLinePaint.setColor(gridStyle.lineColor);
+		gridBorderPaint.setColor(gridStyle.lineColor);
+		gridLinePaint.setAlpha(gridLineAlpha);
+		gridBorderPaint.setAlpha(gridLineAlpha);
+		gridFillPaint.setColor(gridStyle.fillColor);
+		gridFillPaint.setAlpha(fillAlpha);
 		if (foldHalfStarts == null)
 		{
 			drawFloatGrid(canvas, -1, 0, getWidth(), getHeight());
@@ -265,21 +284,15 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 		float[] rect = floatRectForHalf(half);
 		if (rect == null || width <= 0 || height <= 0)
 			return;
-		float l = left + rect[0] * width;
-		float t = rect[1] * height;
-		float r = left + rect[2] * width;
-		float b = rect[3] * height;
-		float inset = gridBorderPaint.getStrokeWidth() / 2f;
-		canvas.drawRect(l + inset, t + inset, r - inset, b - inset,
-				gridBorderPaint);
+		gridBox.set(left + rect[0] * width, rect[1] * height,
+				left + rect[2] * width, rect[3] * height);
 		float[] lines = linesForHalf(half);
-		for (int i = 0; i < 2; i++)
-		{
-			float x = l + lines[i] * (r - l);
-			canvas.drawLine(x, t, x, b, gridLinePaint);
-			float y = t + lines[i + 2] * (b - t);
-			canvas.drawLine(l, y, r, y, gridLinePaint);
-		}
+		int theme = gridStyle.theme;
+		gridSkin.drawContent(canvas, theme, gridBox, lines,
+				gridFillPaint.getAlpha() > 0 ? gridFillPaint : null);
+		gridSkin.drawFrame(canvas, theme, gridBox, lines);
+		gridSkin.drawArrows(canvas, gridStyle.arrows, theme, gridBox, lines,
+				gridStyle.lineColor, gridLineAlpha);
 	}
 
 	// Which fold half local-x falls in, or -1 for the hinge gap / outside any

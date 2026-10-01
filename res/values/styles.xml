@@ -46,4 +46,40 @@
         <!--<item name="android:toolbarStyle" tools:targetApi="lollipop">@style/ToolbarStyle</item>-->
         <!--<item name="toolbarStyle">@style/ToolbarStyle</item>-->
     </style>
+    <!-- Grid overlay editor bar (reposition_buttons.xml). Four toggles share
+         one row, so padding and text are trimmed to keep them on one line. -->
+    <style name="RepositionToggleButton">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_margin">2dp</item>
+        <item name="android:paddingLeft">2dp</item>
+        <item name="android:paddingRight">2dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:singleLine">true</item>
+    </style>
+    <style name="RepositionOpacityLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_margin">4dp</item>
+        <item name="android:minEms">5</item>
+        <item name="android:textColor">#FFFFFFFF</item>
+    </style>
+    <style name="RepositionOpacitySeek">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:max">100</item>
+    </style>
+    <style name="RepositionColorSwatch">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">28dp</item>
+        <item name="android:layout_marginLeft">8dp</item>
+        <item name="android:layout_marginRight">8dp</item>
+        <item name="android:layout_marginTop">6dp</item>
+        <item name="android:layout_marginBottom">6dp</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
 </resources>

@@ -91,6 +91,7 @@ import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.view.FoldStateController;
 import com.crawlmb.view.CenterlineController;
 import com.crawlmb.view.GridOverlayController;
+import com.crawlmb.view.GridSkin;
 import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
@@ -193,6 +194,10 @@ public class GameActivity extends Activity
 	// Set on launching Preferences, cleared on resume: a double-tap on the
 	// settings cog lands before this activity pauses and would stack two.
 	private boolean preferencesLaunching = false;
+	// Preferences list scroll position handed back when a customization
+	// editor reopens Preferences; null = open at the top.
+	private Bundle prefsReturnData = null;
+	private View editorExitCover = null;
 	private CenterlineController centerlineController = null;
 	// One-time "new preference options" modal, computed in onCreate and shown
 	// from rebuildViews once the modal shell is built (see showNewOptionsModal).
@@ -506,7 +511,41 @@ public class GameActivity extends Activity
 		preferencesLaunching = true;
 		Intent intent = new Intent(this, PreferencesActivity.class);
 		intent.putExtra("gameInProgress", NativeWrapper.gameInProgress());
+		if (prefsReturnData != null)
+		{
+			intent.putExtras(prefsReturnData);
+			prefsReturnData = null;
+		}
 		startActivityForResult(intent, PREFERENCES_FINISHED);
+	}
+
+	// Editor Save/Exit returns to Preferences. The editor's overlay is
+	// already gone, so cover the window (editor black) until Preferences is
+	// up; otherwise the game screen flashes in between. Removed in onStop
+	// (or onResume, for multi-window).
+	private void reopenPreferencesFromEditor() {
+		if (preferencesLaunching)
+			return;
+		if (editorExitCover == null)
+		{
+			editorExitCover = new View(this);
+			editorExitCover.setBackgroundColor(0xFF000000);
+			editorExitCover.setClickable(true);
+			((ViewGroup) getWindow().getDecorView()).addView(editorExitCover,
+					new ViewGroup.LayoutParams(
+							ViewGroup.LayoutParams.MATCH_PARENT,
+							ViewGroup.LayoutParams.MATCH_PARENT));
+		}
+		openPreferences();
+	}
+
+	private void removeEditorExitCover() {
+		if (editorExitCover == null)
+			return;
+		if (editorExitCover.getParent() instanceof ViewGroup)
+			((ViewGroup) editorExitCover.getParent())
+					.removeView(editorExitCover);
+		editorExitCover = null;
 	}
 
 	// True while a reposition / grid / centerline editor or modal owns the
@@ -533,6 +572,15 @@ public class GameActivity extends Activity
             		// Because of a change in preferences, crawl must be reloaded
             		finish();
             		startActivity(getIntent());
+            	}
+            	if (data.getBooleanExtra("repositionUi", false)
+            			|| data.getBooleanExtra("repositionGrid", false))
+            	{
+            		prefsReturnData = new Bundle();
+            		prefsReturnData.putInt(PreferencesActivity.EXTRA_LIST_POS,
+            				data.getIntExtra(PreferencesActivity.EXTRA_LIST_POS, -1));
+            		prefsReturnData.putInt(PreferencesActivity.EXTRA_LIST_TOP,
+            				data.getIntExtra(PreferencesActivity.EXTRA_LIST_TOP, 0));
             	}
             	if (data.getBooleanExtra("repositionUi", false))
             		pendingRepositionEntry = true;
@@ -2962,6 +3010,7 @@ public class GameActivity extends Activity
 							if (root != null)
 								root.post(nw::redrawScreen);
 						}
+						reopenPreferencesFromEditor();
 					}
 
 					@Override
@@ -2969,7 +3018,7 @@ public class GameActivity extends Activity
 					{
 						repositionController = null;
 						if (restoreIme)
-							restoreKeyboardAfterReload();
+							reopenPreferencesFromEditor();
 					}
 				});
 		repositionController.enter();
@@ -2998,6 +3047,7 @@ public class GameActivity extends Activity
 							if (root != null)
 								root.post(nw::redrawScreen);
 						}
+						reopenPreferencesFromEditor();
 					}
 
 					@Override
@@ -3005,7 +3055,7 @@ public class GameActivity extends Activity
 					{
 						unfoldedRepositionController = null;
 						if (restoreIme)
-							restoreKeyboardAfterReload();
+							reopenPreferencesFromEditor();
 					}
 				});
 		unfoldedRepositionController.enter();
@@ -3043,11 +3093,13 @@ public class GameActivity extends Activity
 		gridOverlayController = new GridOverlayController(this, screenLayout,
 				portraitKeyboardView, lastBottomInset,
 				portraitFontConfig.repositionHighlightColor,
+				portraitFontConfig.gridOpacityExponent,
 				new GridOverlayController.Callbacks()
 				{
 					@Override
 					public void onSave(String[] sides, float[][] lines,
-							float[][] rects, boolean floating, int opacity)
+							float[][] rects, boolean floating,
+							GridSkin.Style style)
 					{
 						gridOverlayController = null;
 						for (int i = 0; i < sides.length; i++)
@@ -3064,11 +3116,12 @@ public class GameActivity extends Activity
 							Preferences.setGridFloat(sides[i], floating);
 						}
 						if (floating)
-							Preferences.setGridOpacity(opacity);
+							Preferences.setGridStyle(style,
+									portraitFontConfig.repositionHighlightColor);
 						if (portraitDirectionalView != null)
 							portraitDirectionalView.invalidate();
 						// Nothing layout-visible changes — no rebuild needed.
-						restoreKeyboardAfterReload();
+						reopenPreferencesFromEditor();
 					}
 
 					@Override
@@ -3076,7 +3129,7 @@ public class GameActivity extends Activity
 					{
 						gridOverlayController = null;
 						if (restoreIme)
-							restoreKeyboardAfterReload();
+							reopenPreferencesFromEditor();
 					}
 				});
 		if (unfoldedActive && foldPosture != null)
@@ -3335,7 +3388,8 @@ public class GameActivity extends Activity
 					new String[] { null });
 		configureDirectionalView(view, hapticFeedbackEnabled);
 		if (portraitFontConfig != null)
-			view.setGridColor(portraitFontConfig.repositionHighlightColor);
+			view.setGridStyle(portraitFontConfig.repositionHighlightColor,
+					portraitFontConfig.gridOpacityExponent);
 		screenLayout.addView(view);
 		portraitDirectionalView = view;
 		// Raise the keyboard above the now full-height overlay so its half keeps
@@ -3445,6 +3499,7 @@ public class GameActivity extends Activity
 	@Override
 	protected void onStop() {
 		super.onStop();
+		removeEditorExitCover();
 		if (foldStateController != null)
 			foldStateController.stop();
 		// Discard an in-progress reposition session — its overlay would not
@@ -3459,6 +3514,9 @@ public class GameActivity extends Activity
 			gridOverlayController.exit(false);
 		if (centerlineController != null && centerlineController.isActive())
 			centerlineController.exit(false);
+		// An editor dropped here never reopens Preferences, so don't let its
+		// list position leak into the next menu open.
+		prefsReturnData = null;
 		// Drain pushes before the process can be cached and frozen
 		// (MIUI freezes within seconds; queued work would be lost).
 		// onStop runs after the next screen is visible, so the wait is
@@ -3471,6 +3529,8 @@ public class GameActivity extends Activity
 		// Log.d("Crawl", "onResume");
 		super.onResume();
 		preferencesLaunching = false;
+		// Multi-window may resume us without an onStop in between.
+		removeEditorExitCover();
 
 		setScreen();
 

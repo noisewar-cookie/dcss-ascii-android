@@ -2,7 +2,8 @@
 <!-- Button bar of the Reposition In-Game UI mode. Covers the virtual
      keyboard area (or a bottom strip when no keyboard is shown); height and
      bottom inset padding are set at runtime by RepositionController. The
-     float toggle and opacity rows are shown only by GridOverlayController. -->
+     float, line and fill rows are shown only by GridOverlayController; the
+     Save/Reset/Exit row stays last. -->
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -12,12 +13,63 @@
     android:gravity="center_vertical"
     android:paddingLeft="8dp"
     android:paddingRight="8dp">
-    <Button
-        android:id="@+id/reposition_float"
+    <LinearLayout
+        android:id="@+id/reposition_float_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="4dp"
-        android:visibility="gone"/>
+        android:orientation="horizontal"
+        android:visibility="gone">
+        <Button
+            android:id="@+id/reposition_float"
+            style="@style/RepositionToggleButton"/>
+        <Button
+            android:id="@+id/reposition_fill"
+            style="@style/RepositionToggleButton"/>
+        <Button
+            android:id="@+id/reposition_theme"
+            android:text="@string/reposition_theme"
+            style="@style/RepositionToggleButton"/>
+        <Button
+            android:id="@+id/reposition_arrows"
+            android:text="@string/reposition_arrows"
+            style="@style/RepositionToggleButton"/>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/reposition_opacity_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+        <TextView
+            android:id="@+id/reposition_opacity_label"
+            style="@style/RepositionOpacityLabel"/>
+        <SeekBar
+            android:id="@+id/reposition_opacity"
+            style="@style/RepositionOpacitySeek"/>
+        <View
+            android:id="@+id/reposition_color"
+            android:contentDescription="@string/reposition_color"
+            style="@style/RepositionColorSwatch"/>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/reposition_fill_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+        <TextView
+            android:id="@+id/reposition_fill_label"
+            style="@style/RepositionOpacityLabel"/>
+        <SeekBar
+            android:id="@+id/reposition_fill_opacity"
+            style="@style/RepositionOpacitySeek"/>
+        <View
+            android:id="@+id/reposition_fill_color"
+            android:contentDescription="@string/reposition_fill_color"
+            style="@style/RepositionColorSwatch"/>
+    </LinearLayout>
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -43,26 +95,5 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_margin="4dp"/>
-    </LinearLayout>
-    <LinearLayout
-        android:id="@+id/reposition_opacity_row"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:visibility="gone">
-        <TextView
-            android:id="@+id/reposition_opacity_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="4dp"
-            android:minEms="6"
-            android:textColor="#FFFFFFFF"/>
-        <SeekBar
-            android:id="@+id/reposition_opacity"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:max="100"/>
     </LinearLayout>
 </LinearLayout>

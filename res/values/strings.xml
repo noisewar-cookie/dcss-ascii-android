@@ -109,7 +109,7 @@
     <string name="preferences_orientation_summary">Select screen orientation.</string>
     <string name="preferences_fontface_title">Font</string>
     <string name="preferences_fontface_summary">Hi-res devices only.</string>
-    <string name="preferences_reposition_ui_title">Reposition In-Game UI</string>
+    <string name="preferences_reposition_ui_title">Reposition In-Game UI Panels</string>
     <string name="preferences_reposition_ui_summary">Reorder the game panels by dragging them.</string>
     <string name="preferences_reposition_ui_disabled_summary">Only available while a game is in progress.</string>
     <string name="unfolded_category">Folding Devices</string>
@@ -124,7 +124,15 @@
     <string name="reposition_cancel">Exit</string>
     <string name="reposition_float_on">Float: On</string>
     <string name="reposition_float_off">Float: Off</string>
-    <string name="reposition_opacity">Opacity: %1$d%%</string>
+    <string name="reposition_fill_on">Fill: On</string>
+    <string name="reposition_fill_off">Fill: Off</string>
+    <string name="reposition_opacity">Line: %1$d%%</string>
+    <string name="reposition_fill_opacity">Fill: %1$d%%</string>
+    <string name="reposition_theme">Themes</string>
+    <string name="reposition_color">Line color</string>
+    <string name="reposition_fill_color">Fill color</string>
+    <string name="reposition_arrows">Arrows</string>
+    <string name="reposition_color_default">Default</string>
     <string name="reposition_panel_map">Map</string>
     <string name="reposition_panel_hud">HUD</string>
     <string name="reposition_panel_mlist">Enemies</string>

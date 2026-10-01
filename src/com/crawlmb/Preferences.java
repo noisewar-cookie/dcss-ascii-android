@@ -12,6 +12,7 @@ import java.util.Map;
 
 import com.crawlmb.keyboard.CrawlKeyboardWrapper.KeyboardType;
 import com.crawlmb.keymap.KeyMapper;
+import com.crawlmb.view.GridSkin;
 
 final public class Preferences
 {
@@ -157,10 +158,18 @@ final public class Preferences
 	public static final String KEY_GRIDRECT = "crawl.gridrect";
 	// Default box = the whole region, so a fresh float grid matches docked.
 	public static final float[] GRID_RECT_DEFAULTS = { 0f, 0f, 1f, 1f };
-	// In-game visibility (0-100 %) of the floating grid's frame and dividers;
-	// one value for every region.
-	public static final String KEY_GRIDOPACITY = "crawl.gridopacity";
-	public static final int GRID_OPACITY_DEFAULT = 20;
+	// Floating grid look (GridSkin.Style), one value for every region.
+	// Opacities are slider positions (0-100, see GridSkin.opacityAlpha);
+	// unset colors = font_config reposition_highlight_color.
+	public static final String KEY_GRIDOPACITY = "crawl.gridlineopacity";
+	// Legacy linear opacity (v24); read only for migration.
+	private static final String KEY_GRIDOPACITY_LINEAR = "crawl.gridopacity";
+	public static final String KEY_GRIDCOLOR = "crawl.gridcolor";
+	public static final String KEY_GRIDTHEME = "crawl.gridtheme";
+	public static final String KEY_GRIDFILL = "crawl.gridfill";
+	public static final String KEY_GRIDFILLOPACITY = "crawl.gridfillopacity";
+	public static final String KEY_GRIDFILLCOLOR = "crawl.gridfillcolor";
+	public static final String KEY_GRIDARROWS = "crawl.gridarrows";
 
     private static final String KEYBOARD_LAYOUT_COUNT = "layout_count";
     public static final String KEYBOARD_LAYOUT_CURRENT = "layout_current";
@@ -206,6 +215,7 @@ final public class Preferences
 
 		keymapper = new KeyMapper(sharedPreferences);
 		migrateWikiSource();
+		migrateGridOpacity();
 	}
 
 	// Carry the old on/off wiki toggle into the source picker once.
@@ -219,6 +229,23 @@ final public class Preferences
 				.putString(KEY_WIKISOURCE,
 						on ? WIKISOURCE_ASHENZARI : WIKISOURCE_NONE)
 				.remove(KEY_WIKIBUTTONENABLED)
+				.apply();
+	}
+
+	// v24 stored alpha percent directly; convert to the slider position that
+	// gives the same alpha on the default curve.
+	private static void migrateGridOpacity()
+	{
+		if (sharedPreferences.contains(KEY_GRIDOPACITY)
+				|| !sharedPreferences.contains(KEY_GRIDOPACITY_LINEAR))
+			return;
+		int linear = Math.max(0, Math.min(100,
+				sharedPreferences.getInt(KEY_GRIDOPACITY_LINEAR, 0)));
+		int pos = Math.round(100f * (float) Math.pow(linear / 100f,
+				1f / GridSkin.DEFAULT_OPACITY_EXPONENT));
+		sharedPreferences.edit()
+				.putInt(KEY_GRIDOPACITY, pos)
+				.remove(KEY_GRIDOPACITY_LINEAR)
 				.apply();
 	}
 
@@ -724,15 +751,50 @@ final public class Preferences
 				gridSideKey(KEY_GRIDFLOAT, side), floating).apply();
 	}
 
-	public static int getGridOpacity()
+	public static void loadGridStyle(GridSkin.Style out, int defaultColor)
 	{
-		int v = sharedPreferences.getInt(KEY_GRIDOPACITY, GRID_OPACITY_DEFAULT);
-		return Math.max(0, Math.min(100, v));
+		out.theme = gridIndex(KEY_GRIDTHEME, GridSkin.DEFAULT, GridSkin.COUNT);
+		out.lineOpacity = gridIndex(KEY_GRIDOPACITY,
+				GridSkin.LINE_OPACITY_DEFAULT, 101);
+		out.lineColor = sharedPreferences.getInt(KEY_GRIDCOLOR, defaultColor);
+		out.fill = sharedPreferences.getBoolean(KEY_GRIDFILL, false);
+		out.fillOpacity = gridIndex(KEY_GRIDFILLOPACITY,
+				GridSkin.FILL_OPACITY_DEFAULT, 101);
+		out.fillColor = sharedPreferences.getInt(KEY_GRIDFILLCOLOR,
+				defaultColor);
+		out.arrows = gridIndex(KEY_GRIDARROWS, GridSkin.ARROWS_NONE,
+				GridSkin.ARROWS_COUNT);
 	}
 
-	public static void setGridOpacity(int percent)
+	// Picking the default color clears its key so it keeps tracking
+	// font_config.
+	public static void setGridStyle(GridSkin.Style s, int defaultColor)
 	{
-		sharedPreferences.edit().putInt(KEY_GRIDOPACITY, percent).apply();
+		SharedPreferences.Editor e = sharedPreferences.edit();
+		e.putInt(KEY_GRIDTHEME, s.theme);
+		e.putInt(KEY_GRIDOPACITY, s.lineOpacity);
+		putGridColor(e, KEY_GRIDCOLOR, s.lineColor, defaultColor);
+		e.putBoolean(KEY_GRIDFILL, s.fill);
+		e.putInt(KEY_GRIDFILLOPACITY, s.fillOpacity);
+		putGridColor(e, KEY_GRIDFILLCOLOR, s.fillColor, defaultColor);
+		e.putInt(KEY_GRIDARROWS, s.arrows);
+		e.apply();
+	}
+
+	// Stored int in [0, limit), else def.
+	private static int gridIndex(String key, int def, int limit)
+	{
+		int v = sharedPreferences.getInt(key, def);
+		return v >= 0 && v < limit ? v : def;
+	}
+
+	private static void putGridColor(SharedPreferences.Editor e, String key,
+			int color, int defaultColor)
+	{
+		if (color == defaultColor)
+			e.remove(key);
+		else
+			e.putInt(key, color);
 	}
 
 	public static float[] getGridFloatLines(String side)

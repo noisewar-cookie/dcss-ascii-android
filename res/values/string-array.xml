@@ -110,4 +110,22 @@
         <item>ashenzari</item>
         <item>crawlwiki</item>
     </string-array>
+    <!-- Order matches GridSkin constants. -->
+    <string-array name="grid_theme_names">
+        <item>Default</item>
+        <item>Rounded</item>
+        <item>Cross</item>
+        <item>Rounded Cross</item>
+        <item>D-Pad</item>
+        <item>Rounded D-Pad</item>
+        <item>None</item>
+    </string-array>
+    <!-- Index order = GridSkin.ARROWS_*. -->
+    <string-array name="grid_arrow_names">
+        <item>None</item>
+        <item>Triangle</item>
+        <item>Carat</item>
+        <item>Arrow</item>
+        <item>Box Arrow</item>
+    </string-array>
 </resources>
