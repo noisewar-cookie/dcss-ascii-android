@@ -3683,6 +3683,15 @@ public class GameActivity extends Activity
 		WindowCompatAdapter.applyFullscreen(this, Preferences.getFullScreen());
 	}
 
+	// API < 30: compat hide() only sets SYSTEM_UI_FLAG_FULLSCREEN, which focus
+	// loss (dialog, shade) clears; re-hide when focus returns.
+	@Override
+	public void onWindowFocusChanged(boolean hasFocus) {
+		super.onWindowFocusChanged(hasFocus);
+		if (hasFocus && VERSION.SDK_INT < VERSION_CODES.R)
+			setScreen();
+	}
+
 	// Scale raw corner radius to inscribed-rectangle inset: R*(1-cos45°).
 	@android.annotation.SuppressLint("NewApi")
 	private static int cornerRadius(android.view.WindowInsets insets, int position)

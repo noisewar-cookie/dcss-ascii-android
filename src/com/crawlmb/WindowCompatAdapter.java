@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.os.Build;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowManager;
 
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -57,6 +58,9 @@ public final class WindowCompatAdapter
 		}
 		else
 		{
+			// Theme.NoTitleBar.Fullscreen sets FLAG_FULLSCREEN; on API 30+
+			// compat show() leaves it set and the system re-hides the bar.
+			window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 			controller.show(WindowInsetsCompat.Type.statusBars());
 		}
 	}
