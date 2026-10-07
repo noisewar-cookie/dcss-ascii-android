@@ -1,0 +1,5 @@
+Release 26 (0.34.1)
+
+Bug Fixes:
+• Status bar no longer overlaps when fullscreen is off.
+• Potential fix for stuttering render on resume.
