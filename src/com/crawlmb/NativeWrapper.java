@@ -16,6 +16,7 @@ public class NativeWrapper
 	// Last wrap width pushed live, to skip redundant updateMsgWrap calls.
 	private int lastMsgWrapCols = -1;
 	private int lastProseWrapCols = -1;
+	private int lastSkillsWrapCols = -1;
 
 	// Last compact-HUD pushes. These native rows/bars aren't part of the
 	// retained terminal grid, so a view rebuild (onStart/fold) leaves them
@@ -52,6 +53,7 @@ public class NativeWrapper
 		int msgRows = renderer.getMsgRows();
 		int proseCols = renderer.getProseWrapCols();
 		setWordwrap(wrapCols, msgRows, proseCols);
+		setSkillsWrapCols(renderer.getSkillsWrapCols());
 		setNewturnMark(renderer.getNewturnMark());
 		setCompactHud(renderer.getCompactHud());
 		setMpBarColour(renderer.getMpBarColor());
@@ -67,12 +69,19 @@ public class NativeWrapper
 			return;
 		int wrapCols = renderer.getMsgWrapCols();
 		int proseCols = renderer.getProseWrapCols();
+		int skillsCols = renderer.getSkillsWrapCols();
 		boolean msgChanged = wrapCols > 0 && wrapCols != lastMsgWrapCols;
 		boolean proseChanged = proseCols > 0 && proseCols != lastProseWrapCols;
-		if (!msgChanged && !proseChanged)
+		boolean skillsChanged = skillsCols > 0 && skillsCols != lastSkillsWrapCols;
+		if (!msgChanged && !proseChanged && !skillsChanged)
 			return;
 		synchronized (display_lock)
 		{
+			if (skillsChanged)
+			{
+				lastSkillsWrapCols = skillsCols;
+				setSkillsWrapCols(skillsCols);
+			}
 			if (msgChanged)
 			{
 				lastMsgWrapCols = wrapCols;
@@ -93,6 +102,7 @@ public class NativeWrapper
 	private native void setMpBarColour(int argb);
 	private native void setMsgMaxWidthLive(int msgWrapCols);
 	private native void setProseWrapColsLive(int proseWrapCols);
+	private native void setSkillsWrapCols(int skillsWrapCols);
 	public static native void nativeSaveGame();
 	// True while a game is loaded (crawl_state.need_save) — false on the
 	// DCSS main menu / character creation. Safe from the UI thread.

@@ -70,7 +70,7 @@ public class SettingsButtonController
 
         root.addView(container);
 
-        root.getViewTreeObserver().addOnGlobalLayoutListener(
+        WindowVto.of(root).addOnGlobalLayoutListener(
                 new ViewTreeObserver.OnGlobalLayoutListener()
                 {
                     @Override
@@ -79,7 +79,7 @@ public class SettingsButtonController
                         // Bail once our container has been detached by a rebuild.
                         if (container.getParent() == null)
                         {
-                            root.getViewTreeObserver()
+                            WindowVto.of(root)
                                     .removeOnGlobalLayoutListener(this);
                             return;
                         }

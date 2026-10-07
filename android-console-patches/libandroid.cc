@@ -70,10 +70,12 @@ extern int main(int argc, char *argv[]);
 // Non-static: message.cc.patch reads android_msg_wrap_cols to anchor the
 // more-prompt below the newest message instead of the window's last row;
 // ui.cc.patch reads android_prose_wrap_cols to cap the wrap width of prose
-// Text widgets (describe/god/hints screens).
+// Text widgets (describe/god/hints screens); skill-menu.cc.patch reads
+// android_skills_wrap_cols to wrap the skills screen's help text.
 int android_layout_lines = LINES;
 int android_msg_wrap_cols = 0;
 int android_prose_wrap_cols = 0;
+int android_skills_wrap_cols = 0;
 static int android_msg_rows = 0;
 
 // New turn indicator (Android preference). Set by
@@ -420,6 +422,7 @@ extern "C"
 	void Java_com_crawlmb_NativeWrapper_setMpBarColour( JNIEnv* env, jobject object, jint argb);
 	void Java_com_crawlmb_NativeWrapper_setMsgMaxWidthLive( JNIEnv* env, jobject object, jint msgWrapCols);
 	void Java_com_crawlmb_NativeWrapper_setProseWrapColsLive( JNIEnv* env, jobject object, jint proseWrapCols);
+	void Java_com_crawlmb_NativeWrapper_setSkillsWrapCols( JNIEnv* env, jobject object, jint skillsWrapCols);
 	void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object);
 	void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz);
 	jboolean Java_com_crawlmb_NativeWrapper_gameInProgress( JNIEnv* env, jclass clz);
@@ -485,6 +488,13 @@ void Java_com_crawlmb_NativeWrapper_setProseWrapColsLive( JNIEnv* env, jobject o
 	if (proseWrapCols <= 0)
 		return;
 	android_prose_wrap_cols = proseWrapCols;
+}
+
+// Visible cols of the skills view (0 = wrap off). Set at boot and live from
+// NativeWrapper; SkillMenu::init reads it each time the menu opens.
+void Java_com_crawlmb_NativeWrapper_setSkillsWrapCols( JNIEnv* env, jobject object, jint skillsWrapCols)
+{
+	android_skills_wrap_cols = skillsWrapCols > 0 ? skillsWrapCols : 0;
 }
 
 void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz)

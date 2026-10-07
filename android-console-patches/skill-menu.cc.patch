@@ -1,8 +1,18 @@
 diff --git a/crawl-ref/source/skill-menu.cc b/crawl-ref/source/skill-menu.cc
-index 2d2afd8507..d3b759d002 100644
+index 2d2afd8..f08841a 100644
 --- a/crawl-ref/source/skill-menu.cc
 +++ b/crawl-ref/source/skill-menu.cc
-@@ -725,7 +725,7 @@ void SkillMenuSwitch::update()
+@@ -35,6 +35,9 @@
+ #include "ui.h"
+ #include "unwind.h"
+ 
++// Visible cols of the Android skills view; 0 = word wrap off (libandroid.cc).
++extern int android_skills_wrap_cols;
++
+ using namespace ui;
+ 
+ menu_letter2 SkillMenuEntry::m_letter;
+@@ -725,7 +728,7 @@ void SkillMenuSwitch::update()
  
      const vector<int> hotkeys = get_hotkeys();
      ASSERT(hotkeys.size());
@@ -11,7 +21,121 @@ index 2d2afd8507..d3b759d002 100644
      for (auto it = m_states.begin(); it != m_states.end(); ++it)
      {
          if (it != m_states.begin())
-@@ -1282,8 +1282,8 @@ void SkillMenu::init_title()
+@@ -868,6 +871,113 @@ void SkillMenu::init(int flag, int region_height)
+     --m_pos.x;
+     init_switches();
+ 
++    // Android: grow the help block to the longest text it can show at the
++    // wrapped width, before anything is drawn (moving rows later would leave
++    // stale cells). Non-simple keeps stock's blank row under the text; simple
++    // gets its gap from RegionRouter's fold.
++    if (android_skills_wrap_cols > 0)
++    {
++        const int wrap = m_help->get_max_coord().x
++                         - m_help->get_min_coord().x;
++        const int rows = m_help->get_max_coord().y
++                         - m_help->get_min_coord().y;
++        int need = 0;
++        auto fit = [&](string t)
++        {
++            if (!t.empty())
++                need = max(need, linebreak_string(t, wrap) + 1);
++        };
++        // Toggle help: set_help(switch->get_help()) for each reachable state.
++        for (auto &entry : m_switches)
++        {
++            SkillMenuSwitch* sw = entry.second;
++            if (!sw)
++                continue;
++            const skill_menu_state orig = sw->get_state();
++            for (int st = SKM_NONE + 1; st <= SKM_VIEW_COST; ++st)
++            {
++                sw->set_state(static_cast<skill_menu_state>(st));
++                if (sw->get_state() == st)
++                    fit(sw->get_help());
++            }
++            sw->set_state(orig);
++        }
++        // Default help for every view x level x manual combination (set_skills
++        // decides SKMF_MANUAL later). find(): operator[] would insert nulls.
++        auto sw_at = [&](skill_menu_switch k) -> SkillMenuSwitch*
++        {
++            auto it = m_switches.find(k);
++            return it == m_switches.end() ? nullptr : it->second;
++        };
++        SkillMenuSwitch* view = sw_at(SKM_VIEW);
++        SkillMenuSwitch* level = sw_at(SKM_LEVEL);
++        const bool manual_orig = is_set(SKMF_MANUAL);
++        const skill_menu_state view_orig = view ? view->get_state() : SKM_NONE;
++        const skill_menu_state level_orig = level ? level->get_state()
++                                                  : SKM_NONE;
++        for (int v = SKM_NONE; v <= SKM_VIEW_COST; ++v)
++        {
++            if (view && (view->set_state(static_cast<skill_menu_state>(v)),
++                         view->get_state() != v))
++            {
++                continue;
++            }
++            for (int l = SKM_NONE; l <= SKM_VIEW_COST; ++l)
++            {
++                if (level
++                    && (level->set_state(static_cast<skill_menu_state>(l)),
++                        level->get_state() != l))
++                {
++                    continue;
++                }
++                for (int manual = 0; manual < 2; ++manual)
++                {
++                    if (manual)
++                        set_flag(SKMF_MANUAL);
++                    else
++                        clear_flag(SKMF_MANUAL);
++                    set_default_help();
++                    fit(m_help->get_text());
++                }
++                if (!level)
++                    break;
++            }
++            if (!view)
++                break;
++        }
++        if (view)
++            view->set_state(view_orig);
++        if (level)
++            level->set_state(level_orig);
++        if (manual_orig)
++            set_flag(SKMF_MANUAL);
++        else
++            clear_flag(SKMF_MANUAL);
++
++        if (!is_set(SKMF_SIMPLE))
++            ++need;
++        const int extra = need - rows;
++        if (extra > 0)
++        {
++            const coord_def down(0, extra);
++            m_help->set_bounds(m_help->get_min_coord(),
++                               m_help->get_max_coord() + down);
++            for (auto &entry : m_switches)
++                if (entry.second)
++                    entry.second->move(down);
++            if (m_help_button)
++            {
++                m_help_button->move(down);
++                m_middle_button->move(down);
++                m_clear_targets_button->move(down);
++            }
++            m_pos.y += extra;
++            // attach_item rejects out-of-bounds items, so grow the freeform.
++            m_max_coord.y += extra;
++            m_ff->init(m_min_coord, m_max_coord, "freeform");
++        }
++    }
++
+     if (m_pos.y < m_max_coord.y - 1)
+         shift_bottom_down();
+ 
+@@ -1282,8 +1392,8 @@ void SkillMenu::init_title()
  {
      m_title = new NoSelectTextItem();
      m_title->set_bounds(m_pos,
@@ -22,7 +146,22 @@ index 2d2afd8507..d3b759d002 100644
      m_title->set_fg_colour(WHITE);
      m_ff->attach_item(m_title);
      m_title->set_visible(true);
-@@ -1307,36 +1307,23 @@ void SkillMenu::init_button_row()
+@@ -1301,42 +1411,37 @@ void SkillMenu::init_button_row()
+         help_height += 2;
+     }
+ 
+-    m_help->set_bounds(m_pos, coord_def(m_max_coord.x, m_pos.y + help_height));
++    // Wrap at the skills view's visible width (minus the help's start col).
++    // Rows are fitted to the text in init() once switches exist.
++    int help_right = m_max_coord.x;
++    const int wrap = min(android_skills_wrap_cols - (m_pos.x - 1),
++                         m_max_coord.x - m_pos.x);
++    if (android_skills_wrap_cols > 0 && wrap > 0)
++        help_right = m_pos.x + wrap;
++
++    m_help->set_bounds(m_pos, coord_def(help_right, m_pos.y + help_height));
+     m_pos.y += help_height;
+     m_ff->attach_item(m_help);
      m_help->set_fg_colour(LIGHTGREY);
      m_help->set_visible(true);
  
@@ -67,25 +206,25 @@ index 2d2afd8507..d3b759d002 100644
      if (!you.has_mutation(MUT_DISTRIBUTED_TRAINING))
      {
          sw = new SkillMenuSwitch("mode", '/');
-@@ -1349,7 +1336,17 @@ void SkillMenu::init_switches()
+@@ -1349,7 +1454,17 @@ void SkillMenu::init_switches()
          sw->update();
          sw->set_id(SKM_MODE);
          add_item(sw, sw->size(), m_pos);
 +    }
-+
+ 
 +    // Row 2: train|focus, modified|base (both conditional)
 +    if (m_pos.x > 2)
 +    {
 +        m_pos.x = 2;
 +        ++m_pos.y;
 +    }
- 
++
 +    if (!you.has_mutation(MUT_DISTRIBUTED_TRAINING))
 +    {
          sw = new SkillMenuSwitch("skill", '|');
          m_switches[SKM_DO] = sw;
          if (!is_set(SKMF_EXPERIENCE)
-@@ -1365,7 +1362,51 @@ void SkillMenu::init_switches()
+@@ -1365,7 +1480,51 @@ void SkillMenu::init_switches()
          sw->update();
          sw->set_id(SKM_DO);
          add_item(sw, sw->size(), m_pos);
@@ -137,7 +276,7 @@ index 2d2afd8507..d3b759d002 100644
          sw = new SkillMenuSwitch("skills", '*');
          m_switches[SKM_SHOW] = sw;
          sw->add(SKM_SHOW_DEFAULT);
-@@ -1380,17 +1421,6 @@ void SkillMenu::init_switches()
+@@ -1380,17 +1539,6 @@ void SkillMenu::init_switches()
          add_item(sw, sw->size(), m_pos);
      }
  
@@ -155,7 +294,7 @@ index 2d2afd8507..d3b759d002 100644
      sw = new SkillMenuSwitch("", '!');
      m_switches[SKM_VIEW] = sw;
      if (!is_set(SKMF_SPECIAL) || you.wizard)
-@@ -1635,7 +1665,7 @@ void SkillMenu::set_title()
+@@ -1635,7 +1783,7 @@ void SkillMenu::set_title()
      string t;
      if (is_set(SKMF_EXPERIENCE))
      {

@@ -189,7 +189,7 @@ public class RepositionController
 		buildUi();
 
 		layoutListener = this::recomputeGeometry;
-		splitContainer.getViewTreeObserver()
+		WindowVto.of(splitContainer)
 				.addOnGlobalLayoutListener(layoutListener);
 		recomputeGeometry();
 	}
@@ -239,7 +239,7 @@ public class RepositionController
 	private void teardown()
 	{
 		active = false;
-		splitContainer.getViewTreeObserver()
+		WindowVto.of(splitContainer)
 				.removeOnGlobalLayoutListener(layoutListener);
 		router.setFrozenGameplayCallback(null);
 		// Unfreezing reapplies the pending/current mode — this restores the

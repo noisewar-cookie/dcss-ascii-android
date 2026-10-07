@@ -76,6 +76,7 @@ public interface TerminalRenderer
 	default int getMsgWrapCols() { return 0; }
 	default int getMsgRows() { return 0; }
 	default int getProseWrapCols() { return 0; }
+	default int getSkillsWrapCols() { return 0; }
 
 	// Whether the new-turn indicator marks (_/-) are shown. Queried by
 	// NativeWrapper.gameStart to pass to libandroid.cc before initGame.

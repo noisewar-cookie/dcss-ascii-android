@@ -621,6 +621,32 @@ public class RegionRouter implements TerminalRenderer
 		scale = Math.max(scale, fontConfig.portraitMainmenuFontScale);
 		scale = Math.max(scale, fontConfig.portraitDefaultFontScale
 				* fontGroupMult(MenuType.DEFAULT));
+		return visibleColsAtScale(face, width, scale);
+	}
+
+	// Wrap width for the skills screen's help text: skillsView's visible
+	// cols (measured; height-fit shrinks the font below the configured
+	// scale), else estimated at that scale. 0 when word wrap is off.
+	@Override
+	public int getSkillsWrapCols()
+	{
+		if (msgWordwrapView == null || skillsView == null || fontConfig == null)
+			return 0;
+		int measured = skillsView.computeVisibleCols();
+		if (measured > 0)
+			return Math.min(measured - 1, TERMINAL_COLS - 1);
+		int width = skillsView.getMeasuredWidth();
+		if (width <= 0)
+			return 0;
+		Typeface face = skillsView.getTypeface(Preferences.getFontFace());
+		if (face == null)
+			return 0;
+		return visibleColsAtScale(face, width, fontConfig.portraitSkillsFontScale
+				* fontGroupMult(MenuType.SKILLS));
+	}
+
+	private int visibleColsAtScale(Typeface face, int width, float scale)
+	{
 		int refSize = GameFontShaper.widthFitTextSize(context,
 				TERMINAL_COLS, width,
 				RegionTermView.MIN_FONT_SIZE, RegionTermView.MAX_FONT_SIZE);
@@ -681,11 +707,13 @@ public class RegionRouter implements TerminalRenderer
 	// the UI thread while the game thread owns the flag.
 	private volatile boolean skipSplitRegionsThisStorm = false;
 
-	// Set by onFrame on a transition into a fullView-hosted menu; routeCell then
-	// skips this storm's fullView paint. Without it a menu->menu hop that keeps
-	// fullView visible but rescales it (spell/ability list 1.75 -> describe
-	// 1.60) flashes the new content at the old scale for one vsync before
-	// applyMode rescales. applyMode clears + replays fullView here anyway.
+	// Set by onFrame on any transition; routeCell then skips this storm's
+	// fullView paint. Without it a menu->menu hop that keeps fullView visible
+	// but rescales it (spell/ability list 1.75 -> describe 1.60) flashes the
+	// new content at the old scale for one vsync before applyMode rescales,
+	// and a fresh (VISIBLE) fullView after rebuildViews flashes the raw
+	// 80-col gameplay frame before applyMode hides it. applyMode clears +
+	// replays fullView whenever it next becomes visible.
 	private volatile boolean skipFullViewThisStorm = false;
 
 	// Anchor for the single-column fold of the skills menu. Recomputed on
@@ -724,8 +752,10 @@ public class RegionRouter implements TerminalRenderer
 	//      the main game's help bounds naturally leave a trailing blank.
 	// Threshold (skillsSimpleButtonRow) is the source terminal row where
 	// the first switch row begins -- terminal row 22 with help_height=5
-	// and m_pos.y -= 1 applied.
+	// and m_pos.y -= 1 applied; found by scan since word wrap grows the
+	// help block (skill-menu.cc.patch).
 	private volatile boolean skillsSimpleMode = false;
+	private volatile int skillsSimpleButtonRow = SKILL_SIMPLE_BUTTON_ROW;
 	private static final int SKILL_SIMPLE_BUTTON_ROW = 22;
 
 	// Anchor for the single-column fold of item menus. Recomputed each
@@ -1817,15 +1847,13 @@ public class RegionRouter implements TerminalRenderer
 	{
 		if (fullView == null)
 			return;
-		final ViewTreeObserver vto = fullView.getViewTreeObserver();
-		vto.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener()
+		WindowVto.of(fullView).addOnGlobalLayoutListener(
+				new ViewTreeObserver.OnGlobalLayoutListener()
 		{
 			@Override
 			public void onGlobalLayout()
 			{
-				ViewTreeObserver o = fullView.getViewTreeObserver();
-				if (o.isAlive())
-					o.removeOnGlobalLayoutListener(this);
+				WindowVto.of(fullView).removeOnGlobalLayoutListener(this);
 				drawLoadingMessage();
 			}
 		});
@@ -1906,15 +1934,13 @@ public class RegionRouter implements TerminalRenderer
 
 	private void scheduleRedrawAfterLayout(final View target)
 	{
-		final ViewTreeObserver vto = target.getViewTreeObserver();
-		vto.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener()
+		WindowVto.of(target).addOnGlobalLayoutListener(
+				new ViewTreeObserver.OnGlobalLayoutListener()
 		{
 			@Override
 			public void onGlobalLayout()
 			{
-				ViewTreeObserver o = target.getViewTreeObserver();
-				if (o.isAlive())
-					o.removeOnGlobalLayoutListener(this);
+				WindowVto.of(target).removeOnGlobalLayoutListener(this);
 				// Prefer the Java-side replay from terminalShadow: it hits
 				// the same views via drawPoint but skips ~3840 JNI round
 				// trips per transition (C++ refreshTerminal → per-cell
@@ -2353,7 +2379,7 @@ public class RegionRouter implements TerminalRenderer
 			// help text and the first switch row, matching the trailing
 			// blank that the main game's 3-row help bounds produce for
 			// its 2-line description.
-			if (skillsSimpleMode && r >= SKILL_SIMPLE_BUTTON_ROW)
+			if (skillsSimpleMode && r >= skillsSimpleButtonRow)
 				offset += 1;
 			skillsView.drawPoint(bottom + offset, c, ch, fcolor,
 					bcolor, extendedErase);
@@ -2419,11 +2445,23 @@ public class RegionRouter implements TerminalRenderer
 						}
 					}
 					skillsSimpleMode = simple;
+					skillsSimpleButtonRow = findSkillsButtonRow(r);
 					buildSkillsCompactMap();
 					return;
 				}
 			}
 		}
+	}
+
+	// First switch row ("[?] ..." at col 1) below the fold grid.
+	private int findSkillsButtonRow(int headerRow)
+	{
+		for (int r = headerRow + SKILL_FOLD_ROWS; r < TERMINAL_ROWS; r++)
+		{
+			if (terminalShadow[r][1] == '[' && terminalShadow[r][3] == ']')
+				return r;
+		}
+		return SKILL_SIMPLE_BUTTON_ROW;
 	}
 
 	// Build compact destination-row arrays that skip blank rows within
@@ -3332,12 +3370,11 @@ public class RegionRouter implements TerminalRenderer
 		// INTO gameplay clears and repaints them.
 		skipSplitRegionsThisStorm = wasGameplay
 				&& currentMode != LayoutMode.GAMEPLAY;
-		// Same guard for fullView menu->menu scale hops (see field). Condition
-		// mirrors applyMode's fullVisible branch (which clears + replays); off
-		// while frozen, where fullView is INVISIBLE and applyMode is deferred.
+		// Same guard for fullView on any transition (see field): it's either
+		// about to hide (-> GAMEPLAY) or applyMode's fullVisible branch clears
+		// + replays it. Off while frozen, where applyMode is deferred.
 		skipFullViewThisStorm = transition
 				&& fullView != null
-				&& currentMode != LayoutMode.GAMEPLAY
 				&& !menuTypeHidesFullView(currentMenuType)
 				&& !repositionFrozen;
 

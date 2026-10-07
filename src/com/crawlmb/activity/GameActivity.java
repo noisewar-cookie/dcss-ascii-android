@@ -95,6 +95,7 @@ import com.crawlmb.view.GridSkin;
 import com.crawlmb.view.QuickControlsView;
 import com.crawlmb.view.RegionRouter;
 import com.crawlmb.view.RegionTermView;
+import com.crawlmb.view.WindowVto;
 import com.crawlmb.view.HudButtonController;
 import com.crawlmb.view.SettingsButtonController;
 import com.crawlmb.view.ModalOverlayController;
@@ -262,10 +263,28 @@ public class GameActivity extends Activity
 	// each half to its own height (the keyboard-side half is shortened).
 	private View unfoldedMapHalf = null;
 	private View unfoldedPanelHalf = null;
+	// Consecutive frames cancelled by the layout-settle gate (see onCreate).
+	private int settleSkips = 0;
+	private static final int MAX_SETTLE_SKIPS = 3;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+
+		// Layout-settle gate: a requestLayout from an onGlobalLayout fit pass
+		// (font/reserve change) doesn't stop that frame's draw, so the pre-fit
+		// size flashes for a frame. Cancel such frames; capped so a view that
+		// re-requests every pass can't stall drawing.
+		WindowVto.of(getWindow().getDecorView()).addOnPreDrawListener(() -> {
+			if (getWindow().getDecorView().isLayoutRequested()
+					&& settleSkips < MAX_SETTLE_SKIPS)
+			{
+				settleSkips++;
+				return false;
+			}
+			settleSkips = 0;
+			return true;
+		});
 
 		// Log.d("Crawl", "onCreate");
 
@@ -419,14 +438,14 @@ public class GameActivity extends Activity
 				? unfoldedMapHalf : unfoldedPanelHalf;
 		if (half == null)
 			return;
-		keyboardView.getViewTreeObserver().addOnGlobalLayoutListener(
+		WindowVto.of(keyboardView).addOnGlobalLayoutListener(
 				new ViewTreeObserver.OnGlobalLayoutListener() {
 			@Override
 			public void onGlobalLayout() {
 				int kbHeight = keyboardView.getHeight();
 				if (kbHeight <= 0)
 					return;
-				keyboardView.getViewTreeObserver()
+				WindowVto.of(keyboardView)
 						.removeOnGlobalLayoutListener(this);
 				ViewGroup.MarginLayoutParams lp =
 						(ViewGroup.MarginLayoutParams) half.getLayoutParams();
@@ -2334,12 +2353,18 @@ public class GameActivity extends Activity
 		// Re-apply the edge-margin zoom each layout so the pivot tracks the
 		// panel size (keyboard show/hide, inset changes).
 		final View gamePanelScaleTarget = gamePanel;
-		gamePanel.getViewTreeObserver().addOnGlobalLayoutListener(
+		WindowVto.of(gamePanel).addOnGlobalLayoutListener(
 				new ViewTreeObserver.OnGlobalLayoutListener()
 				{
 					@Override
 					public void onGlobalLayout()
 					{
+						if (!gamePanelScaleTarget.isAttachedToWindow())
+						{
+							WindowVto.of(gamePanelScaleTarget)
+									.removeOnGlobalLayoutListener(this);
+							return;
+						}
 						applyEdgeMarginScale(gamePanelScaleTarget);
 					}
 				});
@@ -2447,14 +2472,20 @@ public class GameActivity extends Activity
 			final float mapBase = 1.0f;
 			final float hudBase = fontConfig.portraitHudFontScale;
 			final float msgBase = fontConfig.portraitMsgFontScale;
-			gamePanel.getViewTreeObserver().addOnGlobalLayoutListener(
+			WindowVto.of(gamePanel).addOnGlobalLayoutListener(
 					new ViewTreeObserver.OnGlobalLayoutListener()
 					{
 						@Override
 						public void onGlobalLayout()
 						{
-							if (splitRoot.getVisibility() != View.VISIBLE)
+							// Stale tree from a prior rebuild. Fits even while
+							// hidden so the first visible frame is final-size.
+							if (!gamePanel.isAttachedToWindow())
+							{
+								WindowVto.of(gamePanel)
+										.removeOnGlobalLayoutListener(this);
 								return;
+							}
 
 							// Reserve the bars' width + outer inset so the map
 							// stops flush against them (no-ops once stable).
@@ -2629,7 +2660,7 @@ public class GameActivity extends Activity
 		}
 
 		// Fallback map shrinker for UNSPECIFIED-height layouts.
-		gamePanel.getViewTreeObserver().addOnGlobalLayoutListener(
+		WindowVto.of(gamePanel).addOnGlobalLayoutListener(
 				new ViewTreeObserver.OnGlobalLayoutListener()
 				{
 					private int lastAvailable = -1;
@@ -2642,8 +2673,14 @@ public class GameActivity extends Activity
 					@Override
 					public void onGlobalLayout()
 					{
-						if (splitContainer.getVisibility() != View.VISIBLE)
+						// Stale tree from a prior rebuild. Fits even while
+						// hidden so the first visible frame is final-size.
+						if (!gamePanel.isAttachedToWindow())
+						{
+							WindowVto.of(gamePanel)
+									.removeOnGlobalLayoutListener(this);
 							return;
+						}
 
 						// Reserve the docked bars' width so the map fits and
 						// centers beside them (no-ops once stable).
@@ -2951,7 +2988,7 @@ public class GameActivity extends Activity
 				enterRepositionMode();
 				return;
 			}
-			screenLayout.getViewTreeObserver().addOnGlobalLayoutListener(
+			WindowVto.of(screenLayout).addOnGlobalLayoutListener(
 					new ViewTreeObserver.OnGlobalLayoutListener()
 					{
 						@Override
@@ -2959,7 +2996,7 @@ public class GameActivity extends Activity
 						{
 							if (screenLayout.getHeight() <= 0)
 								return;
-							screenLayout.getViewTreeObserver()
+							WindowVto.of(screenLayout)
 									.removeOnGlobalLayoutListener(this);
 							enterRepositionMode();
 						}
@@ -2970,7 +3007,7 @@ public class GameActivity extends Activity
 			return;
 		portraitRouter.setRepositionFrozen(true);
 		final View gamePanel = screenLayout.findViewById(gamePanelId);
-		screenLayout.getViewTreeObserver().addOnGlobalLayoutListener(
+		WindowVto.of(screenLayout).addOnGlobalLayoutListener(
 				new ViewTreeObserver.OnGlobalLayoutListener()
 				{
 					@Override
@@ -2980,7 +3017,7 @@ public class GameActivity extends Activity
 								|| portraitMsgView == null
 								|| portraitMsgView.getHeight() <= 0)
 							return;
-						screenLayout.getViewTreeObserver()
+						WindowVto.of(screenLayout)
 								.removeOnGlobalLayoutListener(this);
 						enterRepositionMode();
 					}
@@ -3083,7 +3120,7 @@ public class GameActivity extends Activity
 			enterGridOverlayMode();
 			return;
 		}
-		screenLayout.getViewTreeObserver().addOnGlobalLayoutListener(
+		WindowVto.of(screenLayout).addOnGlobalLayoutListener(
 				new ViewTreeObserver.OnGlobalLayoutListener()
 				{
 					@Override
@@ -3091,7 +3128,7 @@ public class GameActivity extends Activity
 					{
 						if (screenLayout.getHeight() <= 0)
 							return;
-						screenLayout.getViewTreeObserver()
+						WindowVto.of(screenLayout)
 								.removeOnGlobalLayoutListener(this);
 						enterGridOverlayMode();
 					}
@@ -3194,7 +3231,7 @@ public class GameActivity extends Activity
 			enterCenterlineMode();
 			return;
 		}
-		screenLayout.getViewTreeObserver().addOnGlobalLayoutListener(
+		WindowVto.of(screenLayout).addOnGlobalLayoutListener(
 				new ViewTreeObserver.OnGlobalLayoutListener()
 				{
 					@Override
@@ -3202,7 +3239,7 @@ public class GameActivity extends Activity
 					{
 						if (screenLayout.getHeight() <= 0)
 							return;
-						screenLayout.getViewTreeObserver()
+						WindowVto.of(screenLayout)
 								.removeOnGlobalLayoutListener(this);
 						enterCenterlineMode();
 					}
