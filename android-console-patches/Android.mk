@@ -208,6 +208,7 @@ CRAWLSRC = \
 	lev-pand.cc \
 	libutil.cc \
 	libandroid.cc \
+	android-recorder.cc \
 	loading-screen.cc \
 	lookup-help.cc \
 	los.cc \

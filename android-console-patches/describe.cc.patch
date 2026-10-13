@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/describe.cc b/crawl-ref/source/describe.cc
-index 0a381e125d..61fdd56a14 100644
+index 0a381e125d..df96a322b4 100644
 --- a/crawl-ref/source/describe.cc
 +++ b/crawl-ref/source/describe.cc
 @@ -267,7 +267,15 @@ static string _format_prop_desc(string prop_name, string prop_desc)
@@ -93,10 +93,10 @@ index 0a381e125d..61fdd56a14 100644
          description += make_stringf(
 -            "Base accuracy: %s  Base damage: %s  ",
 +            "Base accuracy: %s%sBase damage: %s%s",
++            inf,
++            stat_sep,
              inf,
 -            inf);
-+            stat_sep,
-+            inf,
 +            stat_sep);
      }
      else
@@ -216,7 +216,17 @@ index 0a381e125d..61fdd56a14 100644
  
      const string damage_string = spell_damage_string(spell);
      const string max_dam_string = spell_max_damage_string(spell);
-@@ -5580,6 +5646,24 @@ static void _attacks_table_row_throwing(const monster_info &mi,
+@@ -4729,7 +4795,8 @@ static void _get_spell_description(const spell_type spell,
+  * @param inf[out]  The spell's description is concatenated onto the end of
+  *                  inf.body.
+  */
+-#ifdef USE_TILE_LOCAL
++// Android: also used by the game recorder (android-recorder.cc).
++#if defined(USE_TILE_LOCAL) || defined(__ANDROID__)
+ void get_spell_desc(const spell_type spell, describe_info &inf)
+ {
+     string desc;
+@@ -5580,6 +5647,24 @@ static void _attacks_table_row_throwing(const monster_info &mi,
  static void _build_table_of_attacks(mon_attack_desc_info &di,
                                      ostringstream &result)
  {
@@ -241,7 +251,7 @@ index 0a381e125d..61fdd56a14 100644
      // Hopefully enough width for every possibility
      di.damage_width    = min(di.damage_width, (size_t) 31);
      di.bonus_width     = min(di.bonus_width, 69 - di.damage_width);
-@@ -5596,24 +5680,42 @@ static void _build_table_of_attacks(mon_attack_desc_info &di,
+@@ -5596,24 +5681,42 @@ static void _build_table_of_attacks(mon_attack_desc_info &di,
      // First, the table header
      result << padded_str(di.plural ? "Attacks" : "Attack",
                           di.attk_desc_width + 2)
@@ -291,7 +301,7 @@ index 0a381e125d..61fdd56a14 100644
      }
  }
  
-@@ -7333,6 +7435,44 @@ static string _format_data_label(int value, bool show_sign, bool is_percent,
+@@ -7333,6 +7436,44 @@ static string _format_data_label(int value, bool show_sign, bool is_percent,
                                   red ? "</red>" : "");
  }
  
@@ -336,7 +346,7 @@ index 0a381e125d..61fdd56a14 100644
  static void _maybe_note_armour_modifier(vector<vector<string>>& items,
                                          const Form& form,
                                          const int skill[3])
-@@ -7353,7 +7493,7 @@ static void _maybe_note_armour_modifier(vector<vector<string>>& items,
+@@ -7353,7 +7494,7 @@ static void _maybe_note_armour_modifier(vector<vector<string>>& items,
          change[i] = base_ac * mult[i] / 100;
  
      vector<string> labels;
@@ -345,7 +355,7 @@ index 0a381e125d..61fdd56a14 100644
  
      for (int i = 0; i < 3; ++i)
      {
-@@ -7403,7 +7543,7 @@ static void _maybe_note_airstrike_damage(vector<vector<string>>& items,
+@@ -7403,7 +7544,7 @@ static void _maybe_note_airstrike_damage(vector<vector<string>>& items,
      }
  
      vector<string> labels;
@@ -354,7 +364,7 @@ index 0a381e125d..61fdd56a14 100644
      labels.push_back(make_stringf("(%d-%d)d%d", data[0][0].num, data[0][1].num, data[0][0].size));
      labels.push_back(make_stringf("(%d-%d)d%d", data[1][0].num, data[1][1].num, data[1][0].size));
      labels.push_back(make_stringf("(%d-%d)d%d", data[2][0].num, data[2][1].num, data[2][0].size));
-@@ -7492,23 +7632,23 @@ static string _describe_talisman_form(transformation form_type)
+@@ -7492,23 +7633,23 @@ static string _describe_talisman_form(transformation form_type)
      items.push_back({"Skill", to_string(skill[0]), to_string(skill[1]), cur_skill});
  
      _maybe_populate_form_table(items, bind(&Form::mult_hp, form, 100, true, placeholders::_1), "HP", skill, -100, true, true, 1);
@@ -384,7 +394,7 @@ index 0a381e125d..61fdd56a14 100644
      }
      if (form_type == transformation::blade)
      {
-@@ -7516,27 +7656,27 @@ static string _describe_talisman_form(transformation form_type)
+@@ -7516,27 +7657,27 @@ static string _describe_talisman_form(transformation form_type)
          _maybe_populate_form_table(items, bind(&Form::get_effect_size, form, placeholders::_1), "Parry SH", skill, 0, false, false);
      }
      if (form_type == transformation::hive)
@@ -419,7 +429,7 @@ index 0a381e125d..61fdd56a14 100644
          _maybe_populate_form_table(items, bind(&Form::get_effect_chance, form, placeholders::_1), "Daze Power", skill, 0, false, false);
      }
  
-@@ -7569,11 +7709,22 @@ static string _describe_talisman_form(transformation form_type)
+@@ -7569,11 +7710,22 @@ static string _describe_talisman_form(transformation form_type)
      // Actually output the table
      ostringstream description;
  
@@ -444,7 +454,7 @@ index 0a381e125d..61fdd56a14 100644
      description << lines[1].to_colour_string() << "\n";
      description << lines[2].to_colour_string() << "\n";
      description << "<white>" << lines[3].to_colour_string() << "<lightgrey>\n";
-@@ -7582,7 +7733,13 @@ static string _describe_talisman_form(transformation form_type)
+@@ -7582,7 +7734,13 @@ static string _describe_talisman_form(transformation form_type)
          description << "\nClass: " << uppercase_first(holiness_description(form->holiness));
  
      // Now add various one-off bits of (generally non-scaling) data after that
@@ -459,7 +469,7 @@ index 0a381e125d..61fdd56a14 100644
      pr.AddRow();
  
      if (form->size != SIZE_CHARACTER)
-@@ -7677,7 +7834,7 @@ static string _describe_talisman_form(transformation form_type)
+@@ -7677,7 +7835,7 @@ static string _describe_talisman_form(transformation form_type)
                      << "\n";
      }
  

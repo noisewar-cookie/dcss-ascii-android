@@ -18,6 +18,7 @@
 package com.crawlmb.activity;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -57,6 +58,7 @@ import android.widget.Toast;
 import android.os.Handler;
 import android.os.Message;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -88,6 +90,9 @@ import com.crawlmb.NativeWrapper;
 import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.WindowCompatAdapter;
+import com.crawlmb.recording.Recordings;
+import com.crawlmb.recording.SqliteRecordingStore;
+import com.crawlmb.recording.ui.ReplayUi;
 import com.crawlmb.view.FoldStateController;
 import com.crawlmb.view.CenterlineController;
 import com.crawlmb.view.GridOverlayController;
@@ -119,6 +124,96 @@ import java.util.Map;
 
 public class GameActivity extends Activity
 {
+
+	// ---- Replay mode (com.crawlmb.recording.ui) ----
+	// Entered in place from the Replays list: the game stays parked in getch
+	// with its renderer unlinked, and the keyboard area hosts the controls.
+	public static final String EXTRA_REPLAY_PATH = "com.crawlmb.REPLAY_PATH";
+	static final int RECORDINGS_FINISHED = 2;
+	private String replayPath = null;
+	private ReplayUi replayUi = null;
+	private TerminalRenderer replayRenderer = null;
+
+	public boolean isReplayMode()
+	{
+		return replayPath != null;
+	}
+
+	/** CrawlDialog.StartGame in replay mode: renderer is measured, draw. */
+	public void startReplay()
+	{
+		if (replayUi == null || replayRenderer == null)
+			return;
+		synchronized (NativeWrapper.display_lock)
+		{
+			replayRenderer.onGameStart();
+		}
+		replayUi.onRendererReady();
+	}
+
+	private void enterReplay(String path)
+	{
+		if (isReplayMode())
+			return;
+		SqliteRecordingStore store = null;
+		try
+		{
+			store = SqliteRecordingStore.openForReplay(new File(path));
+			ActivityManager am =
+					(ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+			// ~9 MB per decoded chunk.
+			int chunks = Math.max(2, Math.min(6, am.getMemoryClass() / 48));
+			replayUi = new ReplayUi(this,
+					new ReplayUi.Host()
+					{
+						@Override
+						public void toast(String msg)
+						{
+							Toast.makeText(GameActivity.this, msg,
+									Toast.LENGTH_SHORT).show();
+						}
+
+						@Override
+						public void exitReplay()
+						{
+							GameActivity.this.exitReplay();
+						}
+					}, store, chunks);
+		}
+		catch (RuntimeException e)
+		{
+			Log.w("Crawl", "replay open failed", e);
+			if (store != null)
+				store.close();
+			Toast.makeText(this, "Couldn't open that replay.",
+					Toast.LENGTH_LONG).show();
+			return;
+		}
+		replayPath = path;
+		rebuildViews();
+	}
+
+	// Back from replay lands on the Replays list; Back there returns to the game.
+	private void exitReplay()
+	{
+		if (!isReplayMode())
+			return;
+		replayUi.release();
+		replayUi = null;
+		replayRenderer = null;
+		replayPath = null;
+		rebuildViews();
+		if (gameKeyListener != null && gameKeyListener.nativew != null)
+		{
+			final NativeWrapper nw = gameKeyListener.nativew;
+			View root = findViewById(android.R.id.content);
+			if (root != null)
+				root.post(nw::redrawScreen);
+		}
+		addExitCover();
+		startActivityForResult(new Intent(this, RecordingsActivity.class),
+				RECORDINGS_FINISHED);
+	}
 
 	static final int PREFERENCES_FINISHED = 1;
 	
@@ -370,7 +465,9 @@ public class GameActivity extends Activity
 		unfoldedActive = newUnfoldedActive;
 		halfActive = newHalfActive;
 		rebuildViews();
-		if (gameKeyListener != null && gameKeyListener.nativew != null)
+		// Replay repaints via StartGame -> startReplay once measured.
+		if (!isReplayMode() && gameKeyListener != null
+				&& gameKeyListener.nativew != null)
 		{
 			final NativeWrapper nw = gameKeyListener.nativew;
 			View root = findViewById(android.R.id.content);
@@ -548,17 +645,20 @@ public class GameActivity extends Activity
 	private void reopenPreferencesFromEditor() {
 		if (preferencesLaunching)
 			return;
-		if (editorExitCover == null)
-		{
-			editorExitCover = new View(this);
-			editorExitCover.setBackgroundColor(0xFF000000);
-			editorExitCover.setClickable(true);
-			((ViewGroup) getWindow().getDecorView()).addView(editorExitCover,
-					new ViewGroup.LayoutParams(
-							ViewGroup.LayoutParams.MATCH_PARENT,
-							ViewGroup.LayoutParams.MATCH_PARENT));
-		}
+		addExitCover();
 		openPreferences();
+	}
+
+	private void addExitCover() {
+		if (editorExitCover != null)
+			return;
+		editorExitCover = new View(this);
+		editorExitCover.setBackgroundColor(0xFF000000);
+		editorExitCover.setClickable(true);
+		((ViewGroup) getWindow().getDecorView()).addView(editorExitCover,
+				new ViewGroup.LayoutParams(
+						ViewGroup.LayoutParams.MATCH_PARENT,
+						ViewGroup.LayoutParams.MATCH_PARENT));
 	}
 
 	private void removeEditorExitCover() {
@@ -588,7 +688,22 @@ public class GameActivity extends Activity
 	@Override
 	protected void onActivityResult(int requestCode, int resultCode,
             Intent data) {
+        if (requestCode == RECORDINGS_FINISHED) {
+            if (resultCode == RESULT_OK && data != null
+                    && data.getStringExtra(EXTRA_REPLAY_PATH) != null)
+                enterReplay(data.getStringExtra(EXTRA_REPLAY_PATH));
+            return;
+        }
         if (requestCode == PREFERENCES_FINISHED) {
+            // Record toggle applies live (next keypress) on any return.
+            if (gameKeyListener != null && gameKeyListener.nativew != null)
+                gameKeyListener.nativew.requestRecording(
+                        Preferences.getRecordGames());
+            if (resultCode == RESULT_OK && data != null
+                    && data.getStringExtra(EXTRA_REPLAY_PATH) != null) {
+                enterReplay(data.getStringExtra(EXTRA_REPLAY_PATH));
+                return;
+            }
             if (resultCode == RESULT_OK) {
             	if(data.getBooleanExtra("reloadCrawl", false)) {
             		// Because of a change in preferences, crawl must be reloaded
@@ -753,14 +868,38 @@ public class GameActivity extends Activity
 
 			// Portrait-only: stored isScreenPortraitOrientation() pref ignored.
 			TerminalRenderer renderer = buildPortraitLayout(hapticFeedbackEnabled);
-			gameKeyListener.link(renderer, handler);
+			// Replay: live frames drop (null renderer) while the recording draws.
+			gameKeyListener.link(isReplayMode() ? null : renderer, handler);
+			replayRenderer = isReplayMode() ? renderer : null;
 
 			String keyboardType = Preferences.getPortraitKeyboard();
 
 			String[] keyboards = getResources().getStringArray(
 					R.array.virtualKeyboardValues);
 
-			if (keyboardType.equals(keyboards[1])) // Crawl Keyboard
+			if (isReplayMode())
+			{
+				// Controls take the Crawl keyboard's slot, fold half included.
+				View controls = replayUi.bind(renderer, screenLayout,
+						kbConfine ? kbHalfWidth : 0, kbHalfLeft);
+				portraitKeyboardView = controls;
+				boolean anchorAbove = !(unfoldedActive && kbConfine);
+				if (anchorAbove && gamePanelId != View.NO_ID)
+				{
+					View gamePanel = screenLayout.findViewById(gamePanelId);
+					if (gamePanel != null)
+					{
+						RelativeLayout.LayoutParams gp = (RelativeLayout.LayoutParams) gamePanel.getLayoutParams();
+						gp.addRule(RelativeLayout.ABOVE, controls.getId());
+						gamePanel.setLayoutParams(gp);
+					}
+				}
+				else if (unfoldedActive && kbConfine)
+					reserveKeyboardHalf(controls);
+				getWindow().setSoftInputMode(
+						WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+			}
+			else if (keyboardType.equals(keyboards[1])) // Crawl Keyboard
 			{
 				CrawlKeyboardWrapper virtualKeyboard = kbConfine
 						? new CrawlKeyboardWrapper(this, gameKeyListener,
@@ -839,7 +978,7 @@ public class GameActivity extends Activity
 			// DirectionalTouchView and win taps over the touch overlay. Empty
 			// container area passes touches through. Recreated each rebuild so
 			// they re-anchor to the HUD's current slot after a reposition.
-			if (portraitHudView != null)
+			if (portraitHudView != null && !isReplayMode())
 			{
 				IconConfig iconConfig = IconConfig.load(getAssets());
 				modalController = new ModalOverlayController(this, screenLayout,
@@ -2426,7 +2565,12 @@ public class GameActivity extends Activity
 		router.setFontConfig(fontConfig);
 		router.setShowLoadingMessage(getIntent().getBooleanExtra(
 				SplashActivity.EXTRA_ASSETS_FRESHLY_INSTALLED, false));
-		router.setRedrawRequester(() -> gameKeyListener.nativew.redrawScreen());
+		router.setRedrawRequester(() -> {
+			if (replayUi != null)
+				replayUi.redraw();
+			else
+				gameKeyListener.nativew.redrawScreen();
+		});
 		// If we're resuming with the Ctrl+P / startup message history popup
 		// still open on the C++ side, widen fullView's region to 48 rows now
 		// — before onResume's redrawScreen pushes drawPoint calls. Otherwise
@@ -3542,6 +3686,8 @@ public class GameActivity extends Activity
 		// push queued before it returns. The blocking drain is in onStop
 		// — blocking onPause stalls the incoming activity.
 		NativeWrapper.nativeSaveGame();
+		// Close the open recording chunk and commit (writes happen off-thread).
+		Recordings.flush();
 	}
 
 	@Override
@@ -3570,6 +3716,8 @@ public class GameActivity extends Activity
 		// onStop runs after the next screen is visible, so the wait is
 		// invisible in-app. 5s cap so a wedged provider can't ANR us.
 		CustomFolderSync.pushBlocking(this, 5000);
+		// Same reasoning for queued replay writes.
+		Recordings.drain(2000);
 	}
 
 	@Override
@@ -3646,6 +3794,13 @@ public class GameActivity extends Activity
 
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
+		// Replay swallows every non-system key; the parked game sees none.
+		if (replayUi != null) {
+			if (isSystemKey(keyCode))
+				return super.onKeyDown(keyCode, event);
+			replayUi.onKeyDown(keyCode, event);
+			return true;
+		}
 		if (modalController != null && modalController.isActive()) {
 			if (isSystemKey(keyCode))
 				return super.onKeyDown(keyCode, event);
@@ -3702,6 +3857,8 @@ public class GameActivity extends Activity
 
 	@Override
 	public boolean onKeyUp(int keyCode, KeyEvent event) {
+		if (replayUi != null)
+			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
 		if (modalController != null && modalController.isActive())
 			return isSystemKey(keyCode) ? super.onKeyUp(keyCode, event) : true;
 		if (repositionController != null && repositionController.isActive())
@@ -3756,4 +3913,15 @@ public class GameActivity extends Activity
         }
 	}
 
+
+	@Override
+	protected void onDestroy()
+	{
+		if (replayUi != null)
+		{
+			replayUi.release();
+			replayUi = null;
+		}
+		super.onDestroy();
+	}
 }

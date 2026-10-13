@@ -1279,3 +1279,36 @@ index 3c3bfb8186..572e32f1ba 100644
      vector<char> equip_chars;
      for (const formatted_string &bline
              : _get_overview_resistances(equip_chars, 640))
+@@ -2703,6 +3286,32 @@ string dump_overview_screen()
+     return text;
+ }
+ 
++// Android replay: the live % screen as colour-tagged text (dump_overview_screen
++// flattens colours and appends the ability list).
++string android_overview_screen()
++{
++    string text = _overview_screen_title(80);
++
++    for (const formatted_string &bline : _get_overview_stats())
++        text += bline.to_colour_string() + "\n";
++    text += "\n";
++
++    for (const formatted_string &bline : _get_overview_progress())
++        text += bline.to_colour_string() + "\n";
++    text += "\n";
++
++    vector<char> equip_chars;
++    for (const formatted_string &bline
++            : _get_overview_resistances(equip_chars, 80))
++    {
++        text += bline.to_colour_string() + "\n";
++    }
++    text += "\n";
++
++    text += _status_mut_rune_list(80);
++    return text;
++}
++
+ static string _rampage_passive_string()
+ {
+     string desc = "";

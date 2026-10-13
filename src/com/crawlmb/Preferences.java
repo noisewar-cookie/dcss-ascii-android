@@ -29,6 +29,7 @@ final public class Preferences
 	public static final String KEY_SKIPCONTROLSINFO = "crawl.skipcontrolsinfo";
 	public static final String KEY_WORDWRAP = "crawl.wordwrap";
 	public static final String KEY_NEWTURNMARK = "crawl.newturnmark";
+	public static final String KEY_RECORDGAMES = "crawl.recordgames";
 	public static final String KEY_COMPACTHUD = "crawl.compacthud";
 	// Compact-mode HP/MP vertical bars: which map edge they dock to, or off.
 	// Values SIDE_RIGHT (default) / SIDE_LEFT / SIDE_OFF.
@@ -308,6 +309,13 @@ final public class Preferences
 	public static boolean getNewturnMark()
 	{
 		return sharedPreferences.getBoolean(Preferences.KEY_NEWTURNMARK, true);
+	}
+
+	// Game recording (replay files). Read at gameStart; prefs changes apply
+	// live via NativeWrapper.requestRecording. Default off (opt-in).
+	public static boolean getRecordGames()
+	{
+		return sharedPreferences.getBoolean(Preferences.KEY_RECORDGAMES, false);
 	}
 
 	// Compact HUD mode. Frees three terminal HUD rows (title/vitals to native

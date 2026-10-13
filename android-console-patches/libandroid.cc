@@ -36,6 +36,7 @@
 #include "unicode.h"
 #include "view.h"
 #include "viewgeom.h"
+#include "android-recorder.h"
 
 // main.h was removed in 0.34.1; forward-declare main() directly
 extern int main(int argc, char *argv[]);
@@ -46,6 +47,7 @@ extern int main(int argc, char *argv[]);
 
 #include <time.h>
 #include <jni.h>
+#include <pthread.h>
 #include <android/log.h>
 // Log template is as follows:
 // __android_log_write(ANDROID_LOG_ERROR, "Tag", "Error here");//Or ANDROID_LOG_INFO, ...
@@ -187,6 +189,22 @@ static jmethodID NativeWrapper_setMapAnchor;
 static jmethodID NativeWrapper_updateHudTitle;
 static jmethodID NativeWrapper_updateHudVitals;
 static jmethodID NativeWrapper_updateHudBars;
+// Game recording (android-recorder.cc). byte[] payloads/text: DCSS text is
+// standard UTF-8, which NewStringUTF (modified UTF-8) can mangle.
+static jmethodID NativeWrapper_onRecSnapshot;
+static jmethodID NativeWrapper_onRecMessage;
+static jmethodID NativeWrapper_onRecMessageRollback;
+static jmethodID NativeWrapper_onRecGameEnd;
+
+// Game thread identity, captured in initGame. Recorder bridges use the cached
+// game-thread env, so they must drop calls arriving on any other thread
+// (e.g. autosave via nativeSaveGame on the UI thread).
+static pthread_t g_game_thread;
+static bool g_game_thread_set = false;
+static bool _on_game_thread()
+{
+	return g_game_thread_set && pthread_equal(pthread_self(), g_game_thread);
+}
 
 // Terminal stuff
 class TerminalChar //I guess this could be a struct.
@@ -258,7 +276,7 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 	NativeWrapper_getch = e->GetMethodID(NativeWrapperClass,
 		"getch", "(I)I");
 	NativeWrapper_frameUpdate = e->GetMethodID(NativeWrapperClass,
-		"frameUpdate", "([C[I[I)V");
+		"frameUpdate", "([C[I[III)V");
 	NativeWrapper_updateStatusLights = e->GetMethodID(NativeWrapperClass,
 		"updateStatusLights", "(Ljava/lang/String;[I)V");
 	NativeWrapper_setMessageHistoryMode = e->GetMethodID(NativeWrapperClass,
@@ -279,6 +297,14 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		"updateHudVitals", "(Ljava/lang/String;[I)V");
 	NativeWrapper_updateHudBars = e->GetMethodID(NativeWrapperClass,
 		"updateHudBars", "([I[I)V");
+	NativeWrapper_onRecSnapshot = e->GetMethodID(NativeWrapperClass,
+		"onRecSnapshot", "([B)V");
+	NativeWrapper_onRecMessage = e->GetMethodID(NativeWrapperClass,
+		"onRecMessage", "([BIIZ)V");
+	NativeWrapper_onRecMessageRollback = e->GetMethodID(NativeWrapperClass,
+		"onRecMessageRollback", "(I)V");
+	NativeWrapper_onRecGameEnd = e->GetMethodID(NativeWrapperClass,
+		"onRecGameEnd", "(I[B[B)V");
 
 	return NativeWrapper_fatal
 		&& NativeWrapper_getch
@@ -292,7 +318,11 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 		&& NativeWrapper_setMapAnchor
 		&& NativeWrapper_updateHudTitle
 		&& NativeWrapper_updateHudVitals
-		&& NativeWrapper_updateHudBars;
+		&& NativeWrapper_updateHudBars
+		&& NativeWrapper_onRecSnapshot
+		&& NativeWrapper_onRecMessage
+		&& NativeWrapper_onRecMessageRollback
+		&& NativeWrapper_onRecGameEnd;
 }
 
 // Called from the patched _replay_messages_core (message.cc) at entry and
@@ -427,6 +457,9 @@ extern "C"
 	void Java_com_crawlmb_NativeWrapper_nativeSaveGame( JNIEnv* env, jclass clz);
 	jboolean Java_com_crawlmb_NativeWrapper_gameInProgress( JNIEnv* env, jclass clz);
 	jstring Java_com_crawlmb_NativeWrapper_getCommandHelp( JNIEnv* env, jclass clz);
+	void Java_com_crawlmb_NativeWrapper_setRecordingEnabled( JNIEnv* env, jclass clz, jboolean enabled);
+	void Java_com_crawlmb_NativeWrapper_recResetSession( JNIEnv* env, jclass clz);
+	jbyteArray Java_com_crawlmb_NativeWrapper_getGameIdentity( JNIEnv* env, jclass clz);
 };
 
 // Called on the game thread from NativeWrapper.gameStart, before initGame.
@@ -524,6 +557,8 @@ jstring Java_com_crawlmb_NativeWrapper_getCommandHelp( JNIEnv* env, jclass clz)
 void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstring jDataDir, jstring jSettingsDir, jstring jMorgueDir)
 {
 	init_java_methods(env, object);
+	g_game_thread = pthread_self();
+	g_game_thread_set = true;
 	const char *dataDir = env->GetStringUTFChars(jDataDir, NULL);
 	const char *settingsDir = env->GetStringUTFChars(jSettingsDir, NULL);
 	const char *morgueDir = env->GetStringUTFChars(jMorgueDir, NULL);
@@ -584,7 +619,10 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
 // Row staging buffers are stack-local so the game-thread caller
 // (sendTerminalToScreen) and the UI-thread caller (refreshTerminal) can't
 // race over shared storage.
-static void _send_frame(JNIEnv* e, jobject obj)
+// turn/aut tag every frame for Screen<->Knowledge sync in recordings:
+// game-thread frames carry you.num_turns / you.elapsed_time (-1 outside a
+// game); UI-thread repaints pass -2 so the recorder skips them.
+static void _send_frame(JNIEnv* e, jobject obj, jint turn, jint aut)
 {
 	const int cells = MENU_LINES * COLS;
 	jcharArray jchars = e->NewCharArray(cells);
@@ -614,7 +652,8 @@ static void _send_frame(JNIEnv* e, jobject obj)
 		e->SetIntArrayRegion(jfg, i * COLS, COLS, rowFg);
 		e->SetIntArrayRegion(jbg, i * COLS, COLS, rowBg);
 	}
-	e->CallVoidMethod(obj, NativeWrapper_frameUpdate, jchars, jfg, jbg);
+	e->CallVoidMethod(obj, NativeWrapper_frameUpdate, jchars, jfg, jbg,
+		turn, aut);
 	if (e->ExceptionCheck())
 		e->ExceptionClear();
 	e->DeleteLocalRef(jchars);
@@ -628,7 +667,7 @@ void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object
 	// from the UI thread. May run before initGame: terminalWindow is
 	// zero-initialized then, which Java renders as blanks — don't deref
 	// crawl globals here.
-	_send_frame(env, object);
+	_send_frame(env, object, -2, -2);
 }
 
 void set_mouse_enabled(bool enabled)
@@ -647,7 +686,10 @@ void sendTerminalToScreen()
 		return;
 	}
 	dirtyTerminalChars.clear();
-	_send_frame(env, NativeWrapperObj);
+	const bool in_game = crawl_state.need_save;
+	_send_frame(env, NativeWrapperObj,
+		in_game ? (jint)you.num_turns : -1,
+		in_game ? (jint)you.elapsed_time : -1);
 }
 
 void android_send_status_lights(const char** texts, const int* colours,
@@ -1324,4 +1366,96 @@ bool in_headless_mode()
 void enter_headless_mode()
 {
     _headless_mode = true;
+}
+
+
+// ==========================================================================
+// Game recording bridges (see android-recorder.h). Game thread only.
+// ==========================================================================
+
+static jbyteArray _bytes(JNIEnv *e, const std::string &s)
+{
+	jbyteArray arr = e->NewByteArray((jsize)s.size());
+	if (arr && !s.empty())
+		e->SetByteArrayRegion(arr, 0, (jsize)s.size(),
+			reinterpret_cast<const jbyte*>(s.data()));
+	return arr;
+}
+
+void android_rec_emit_snapshot(const std::string &payload)
+{
+	if (!_on_game_thread() || env == NULL || NativeWrapperObj == NULL)
+		return;
+	jbyteArray arr = _bytes(env, payload);
+	if (!arr)
+	{
+		env->ExceptionClear();
+		return;
+	}
+	env->CallVoidMethod(NativeWrapperObj, NativeWrapper_onRecSnapshot, arr);
+	if (env->ExceptionCheck())
+		env->ExceptionClear();
+	env->DeleteLocalRef(arr);
+}
+
+void android_rec_emit_message(const std::string &tagged_text, int channel,
+	int turn, bool temporary)
+{
+	if (!_on_game_thread() || env == NULL || NativeWrapperObj == NULL)
+		return;
+	jbyteArray arr = _bytes(env, tagged_text);
+	if (!arr)
+	{
+		env->ExceptionClear();
+		return;
+	}
+	env->CallVoidMethod(NativeWrapperObj, NativeWrapper_onRecMessage, arr,
+		(jint)channel, (jint)turn, (jboolean)(temporary ? JNI_TRUE : JNI_FALSE));
+	if (env->ExceptionCheck())
+		env->ExceptionClear();
+	env->DeleteLocalRef(arr);
+}
+
+void android_rec_emit_message_rollback(int count)
+{
+	if (!_on_game_thread() || env == NULL || NativeWrapperObj == NULL)
+		return;
+	env->CallVoidMethod(NativeWrapperObj, NativeWrapper_onRecMessageRollback,
+		(jint)count);
+	if (env->ExceptionCheck())
+		env->ExceptionClear();
+}
+
+void android_rec_emit_game_end(int death_type, const std::string &reason,
+	const std::string &morgue_file)
+{
+	if (!_on_game_thread() || env == NULL || NativeWrapperObj == NULL)
+		return;
+	jbyteArray jr = _bytes(env, reason);
+	jbyteArray jm = _bytes(env, morgue_file);
+	if (jr && jm)
+		env->CallVoidMethod(NativeWrapperObj, NativeWrapper_onRecGameEnd,
+			(jint)death_type, jr, jm);
+	if (env->ExceptionCheck())
+		env->ExceptionClear();
+	if (jr) env->DeleteLocalRef(jr);
+	if (jm) env->DeleteLocalRef(jm);
+}
+
+void Java_com_crawlmb_NativeWrapper_setRecordingEnabled( JNIEnv* env1, jclass clz, jboolean enabled)
+{
+	android_rec_set_enabled(enabled == JNI_TRUE);
+}
+
+// Call only while the game thread is parked in getch (same rule as
+// getCommandHelp) or before initGame.
+void Java_com_crawlmb_NativeWrapper_recResetSession( JNIEnv* env1, jclass clz)
+{
+	android_rec_reset_session();
+}
+
+// Game identity JSON as UTF-8 bytes. Same threading rule as recResetSession.
+jbyteArray Java_com_crawlmb_NativeWrapper_getGameIdentity( JNIEnv* env1, jclass clz)
+{
+	return _bytes(env1, android_rec_game_identity_json());
 }

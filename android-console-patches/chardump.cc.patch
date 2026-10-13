@@ -1,0 +1,23 @@
+diff --git a/crawl-ref/source/chardump.cc b/crawl-ref/source/chardump.cc
+index 5c3679a..43da345 100644
+--- a/crawl-ref/source/chardump.cc
++++ b/crawl-ref/source/chardump.cc
+@@ -188,6 +188,18 @@ static dump_params _get_dump(bool full_id = false,
+     return par;
+ }
+ 
++#ifdef __ANDROID__
++// Game recording: render a single dump section exactly as the morgue would,
++// with full_id == false so only player knowledge is included. Used by
++// android-recorder.cc for examine panels (skills, spells, religion, ...).
++string android_chardump_section(const string &section)
++{
++    dump_params par(section, false, nullptr);
++    dump_section(par);
++    return par.text;
++}
++#endif
++
+ bool dump_char(const string &fname, bool quiet, bool full_id,
+                const scorefile_entry *se)
+ {

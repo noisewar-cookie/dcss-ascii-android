@@ -1,6 +1,8 @@
 package com.crawlmb;
 
 import com.crawlmb.keylistener.GameKeyListener;
+import com.crawlmb.recording.GameRecorder;
+import com.crawlmb.recording.Recordings;
 import com.crawlmb.view.TerminalRenderer;
 
 public class NativeWrapper
@@ -28,6 +30,12 @@ public class NativeWrapper
 	private int[] lastHudVitalsColours = null;
 	private int[] lastHudHp = null;
 	private int[] lastHudMp = null;
+
+	// Game recording (com.crawlmb.recording). Null until gameStart. Every
+	// display callback below is teed into it; it never takes display_lock.
+	private GameRecorder recorder = null;
+	// Pref toggled mid-game: applied on the game thread at the next key.
+	private volatile Boolean pendingRecord = null;
 
 	// Serializes all terminal-state access: taken by frameUpdate (game
 	// thread) and RegionRouter's UI-thread replay paths.
@@ -57,6 +65,10 @@ public class NativeWrapper
 		setNewturnMark(renderer.getNewturnMark());
 		setCompactHud(renderer.getCompactHud());
 		setMpBarColour(renderer.getMpBarColor());
+		recorder = Recordings.recorder(ctx);
+		pendingRecord = null;
+		applyRecording(Preferences.getRecordGames());
+		recorder.onLayout(currentLayout());
 		initGame(dataDir, settingsDir, morgueDir);
 	}
 
@@ -75,6 +87,8 @@ public class NativeWrapper
 		boolean skillsChanged = skillsCols > 0 && skillsCols != lastSkillsWrapCols;
 		if (!msgChanged && !proseChanged && !skillsChanged)
 			return;
+		if (recorder != null)
+			recorder.onLayout(currentLayout());
 		synchronized (display_lock)
 		{
 			if (skillsChanged)
@@ -110,6 +124,11 @@ public class NativeWrapper
 	// The '?' command keyhelp as a colour-tagged string, built from live
 	// keybindings. Call only while a game is in progress (thread parked in getch).
 	public static native String getCommandHelp();
+	// Game recording (android-recorder.cc). Call on the game thread or before
+	// initGame. getGameIdentity returns UTF-8 JSON bytes.
+	public static native void setRecordingEnabled(boolean enabled);
+	public static native void recResetSession();
+	public static native byte[] getGameIdentity();
 
 	public NativeWrapper(GameKeyListener s)
 	{
@@ -119,7 +138,18 @@ public class NativeWrapper
 	public int getch(final int v)
 	{
 		keyListener.gameThread.setFullyInitialized();
+		GameRecorder rec = recorder;
+		if (rec != null)
+			rec.onInputWait();
 		int key = keyListener.getKey(v);
+		Boolean p = pendingRecord;
+		if (p != null && rec != null)
+		{
+			pendingRecord = null;
+			applyRecording(p);
+		}
+		if (rec != null)
+			rec.onInput(key);
 		return key;
 	}
 
@@ -139,6 +169,7 @@ public class NativeWrapper
 		android.content.Context ctx = CrawlApplication.getAppContext();
 		if (ctx == null || savePath == null)
 			return;
+		Recordings.onGameSaved();
 		CustomFolderSync.pushSaveFileAsync(ctx, new java.io.File(savePath));
 	}
 
@@ -149,6 +180,37 @@ public class NativeWrapper
 	public void applyCompactHud(boolean enabled)
 	{
 		setCompactHud(enabled);
+		if (recorder != null)
+			recorder.onLayout(currentLayout());
+	}
+
+	// Live "Record games" toggle from prefs (UI thread). Native recorder state
+	// is game-thread only, so it's handed over via getch.
+	public void requestRecording(boolean on)
+	{
+		GameRecorder rec = recorder;
+		if (rec != null)
+			pendingRecord = rec.isEnabled() != on ? on : null;
+	}
+
+	private void applyRecording(boolean on)
+	{
+		recorder.setEnabled(on);
+		setRecordingEnabled(on);
+		if (on)
+			recResetSession();
+	}
+
+	// Layout the game is rendered with, recorded so replay can force it
+	// (RecFormat.LAYOUT_* order).
+	private int[] currentLayout()
+	{
+		TerminalRenderer r = renderer;
+		if (r == null)
+			return new int[7];
+		return new int[] { r.getMsgWrapCols(), r.getMsgRows(), r.getProseWrapCols(),
+				r.getSkillsWrapCols(), r.getCompactHud() ? 1 : 0, r.getNewturnMark() ? 1 : 0,
+				r.getMpBarColor() };
 	}
 
 	private native void refreshTerminal();
@@ -158,7 +220,7 @@ public class NativeWrapper
 		// Log.d(TAG, "onGameStart()");
 		synchronized (display_lock)
 		{
-			return renderer.onGameStart();
+			return renderer != null && renderer.onGameStart();
 		}
 	}
 
@@ -167,6 +229,8 @@ public class NativeWrapper
 		// Log.d(TAG, "increaseFontSzie()");
 		synchronized (display_lock)
 		{
+			if (renderer == null) // replay mode: renderer unlinked
+				return;
 			renderer.increaseFontSize();
 			resize();
 		}
@@ -196,6 +260,8 @@ public class NativeWrapper
 		// Log.d(TAG, "decreaseFontSize()");
 		synchronized (display_lock)
 		{
+			if (renderer == null) // replay mode: renderer unlinked
+				return;
 			renderer.decreaseFontSize();
 			resize();
 		}
@@ -218,6 +284,8 @@ public class NativeWrapper
 		// Log.d(TAG, "resize()");
 		synchronized (display_lock)
 		{
+			if (renderer == null)
+				return;
 			renderer.onGameStart();
 			refreshTerminal();
 		}
@@ -228,8 +296,14 @@ public class NativeWrapper
 	// Runs on the game thread (sendTerminalToScreen) or the UI thread
 	// (refreshTerminal). display_lock is held for the entire frame — diff,
 	// classification, routing and painting all see one consistent grid.
-	public void frameUpdate(char[] chars, int[] fg, int[] bg)
+	// turn/aut: game-thread frames carry you.num_turns / you.elapsed_time
+	// (-1 outside a game); UI-thread repaints (refreshTerminal) pass -2 and
+	// are not recorded.
+	public void frameUpdate(char[] chars, int[] fg, int[] bg, int turn, int aut)
 	{
+		GameRecorder rec = recorder;
+		if (rec != null && turn != -2)
+			rec.onFrame(chars, fg, bg, turn, aut);
 		synchronized (display_lock)
 		{
 			if (renderer != null)
@@ -239,6 +313,8 @@ public class NativeWrapper
 
 	public void updateStatusLights(String texts, int[] colours)
 	{
+		if (recorder != null)
+			recorder.onStatusLights(texts, colours);
 		synchronized (display_lock)
 		{
 			if (renderer != null)
@@ -251,6 +327,8 @@ public class NativeWrapper
 	// scrollable when it overflows.
 	public void updateHudTitle(String texts, int[] colours)
 	{
+		if (recorder != null)
+			recorder.onHudTitle(texts, colours);
 		synchronized (display_lock)
 		{
 			lastHudTitleTexts = texts;
@@ -262,6 +340,8 @@ public class NativeWrapper
 
 	public void updateHudVitals(String texts, int[] colours)
 	{
+		if (recorder != null)
+			recorder.onHudVitals(texts, colours);
 		synchronized (display_lock)
 		{
 			lastHudVitalsTexts = texts;
@@ -276,6 +356,8 @@ public class NativeWrapper
 	//  argbChangeNeg, argbEmpty]; mp is length 0 for species with no MP.
 	public void updateHudBars(int[] hp, int[] mp)
 	{
+		if (recorder != null)
+			recorder.onHudBars(hp, mp);
 		synchronized (display_lock)
 		{
 			lastHudHp = hp;
@@ -291,6 +373,8 @@ public class NativeWrapper
 	// to the full 48-row terminal.
 	public void setMessageHistoryMode(boolean active)
 	{
+		if (recorder != null)
+			recorder.onMessageHistoryMode(active);
 		synchronized (display_lock)
 		{
 			if (renderer != null)
@@ -301,6 +385,8 @@ public class NativeWrapper
 	// Called from libandroid.cc with the whole Ctrl+P log.
 	public void setMessageHistory(char[] chars, int[] fg, int[] bg)
 	{
+		if (recorder != null)
+			recorder.onMessageHistory(chars, fg, bg);
 		synchronized (display_lock)
 		{
 			if (renderer != null)
@@ -321,6 +407,8 @@ public class NativeWrapper
 	// classification while the user scrolls through the morgue text.
 	public void setCharacterLogMode(boolean active)
 	{
+		if (recorder != null)
+			recorder.onCharacterLogMode(active);
 		synchronized (display_lock)
 		{
 			if (renderer != null)
@@ -332,6 +420,8 @@ public class NativeWrapper
 	// 1-indexed player cell.
 	public void setMapAnchor(int col, int row)
 	{
+		if (recorder != null)
+			recorder.onMapAnchor(col, row);
 		synchronized (display_lock)
 		{
 			if (renderer != null)
@@ -374,4 +464,33 @@ public class NativeWrapper
 		}
 	}
 
+	// ---- Game recording callbacks from libandroid.cc (game thread) ----
+
+	public void onRecSnapshot(byte[] payload)
+	{
+		GameRecorder rec = recorder;
+		if (rec != null)
+			rec.onSnapshot(payload);
+	}
+
+	public void onRecMessage(byte[] utf8, int channel, int turn, boolean temporary)
+	{
+		GameRecorder rec = recorder;
+		if (rec != null)
+			rec.onMessage(utf8, channel, turn, temporary);
+	}
+
+	public void onRecMessageRollback(int count)
+	{
+		GameRecorder rec = recorder;
+		if (rec != null)
+			rec.onMessageRollback(count);
+	}
+
+	public void onRecGameEnd(int deathType, byte[] reason, byte[] morgueFile)
+	{
+		GameRecorder rec = recorder;
+		if (rec != null)
+			rec.onGameEnd(deathType, reason, morgueFile);
+	}
 }

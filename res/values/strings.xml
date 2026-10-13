@@ -102,6 +102,8 @@
     <string name="font_size_slider_default">Default</string>
     <string name="font_size_slider_format">%+d pt</string>
     <string name="preferences_newturnmark_title">New turn indicator</string>
+    <string name="preferences_recordgames_title">Record games</string>
+    <string name="preferences_recordgames_summary">Save a turn-by-turn replay of each game. Takes effect on your next move.</string>
     <string name="preferences_newturnmark_summary">Show turn markers in the message log. Restarts app.</string>
     <string name="preferences_bevelmargin_title">Edge margin</string>
     <string name="preferences_bevelmargin_summary">Margin adjustment (from screen edges). Reopen the game to apply.</string>
@@ -335,6 +337,13 @@
     <string name="font_import">Import…</string>
     <string name="font_import_failed">Could not open font picker.</string>
     <string name="font_imported">Imported %s</string>
+    <string name="recordings_title">Replays</string>
+    <string name="recordings_import">Import…</string>
+    <string name="recordings_col_name">Name</string>
+    <string name="recordings_col_size">Size</string>
+    <string name="recordings_col_saved">Last saved</string>
+    <string name="recordings_empty">No recordings yet. Turn on Record games in settings.</string>
+    <string name="recordings_win">Win</string>
     <string name="new_prefs_options_message">New options added!\n\nTwo-finger long press to see app menu.</string>
     <string name="font_delete">Delete font</string>
     <string name="font_delete_confirm_title">Remove font?</string>

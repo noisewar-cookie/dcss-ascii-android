@@ -104,6 +104,7 @@ public class PreferencesActivity extends PreferenceActivity implements
         setConfigFilePreferences();
 
         setCharacterFilesIntent();
+        setRecordingsIntent();
 
         setCustomizeKeyboardIntent();
 
@@ -220,6 +221,7 @@ public class PreferencesActivity extends PreferenceActivity implements
     private static final int REQ_BACKUP_CONFIG = 1005;
     private static final int REQ_RESTORE_CONFIG = 1006;
     private static final int REQ_PICK_CUSTOM_FOLDER = 1007;
+    private static final int REQ_RECORDINGS = 1008;
 
     private void addBackupRestorePreferences() {
         addZipPreference("configFiles", R.string.backup_config_files,
@@ -290,6 +292,16 @@ public class PreferencesActivity extends PreferenceActivity implements
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode != RESULT_OK || data == null)
             return;
+        if (requestCode == REQ_RECORDINGS) {
+            String path = data.getStringExtra(GameActivity.EXTRA_REPLAY_PATH);
+            if (path != null) {
+                Intent result = new Intent();
+                result.putExtra(GameActivity.EXTRA_REPLAY_PATH, path);
+                setResult(RESULT_OK, result);
+                finish();
+            }
+            return;
+        }
         Uri uri = data.getData();
         if (uri == null)
             return;
@@ -700,8 +712,14 @@ public class PreferencesActivity extends PreferenceActivity implements
         PreferenceCategory cat = (PreferenceCategory) findPreference(categoryKey);
         if (cat == null)
             return;
-        for (int i = 0; i < cat.getPreferenceCount(); i++)
-            guardPref(cat.getPreference(i));
+        for (int i = 0; i < cat.getPreferenceCount(); i++) {
+            Preference p = cat.getPreference(i);
+            // Recordings live in app-private storage, not the custom folder.
+            if ("recordings".equals(p.getKey())
+                    || "crawl.recordgames".equals(p.getKey()))
+                continue;
+            guardPref(p);
+        }
     }
 
     // setEnabled(false) greys out title and summary and blocks both
@@ -850,6 +868,19 @@ public class PreferencesActivity extends PreferenceActivity implements
         Intent characterFilesIntent = new Intent(this,
                 CharacterFilesActivity.class);
         characterFilesPreference.setIntent(characterFilesIntent);
+    }
+
+    // Watch picks come back here and are handed to GameActivity, which
+    // plays the replay in place.
+    private void setRecordingsIntent() {
+        Preference p = findPreference("recordings");
+        if (p != null)
+            p.setOnPreferenceClickListener(pref -> {
+                startActivityForResult(
+                        new Intent(this, RecordingsActivity.class),
+                        REQ_RECORDINGS);
+                return true;
+            });
     }
 
     private void setCustomizeKeyboardIntent() {

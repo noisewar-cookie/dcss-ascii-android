@@ -40,6 +40,12 @@ public class CrawlDialog
 			fatalAlert(state.getFatalError());
 			break;
 		case StartGame: // start crawl
+			if (activity.isReplayMode())
+			{
+				// Replay owns the renderer; the game resumes on exit's rebuild.
+				activity.startReplay();
+				break;
+			}
 			state.gameThread.send(GameThread.Request.StartGame);
 			break;
 		case OnGameExit: // crawl is exiting

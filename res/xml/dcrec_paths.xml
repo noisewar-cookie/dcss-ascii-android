@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider paths for sharing exported replays (Recordings.exportsDir). -->
+<paths>
+    <cache-path name="dcrec" path="dcrec-export/" />
+</paths>

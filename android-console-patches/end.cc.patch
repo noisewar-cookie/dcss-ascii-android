@@ -1,0 +1,30 @@
+diff --git a/crawl-ref/source/end.cc b/crawl-ref/source/end.cc
+index 8109dfd..f91245a 100644
+--- a/crawl-ref/source/end.cc
++++ b/crawl-ref/source/end.cc
+@@ -4,6 +4,9 @@
+  **/
+ 
+ #include "AppHdr.h"
++#ifdef __ANDROID__
++#include "android-recorder.h"
++#endif
+ 
+ #include "end.h"
+ 
+@@ -280,6 +283,15 @@ NORETURN void end_game(scorefile_entry &se)
+ 
+     const kill_method_type death_type = (kill_method_type) se.get_death_type();
+ 
++#ifdef __ANDROID__
++    // Game recording: final snapshot BEFORE identify_inventory() below, so
++    // the recording never shows identities the player didn't know.
++    android_rec_on_game_end(death_type,
++        se.death_description(scorefile_entry::DDV_NORMAL),
++        strip_filename_unsafe_chars(
++            morgue_name(you.your_name, se.get_death_time())) + ".txt");
++#endif
++
+     const bool non_death = death_type == KILLED_BY_QUITTING
+                         || death_type == KILLED_BY_WINNING
+                         || death_type == KILLED_BY_LEAVING;

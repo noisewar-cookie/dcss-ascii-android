@@ -1,8 +1,30 @@
 diff --git a/crawl-ref/source/main.cc b/crawl-ref/source/main.cc
-index 6ecd2665af..a5e81542b9 100644
+index 6ecd266..c1e8c21 100644
 --- a/crawl-ref/source/main.cc
 +++ b/crawl-ref/source/main.cc
-@@ -2478,9 +2478,11 @@ void process_command(command_type cmd, command_type prev_cmd)
+@@ -4,6 +4,9 @@
+ **/
+ 
+ #include "AppHdr.h"
++#ifdef __ANDROID__
++#include "android-recorder.h"
++#endif
+ 
+ #include <algorithm>
+ #include <cerrno>
+@@ -1254,6 +1257,11 @@ static void _input()
+         // Flush messages and display message window.
+         msgwin_new_cmd();
+ 
++#ifdef __ANDROID__
++        // Game recording: the player can act now (Knowledge track, kind CP).
++        android_rec_on_command_prompt();
++#endif
++
+         crawl_state.waiting_for_command = true;
+         c_input_reset(true);
+ 
+@@ -2478,9 +2486,11 @@ void process_command(command_type cmd, command_type prev_cmd)
          break;
  
  #ifdef __ANDROID__
@@ -14,3 +36,16 @@ index 6ecd2665af..a5e81542b9 100644
  
      case CMD_TOGGLE_KEYBOARD:
          jni_keyboard_control(2);
+@@ -2740,6 +2750,12 @@ void world_reacts()
+     // the loudest noise tracking for the next world_reacts cycle.
+     you.los_noise_last_turn = you.los_noise_level;
+     you.los_noise_level = 0;
++
++#ifdef __ANDROID__
++    // Game recording: one snapshot per elapsed world turn (kind TE), so
++    // rest/travel/explore delays are captured turn by turn.
++    android_rec_on_world_reacted();
++#endif
+ }
+ 
+ static command_type _get_next_cmd()

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Replays library row: name | size | saved time (or "Win"). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp"
+    android:minHeight="36dp">
+
+    <TextView
+        android:id="@+id/rec_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="#FFCCCCCC"
+        android:textSize="14sp"
+        android:singleLine="true"
+        android:ellipsize="middle" />
+
+    <TextView
+        android:id="@+id/rec_size"
+        android:layout_width="64dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:textColor="#FFAAAAAA"
+        android:textSize="13sp"
+        android:singleLine="true" />
+
+    <TextView
+        android:id="@+id/rec_saved"
+        android:layout_width="wrap_content"
+        android:paddingStart="8dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:textColor="#FFAAAAAA"
+        android:textSize="13sp"
+        android:singleLine="true" />
+
+</LinearLayout>

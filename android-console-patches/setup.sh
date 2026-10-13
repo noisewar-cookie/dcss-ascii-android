@@ -42,6 +42,8 @@ echo "Copying custom files into submodule source..."
 cp -v "$PATCHES_DIR/Android.mk" "$SOURCE_DIR/Android.mk"
 cp -v "$PATCHES_DIR/Application.mk" "$SOURCE_DIR/Application.mk"
 cp -v "$PATCHES_DIR/libandroid.cc" "$SOURCE_DIR/libandroid.cc"
+cp -v "$PATCHES_DIR/android-recorder.cc" "$SOURCE_DIR/android-recorder.cc"
+cp -v "$PATCHES_DIR/android-recorder.h" "$SOURCE_DIR/android-recorder.h"
 echo ""
 
 # ── Step 3: Apply patches to upstream files ──

@@ -430,6 +430,16 @@
             android:key="character_files"
             android:title="Character files...">
         </Preference>
+        <CheckBoxPreference
+            android:key="crawl.recordgames"
+            android:defaultValue="false"
+            android:title="@string/preferences_recordgames_title"
+            android:summary="@string/preferences_recordgames_summary" />
+        <Preference
+            android:key="recordings"
+            android:title="Replays..."
+            android:summary="Watch, share and import recorded games">
+        </Preference>
     </PreferenceCategory>
     <PreferenceCategory android:key="about" android:title="@string/about_category">
         <Preference
