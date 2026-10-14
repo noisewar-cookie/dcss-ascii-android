@@ -19,6 +19,7 @@
         android:background="@color/crawl_surface">
 
         <TextView
+            android:id="@+id/recordings_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -26,6 +27,19 @@
             android:textColor="#FFFFFFFF"
             android:textSize="18sp"
             android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_select_replays"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:minWidth="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:layout_marginEnd="8dp"
+            android:minHeight="0dp"
+            android:text="@string/recordings_select"
+            android:textSize="13sp"
+            style="@style/Widget.Crawl.Button" />
 
         <Button
             android:id="@+id/btn_import_replay"
@@ -98,5 +112,60 @@
         android:text="@string/recordings_empty"
         android:textColor="#FFCCCCCC"
         android:textSize="14sp" />
+
+    <!-- Select mode only. -->
+    <LinearLayout
+        android:id="@+id/recordings_select_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:background="@color/crawl_surface"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/btn_export_replays"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:minWidth="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:minHeight="0dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:text="@string/recordings_export"
+            android:textSize="13sp"
+            style="@style/Widget.Crawl.Button" />
+
+        <Button
+            android:id="@+id/btn_share_replays"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:minWidth="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:minHeight="0dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:text="@string/recordings_share"
+            android:textSize="13sp"
+            style="@style/Widget.Crawl.Button" />
+
+        <Button
+            android:id="@+id/btn_delete_replays"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:minWidth="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:minHeight="0dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:text="@string/recordings_delete"
+            android:textSize="13sp"
+            style="@style/Widget.Crawl.Button" />
+    </LinearLayout>
 
 </LinearLayout>

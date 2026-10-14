@@ -1,6 +1,10 @@
 package com.crawlmb.recording.ui;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.RelativeLayout;
@@ -64,6 +68,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	private int speedIdx = 2; // 1x
 	private int stepIdx = 0;
 	private SkipUnit skipUnit = SkipUnit.TURNS_10;
+	private final boolean[] ticksShown = TimelineBar.tickTypesAllShown();
 	private boolean wasPlayingBeforeScrub;
 	private boolean started;
 	private int lastNotifiedPos = -1;
@@ -118,6 +123,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 					: RelativeLayout.ALIGN_PARENT_RIGHT);
 		layout.addView(controls, lp);
 		controls.timeline().setData(controller.timeline(), controller.resolver());
+		controls.timeline().setTickTypesShown(ticksShown);
 		CrawlKeyboardWrapper kb = new CrawlKeyboardWrapper(ctx, new KeyListener()
 		{
 			@Override
@@ -280,6 +286,29 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 				? ReplayClock.Mode.TURN_TIME : ReplayClock.Mode.AS_PLAYED;
 		controller.setClockMode(m);
 		updateLabels();
+	}
+
+	@Override
+	public void onFilter()
+	{
+		CharSequence[] items = new CharSequence[TimelineBar.TICK_LABELS.length];
+		for (int t = 0; t < items.length; t++)
+		{
+			SpannableString sp = new SpannableString("\u25A0  " + TimelineBar.TICK_LABELS[t]);
+			sp.setSpan(new ForegroundColorSpan(TimelineBar.tickColour(t)), 0, 1,
+					Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+			items[t] = sp;
+		}
+		new AlertDialog.Builder(ctx)
+				.setTitle("Timeline events")
+				.setMultiChoiceItems(items, ticksShown, (d, which, checked) ->
+				{
+					ticksShown[which] = checked;
+					if (controls != null)
+						controls.timeline().setTickTypesShown(ticksShown);
+				})
+				.setPositiveButton("Done", null)
+				.show();
 	}
 
 	@Override

@@ -1,9 +1,11 @@
 package com.crawlmb.recording;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Screen-track encoder. Turns the stream of NativeWrapper display calls into
@@ -263,10 +265,14 @@ public final class FrameChunkEncoder
 
 	// ----------------------------------------------------------- side channels
 	// Always update the shadow; write an event only if a chunk is open (a new
-	// chunk's keyframe captures the shadow anyway).
+	// chunk's keyframe captures the shadow anyway). HUD calls repeat unchanged
+	// values on most refreshes, so those are dropped.
 
 	public void hudTitle(long tMs, String texts, int[] colours)
 	{
+		if (Objects.equals(texts, shadow.hudTitle)
+				&& Arrays.equals(colours, shadow.hudTitleColours))
+			return;
 		shadow.hudTitle = texts;
 		shadow.hudTitleColours = colours == null ? null : colours.clone();
 		if (!open) return;
@@ -276,6 +282,9 @@ public final class FrameChunkEncoder
 
 	public void hudVitals(long tMs, String texts, int[] colours)
 	{
+		if (Objects.equals(texts, shadow.hudVitals)
+				&& Arrays.equals(colours, shadow.hudVitalsColours))
+			return;
 		shadow.hudVitals = texts;
 		shadow.hudVitalsColours = colours == null ? null : colours.clone();
 		if (!open) return;
@@ -285,6 +294,8 @@ public final class FrameChunkEncoder
 
 	public void hudBars(long tMs, int[] hp, int[] mp)
 	{
+		if (Arrays.equals(hp, shadow.hudHp) && Arrays.equals(mp, shadow.hudMp))
+			return;
 		shadow.hudHp = hp == null ? null : hp.clone();
 		shadow.hudMp = mp == null ? null : mp.clone();
 		if (!open) return;
@@ -294,6 +305,9 @@ public final class FrameChunkEncoder
 
 	public void statusLights(long tMs, String texts, int[] colours)
 	{
+		if (Objects.equals(texts, shadow.statusLights)
+				&& Arrays.equals(colours, shadow.statusColours))
+			return;
 		shadow.statusLights = texts;
 		shadow.statusColours = colours == null ? null : colours.clone();
 		if (!open) return;

@@ -490,7 +490,11 @@ public class NativeWrapper
 	public void onRecGameEnd(int deathType, byte[] reason, byte[] morgueFile)
 	{
 		GameRecorder rec = recorder;
-		if (rec != null)
-			rec.onGameEnd(deathType, reason, morgueFile);
+		if (rec != null && rec.onGameEnd(deathType, reason, morgueFile))
+		{
+			android.content.Context ctx = CrawlApplication.getAppContext();
+			if (ctx != null)
+				Recordings.syncFinished(ctx);
+		}
 	}
 }

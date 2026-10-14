@@ -14,15 +14,21 @@ public final class RecFormat
 	 * Format version this build writes and the newest it can read.
 	 * v2: snapshot docs zlib-chained to the previous doc (Deflate FDICT).
 	 * v3: blobs may chain to an earlier blob (blobs.base); sessions.version.
+	 * v4: docs deflate against the last meta doc_dict_depth docs (absent = 1).
+	 * v5: map cells are arrays; visibility comes from the doc's los bitmap.
 	 * Bump on any change an older reader would misread; additive doc/meta
 	 * keys and columns that old readers can ignore don't need a bump.
 	 */
-	public static final int SCHEMA_VERSION = 3;
+	public static final int SCHEMA_VERSION = 5;
 	/** Oldest reader that can play what this build writes (meta min_reader_version). */
-	public static final int MIN_READER_VERSION = 3;
+	public static final int MIN_READER_VERSION = 5;
 	/** Screen-track chunk header byte; versioned apart from the container. */
 	public static final int CHUNK_VERSION = 2;
 	public static final String FILE_EXTENSION = ".dcrec";
+	/** Docs in a new file's deflate dictionary; a file keeps its own (meta). */
+	public static final int DOC_DICT_DEPTH = 6;
+	/** meta codec; a future codec must also raise MIN_READER_VERSION. */
+	public static final String CODEC_DEFLATE = "deflate";
 
 	// ---- Screen-track chunk event types (FrameChunkEncoder/Decoder) ----
 	public static final int CHUNK_MAGIC = 0x44434631; // "DCF1"

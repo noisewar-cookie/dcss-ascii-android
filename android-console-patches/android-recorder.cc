@@ -27,7 +27,11 @@
  *   "inv":[{s,n,q,d}],                     // slot, name, qty, desc hash
  *   "spells":[{n,d}], "abil":[{n,d}],
  *   "mons":[{x,y,n,att,dam,thr,vis,d}],
- *   "map":{level,key,w,h,cells:[{x,y,g,c,f,t,d,i,m}]}  // delta or keyframe
+ *   "map":{level,key,w,h,cells:[...],los:{x,y,w,b}}  // delta or keyframe
+ *       cell = [x,y,g,c,f,t,d,m] + optional [[itemName,hash],...], or [x,y]
+ *       when knowledge is lost. g/c are the in-sight glyph/colour; d is 0
+ *       until the cell is seen in LOS. los: w x w bitmap of visible cells
+ *       from (x,y), row-major, MSB first, as hex.
  * }
  */
 
@@ -205,6 +209,7 @@ struct PendingBlob
 struct LevelCache
 {
     vector<uint64_t> cell_fp;   // GXM * GYM, 0 = unknown
+    unordered_map<int, pair<int, H128>> desc; // idx -> (feat, LOS description)
     int snapshots_since_key = 0;
 };
 
@@ -217,8 +222,6 @@ struct Session
 
     // (object fp ^ player fp) -> blob hash
     unordered_map<uint64_t, H128> desc_cache;
-    // (level, pos, feat) -> feature description blob
-    unordered_map<uint64_t, H128> feat_cache;
     unordered_map<string, LevelCache> levels;
 
     uint64_t last_player_fp = 0;
@@ -643,8 +646,6 @@ void build_map(ostringstream &o, const string &level, uint64_t pfp)
         lc.cell_fp.assign(GXM * GYM, 0);
     lc.snapshots_since_key = key ? 0 : lc.snapshots_since_key + 1;
 
-    const uint64_t level_fp = Fp().add(level).get();
-
     o << ",\"map\":{";
     jkv(o, "level", level, false);
     jkv(o, "key", key ? 1 : 0);
@@ -664,21 +665,23 @@ void build_map(ostringstream &o, const string &level, uint64_t pfp)
             if (lc.cell_fp[idx] != 0)
             {
                 // Knowledge lost (e.g. amnesia): emit a clear.
-                o << (first ? "" : ",") << "{\"x\":" << p.x << ",\"y\":"
-                  << p.y << ",\"clr\":1}";
+                o << (first ? "" : ",") << '[' << p.x << ',' << p.y << ']';
                 first = false;
                 lc.cell_fp[idx] = 0;
+                lc.desc.erase(idx);
             }
             continue;
         }
 
-        const cglyph_t gl = get_cell_glyph(p);
+        // Always the in-sight colours: visibility goes in "los" instead, so
+        // walking doesn't re-send every cell entering or leaving view.
+        const cglyph_t gl = get_cell_glyph(p, false, 1);
         const dungeon_feature_type feat = cell.feat();
         vector<pair<string, H128>> items;
         bool more = false;
         cell_items(p, cell, pfp, items, more);
 
-        const uint32_t fl = cell.flags & (MAP_SEEN_FLAG | MAP_VISIBLE_FLAG
+        const uint32_t fl = cell.flags & (MAP_SEEN_FLAG
                                           | MAP_MAGIC_MAPPED_FLAG
                                           | MAP_DETECTED_ITEM
                                           | MAP_MORE_ITEMS);
@@ -687,51 +690,44 @@ void build_map(ostringstream &o, const string &level, uint64_t pfp)
         for (const auto &it : items)
             f.add(it.first);
         const uint64_t cfp = f.get() | 1; // never 0
-        if (!key && lc.cell_fp[idx] == cfp)
+
+        // Full x-look description, captured only in LOS (an unseen terrain
+        // change can't leak) and kept while the remembered feat is the same.
+        auto dit = lc.desc.find(idx);
+        if (dit != lc.desc.end() && dit->second.first != (int)feat)
+        {
+            lc.desc.erase(dit);
+            dit = lc.desc.end();
+        }
+        bool new_desc = false;
+        if (dit == lc.desc.end() && cell.visible())
+        {
+            describe_info inf;
+            get_feature_desc(p, inf, false);
+            const H128 dh = put_blob(BLOB_FEAT_DESC, process_description(inf));
+            dit = lc.desc.emplace(idx, make_pair((int)feat, dh)).first;
+            new_desc = true;
+        }
+        if (!key && lc.cell_fp[idx] == cfp && !new_desc)
             continue;
         lc.cell_fp[idx] = cfp;
 
         // Short feature name for any known cell.
         const H128 tname = put_blob(BLOB_FEAT_NAME,
                                     feature_description(feat));
-        // Full x-look feature description only for cells in LOS, cached per
-        // (level, pos, feat). Remembered-only cells get just the name, so a
-        // terrain change the player hasn't seen can't leak through.
-        string desc_hex;
-        if (cell.visible())
-        {
-            const uint64_t fk = Fp().add(level_fp).add(p.x).add(p.y)
-                                    .add((uint64_t)feat).get();
-            auto it = g.feat_cache.find(fk);
-            H128 dh;
-            if (it != g.feat_cache.end())
-                dh = it->second;
-            else
-            {
-                describe_info inf;
-                get_feature_desc(p, inf, false);
-                dh = put_blob(BLOB_FEAT_DESC, process_description(inf));
-                if (g.feat_cache.size() > k_cache_cap)
-                    g.feat_cache.clear();
-                g.feat_cache[fk] = dh;
-            }
-            desc_hex = hex(dh);
-        }
 
-        o << (first ? "" : ",") << '{';
-        jkv(o, "x", p.x, false);
-        jkv(o, "y", p.y);
-        jkv(o, "g", (long long)gl.ch);
-        jkv(o, "c", gl.col);
-        jkv(o, "f", fl);
-        jkv(o, "t", hex(tname));
-        if (!desc_hex.empty())
-            jkv(o, "d", desc_hex);
-        if (more)
-            jkv(o, "m", 1);
+        o << (first ? "" : ",") << '[' << p.x << ',' << p.y << ','
+          << (long long)gl.ch << ',' << (int)gl.col << ',' << fl << ',';
+        jstr(o, hex(tname));
+        o << ',';
+        if (dit != lc.desc.end())
+            jstr(o, hex(dit->second.second));
+        else
+            o << '0';
+        o << ',' << (more ? 1 : 0);
         if (!items.empty())
         {
-            o << ",\"i\":[";
+            o << ",[";
             for (size_t k = 0; k < items.size(); ++k)
             {
                 o << (k ? "," : "") << '[';
@@ -742,10 +738,34 @@ void build_map(ostringstream &o, const string &level, uint64_t pfp)
             }
             o << ']';
         }
-        o << '}';
+        o << ']';
         first = false;
     }
-    o << "]}";
+    o << ']';
+
+    const int w = 2 * LOS_RADIUS + 1;
+    const coord_def c0 = you.pos() - coord_def(LOS_RADIUS, LOS_RADIUS);
+    string bits;
+    int acc = 0, n = 0;
+    for (int dy = 0; dy < w; ++dy)
+        for (int dx = 0; dx < w; ++dx)
+        {
+            const coord_def q = c0 + coord_def(dx, dy);
+            acc = acc << 1 | (in_bounds(q) && env.map_knowledge(q).visible());
+            if (++n % 4 == 0)
+            {
+                bits += "0123456789abcdef"[acc];
+                acc = 0;
+            }
+        }
+    if (n % 4)
+        bits += "0123456789abcdef"[acc << (4 - n % 4)];
+    o << ",\"los\":{";
+    jkv(o, "x", c0.x, false);
+    jkv(o, "y", c0.y);
+    jkv(o, "w", w);
+    jkv(o, "b", bits);
+    o << "}}";
 }
 
 // --------------------------------------------------------------------------

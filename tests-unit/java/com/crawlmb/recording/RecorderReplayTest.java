@@ -74,15 +74,15 @@ public class RecorderReplayTest
 	static String mapKey(String level)
 	{
 		return "\"map\":{\"level\":\"" + level + "\",\"key\":1,\"w\":80,\"h\":70,\"cells\":["
-				+ "{\"x\":1,\"y\":1,\"g\":46,\"c\":7,\"f\":1,\"t\":\"" + TestSupport.hash(5) + "\"},"
-				+ "{\"x\":2,\"y\":1,\"g\":35,\"c\":7,\"f\":1,\"t\":\"" + TestSupport.hash(6) + "\"}]}";
+				+ "[1,1,46,7,1,\"" + TestSupport.hash(5) + "\",0,0],"
+				+ "[2,1,35,7,1,\"" + TestSupport.hash(6) + "\",0,0]]}";
 	}
 
 	static String mapDelta(String level, int x)
 	{
 		return "\"map\":{\"level\":\"" + level + "\",\"key\":0,\"w\":80,\"h\":70,\"cells\":["
-				+ "{\"x\":" + x + ",\"y\":2,\"g\":46,\"c\":7,\"f\":1,\"t\":\"" + TestSupport.hash(5)
-				+ "\",\"i\":[[\"a dagger\",\"" + TestSupport.hash(7) + "\"]]}]}";
+				+ "[" + x + ",2,46,7,1,\"" + TestSupport.hash(5)
+				+ "\",0,0,[[\"a dagger\",\"" + TestSupport.hash(7) + "\"]]]]}";
 	}
 
 	@Test

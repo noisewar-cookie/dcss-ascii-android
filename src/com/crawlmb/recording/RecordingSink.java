@@ -15,12 +15,15 @@ public interface RecordingSink
 		public final int nextFrame;
 		/** Highest in-game turn already recorded, -1 if none. */
 		public final int lastTurn;
+		/** The file's doc dictionary depth; appended docs must match it. */
+		public final int docDictDepth;
 
-		public OpenResult(boolean created, int nextFrame, int lastTurn)
+		public OpenResult(boolean created, int nextFrame, int lastTurn, int docDictDepth)
 		{
 			this.created = created;
 			this.nextFrame = nextFrame;
 			this.lastTurn = lastTurn;
+			this.docDictDepth = docDictDepth;
 		}
 	}
 

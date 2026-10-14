@@ -79,6 +79,27 @@ public class FrameCodecTest
 	}
 
 	@Test
+	public void repeatedHudValuesAreDropped()
+	{
+		FrameChunkEncoder enc = new FrameChunkEncoder(TestSupport.ROWS, TestSupport.COLS);
+		TestSupport.FakeScreen scr = new TestSupport.FakeScreen(1);
+		enc.hudVitals(0, "HP 1/2", new int[] { 1 });
+		enc.frame(0, 0, 0, 0, scr.c, scr.fg, scr.bg);
+		enc.frame(1, 10, 0, 0, scr.c, scr.fg, scr.bg);
+		int plain = enc.flush().raw.length;
+		enc.frame(2, 20, 0, 0, scr.c, scr.fg, scr.bg);
+		enc.hudVitals(25, "HP 1/2", new int[] { 1 });
+		enc.hudBars(25, null, null);
+		enc.frame(3, 30, 0, 0, scr.c, scr.fg, scr.bg);
+		assertEquals("repeat should add nothing", plain, enc.flush().raw.length);
+		enc.frame(4, 40, 0, 0, scr.c, scr.fg, scr.bg);
+		enc.hudVitals(45, "HP 2/2", new int[] { 1 });
+		enc.frame(5, 50, 0, 0, scr.c, scr.fg, scr.bg);
+		List<FrameChunkDecoder.DecodedFrame> dec = FrameChunkDecoder.decode(enc.flush().raw);
+		assertEquals("HP 2/2", dec.get(1).state.hudVitals);
+	}
+
+	@Test
 	public void rejectsCorruptChunks()
 	{
 		FrameChunkEncoder enc = new FrameChunkEncoder(TestSupport.ROWS, TestSupport.COLS);

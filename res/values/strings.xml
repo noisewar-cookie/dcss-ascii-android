@@ -347,6 +347,11 @@
     <string name="recordings_col_saved">Last saved</string>
     <string name="recordings_empty">No recordings yet. Turn on Record games in settings.</string>
     <string name="recordings_win">Win</string>
+    <string name="recordings_select">Select Files</string>
+    <string name="recordings_done">Done</string>
+    <string name="recordings_export">Export…</string>
+    <string name="recordings_share">Share</string>
+    <string name="recordings_delete">Delete</string>
     <string name="new_prefs_options_message">New options added!\n\nTwo-finger long press to see app menu.</string>
     <string name="font_delete">Delete font</string>
     <string name="font_delete_confirm_title">Remove font?</string>

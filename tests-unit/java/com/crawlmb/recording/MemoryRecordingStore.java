@@ -1,6 +1,7 @@
 package com.crawlmb.recording;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -58,14 +59,16 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 			int lastTurn = -1;
 			for (Frame f : frames)
 				lastTurn = Math.max(lastTurn, f.turn);
-			return new OpenResult(false, next, lastTurn);
+			return new OpenResult(false, next, lastTurn,
+					Integer.parseInt(meta.getOrDefault("doc_dict_depth", "1")));
 		}
 		opened = true;
 		meta.put("schema_version", Integer.toString(RecFormat.SCHEMA_VERSION));
 		meta.put("min_reader_version", Integer.toString(RecFormat.MIN_READER_VERSION));
 		meta.put("identity", id.json);
 		meta.put("app_version", appVersion);
-		return new OpenResult(true, 0, -1);
+		meta.put("doc_dict_depth", Integer.toString(RecFormat.DOC_DICT_DEPTH));
+		return new OpenResult(true, 0, -1, RecFormat.DOC_DICT_DEPTH);
 	}
 
 	@Override
@@ -225,14 +228,19 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 	@Override
 	public String snapshotDoc(long id)
 	{
-		return new String(docBytes((int) id), StandardCharsets.UTF_8);
-	}
-
-	private byte[] docBytes(int id)
-	{
-		byte[] z = snaps.get(id - 1).doc;
-		return Deflate.inflate(z, Deflate.DEFAULT_MAX_INFLATED,
-				Deflate.usesDictionary(z) ? docBytes(id - 1) : null);
+		int depth = Integer.parseInt(meta.getOrDefault("doc_dict_depth", "1"));
+		int start = (int) id - 1;
+		while (Deflate.usesDictionary(snaps.get(start).doc))
+			start--;
+		ArrayDeque<byte[]> window = new ArrayDeque<>();
+		for (int i = start; i < id; i++)
+		{
+			window.addLast(Deflate.inflate(snaps.get(i).doc, Deflate.DEFAULT_MAX_INFLATED,
+					Deflate.windowDict(window)));
+			if (window.size() > depth)
+				window.removeFirst();
+		}
+		return new String(window.peekLast(), StandardCharsets.UTF_8);
 	}
 
 	@Override

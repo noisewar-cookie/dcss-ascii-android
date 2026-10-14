@@ -30,7 +30,8 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 	private final boolean readOnly;
 	private List<int[]> abandonedCache; // reader side
 	private long lastDocId = -1; // reader side: chained-doc cache
-	private byte[] lastDoc;
+	private ArrayDeque<byte[]> lastWindow = new ArrayDeque<>(); // docs up to lastDocId
+	private int docDictDepth; // 0 until read from meta
 	private Boolean blobBases; // reader side: pre-v3 files lack blobs.base
 	// Reader side: recent blob texts, so stepping through a base chain stays cheap.
 	private final Map<String, byte[]> blobCache = new LinkedHashMap<String, byte[]>(64, 0.75f, true)
@@ -152,16 +153,18 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 			long lastTurn = longQuery("SELECT IFNULL(MAX(turn), -1) FROM frames WHERE turn >= 0");
 			setMeta("app_version_last", appVersion);
 			setVersions();
-			return new OpenResult(false, (int) next, (int) lastTurn);
+			return new OpenResult(false, (int) next, (int) lastTurn, fileDocDictDepth());
 		}
 		setVersions();
+		setMeta("codec", RecFormat.CODEC_DEFLATE);
+		setMeta("doc_dict_depth", Integer.toString(RecFormat.DOC_DICT_DEPTH));
 		setMeta("identity", id.json);
 		setMeta("dcss_version", id.dcssVersion);
 		setMeta("app_version", appVersion);
 		setMeta("created_utc", Long.toString(System.currentTimeMillis()));
 		setMeta("grid", TerminalSize.ROWS + "x" + TerminalSize.COLS);
 		setMeta("layout", join(layout));
-		return new OpenResult(true, 0, -1);
+		return new OpenResult(true, 0, -1, RecFormat.DOC_DICT_DEPTH);
 	}
 
 	@Override
@@ -405,10 +408,12 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 	{
 		if (id != lastDocId)
 		{
-			// A chained doc (FDICT) inflates against the previous row's doc;
-			// walk back to the chain start or the cached doc.
+			// A chained doc (FDICT) inflates against the previous docDictDepth
+			// rows' docs; walk back to the chain start or the cached doc.
+			if (docDictDepth == 0)
+				docDictDepth = fileDocDictDepth();
 			Deque<byte[]> chain = new ArrayDeque<>();
-			byte[] dict = null;
+			ArrayDeque<byte[]> window = new ArrayDeque<>();
 			for (long cur = id; ; )
 			{
 				byte[] z = rawDoc(cur);
@@ -420,16 +425,30 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 				cur = longQuery("SELECT IFNULL(MAX(id), -1) FROM snapshots WHERE id < " + cur);
 				if (cur == lastDocId)
 				{
-					dict = lastDoc;
+					window = new ArrayDeque<>(lastWindow);
 					break;
 				}
 			}
 			for (byte[] z : chain)
-				dict = Deflate.inflate(z, SnapshotPayload.MAX_DOC_BYTES, dict);
+			{
+				if (!Deflate.usesDictionary(z))
+					window.clear();
+				window.addLast(Deflate.inflate(z, SnapshotPayload.MAX_DOC_BYTES,
+						Deflate.windowDict(window)));
+				if (window.size() > docDictDepth)
+					window.removeFirst();
+			}
 			lastDocId = id;
-			lastDoc = dict;
+			lastWindow = window;
 		}
-		return new String(lastDoc, StandardCharsets.UTF_8);
+		return new String(lastWindow.peekLast(), StandardCharsets.UTF_8);
+	}
+
+	// Files from before doc_dict_depth chained to one doc.
+	private int fileDocDictDepth()
+	{
+		int d = intMeta("doc_dict_depth");
+		return d > 0 && d <= 64 ? d : 1;
 	}
 
 	private byte[] rawDoc(long id)

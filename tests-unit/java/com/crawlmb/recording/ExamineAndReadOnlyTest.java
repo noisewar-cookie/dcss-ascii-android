@@ -15,11 +15,13 @@ public class ExamineAndReadOnlyTest
 				+ "\"view\":{\"cx\":10,\"cy\":10,\"hx\":16,\"hy\":8,\"vx\":1,\"vy\":1,\"tx\":1,\"ty\":1,\"sx\":33,\"sy\":17},"
 				+ "\"mons\":[{\"x\":11,\"y\":10,\"n\":\"a goblin\",\"vis\":1,\"d\":\"" + TestSupport.hash(900) + "\"}],"
 				+ "\"map\":{\"level\":\"D:1\",\"key\":1,\"w\":80,\"h\":70,\"cells\":["
-				+ "{\"x\":10,\"y\":10,\"g\":64,\"c\":7,\"f\":66,\"t\":\"" + TestSupport.hash(901) + "\"},"
-				+ "{\"x\":11,\"y\":10,\"g\":103,\"c\":7,\"f\":66,\"t\":\"" + TestSupport.hash(901) + "\"},"
-				+ "{\"x\":12,\"y\":10,\"g\":41,\"c\":7,\"f\":66,\"t\":\"" + TestSupport.hash(901) + "\",\"d\":\""
-				+ TestSupport.hash(902) + "\",\"i\":[[\"a dagger\",\"" + TestSupport.hash(903) + "\"]]},"
-				+ "{\"x\":10,\"y\":11,\"g\":35,\"c\":7,\"f\":2,\"t\":\"" + TestSupport.hash(904) + "\"}]}";
+				+ "[10,10,64,7,2,\"" + TestSupport.hash(901) + "\",0,0],"
+				+ "[11,10,103,7,2,\"" + TestSupport.hash(901) + "\",0,0],"
+				+ "[12,10,41,7,2,\"" + TestSupport.hash(901) + "\",\"" + TestSupport.hash(902)
+				+ "\",0,[[\"a dagger\",\"" + TestSupport.hash(903) + "\"]]],"
+				+ "[10,11,35,7,2,\"" + TestSupport.hash(904) + "\",0,0]],"
+				+ TestSupport.los(2, 2, 17, new int[] { 10, 10 }, new int[] { 11, 10 },
+						new int[] { 12, 10 }) + "}";
 		h.rec.onSnapshot(TestSupport.payload(TestSupport.doc("CP", 0, 0, "D:1", 20, 20, 1, view),
 				new String[][] {
 						{ TestSupport.hash(900), "3", "A goblin.\nA small ugly creature." },

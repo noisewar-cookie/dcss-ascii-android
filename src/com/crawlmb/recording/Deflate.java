@@ -1,6 +1,8 @@
 package com.crawlmb.recording;
 
 import java.io.ByteArrayOutputStream;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
@@ -9,6 +11,7 @@ import java.util.zip.Inflater;
 public final class Deflate
 {
 	public static final int DEFAULT_MAX_INFLATED = 64 * 1024 * 1024;
+	private static final int WINDOW = 32 * 1024; // deflate can't reach further back
 
 	private Deflate() {}
 
@@ -37,6 +40,18 @@ public final class Deflate
 		{
 			d.end();
 		}
+	}
+
+	/** Preset dictionary from consecutive docs, oldest first: their last 32 KB. */
+	public static byte[] windowDict(Collection<byte[]> docs)
+	{
+		if (docs.isEmpty())
+			return null;
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		for (byte[] d : docs)
+			out.write(d, 0, d.length);
+		byte[] all = out.toByteArray();
+		return all.length <= WINDOW ? all : Arrays.copyOfRange(all, all.length - WINDOW, all.length);
 	}
 
 	public static byte[] inflate(byte[] in)

@@ -4,7 +4,9 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 
+import com.crawlmb.CustomFolderSync;
 import com.crawlmb.NativeWrapper;
+import com.crawlmb.Paths;
 import com.crawlmb.view.TerminalRenderer;
 
 import java.io.File;
@@ -20,6 +22,7 @@ public final class Recordings
 {
 	private static RecWriterThread writer;
 	private static GameRecorder recorder;
+	private static volatile File current; // last file the writer opened
 
 	private Recordings() {}
 
@@ -45,7 +48,7 @@ public final class Recordings
 		{
 			final File d = dir(ctx.getApplicationContext());
 			writer = new RecWriterThread(
-					id -> SqliteRecordingStore.openForWriting(fileFor(d, id)),
+					id -> SqliteRecordingStore.openForWriting(current = fileFor(d, id)),
 					t -> android.util.Log.w("dcrec", "writer error", t));
 			recorder = new GameRecorder(writer, new GameRecorder.NativeBridge()
 			{
@@ -111,6 +114,27 @@ public final class Recordings
 		}
 		if (w != null)
 			w.drain(timeoutMs);
+	}
+
+	/** After a recorded game ends: mirror a clean copy to the custom folder's replays/. */
+	public static void syncFinished(Context ctx)
+	{
+		RecWriterThread w;
+		synchronized (Recordings.class)
+		{
+			w = writer;
+		}
+		if (w == null || !Paths.isCustomMode(ctx))
+			return;
+		final Context app = ctx.getApplicationContext();
+		// Queued behind onGameEnd's commit, so the copy includes the end meta.
+		w.submit(s ->
+		{
+			File f = current;
+			if (f != null)
+				CustomFolderSync.pushReplayAsync(app, RecordingExporter.export(f,
+						new File(app.getCacheDir(), "dcrec-sync"), new RecordingExporter.Options()));
+		});
 	}
 
 	/** Own recordings, newest first (library screen). */

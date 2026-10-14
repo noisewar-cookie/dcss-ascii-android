@@ -11,6 +11,7 @@ import com.crawlmb.recording.RecordingReader;
 import com.crawlmb.recording.ReplayTimeline;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -33,12 +34,15 @@ public final class TimelineBar extends SeekBar
 			EventDeriver.XL, EventDeriver.UNIQUE, EventDeriver.MALEVOLENCE };
 	private static final int[] TICK_COLOURS = { 0xFFFF9C9C, 0xFF909090, 0xFF4080FF, 0xFFFF2020,
 			0xFFB050FF };
+	static final String[] TICK_LABELS = { "HP under 10%", "New level", "Level up",
+			"Unique sighted", "Zot's malevolence" };
 	// A game recorded from turn 5000 would otherwise be almost all red.
 	private static final float MAX_GAP_SHARE = 0.5f;
 
 	private int[] bandStart = new int[0];
 	private int[] bandColour = new int[0];
 	private final int[][] ticks = new int[TICK_TYPES.length][0];
+	private boolean[] shown = tickTypesAllShown();
 	private int[] unitOf = { 0 };
 	private int[] gapPos = new int[0];
 	private int[] gapUnits = new int[0];
@@ -102,6 +106,22 @@ public final class TimelineBar extends SeekBar
 		invalidate();
 	}
 
+	static int tickColour(int type) { return TICK_COLOURS[type]; }
+
+	static boolean[] tickTypesAllShown()
+	{
+		boolean[] b = new boolean[TICK_TYPES.length];
+		Arrays.fill(b, true);
+		return b;
+	}
+
+	/** Hidden types are neither drawn nor used by nextTick. */
+	public void setTickTypesShown(boolean[] shown)
+	{
+		this.shown = shown.clone();
+		invalidate();
+	}
+
 	/** Position at a bar progress; inside a gap span snaps to the post-gap position. */
 	public int posAt(int progress)
 	{
@@ -126,10 +146,11 @@ public final class TimelineBar extends SeekBar
 	public int nextTick(int pos, int dir)
 	{
 		int best = -1;
-		for (int[] l : ticks)
-			for (int p : l)
-				if (dir > 0 ? p > pos && (best < 0 || p < best) : p < pos && p > best)
-					best = p;
+		for (int t = 0; t < ticks.length; t++)
+			if (shown[t])
+				for (int p : ticks[t])
+					if (dir > 0 ? p > pos && (best < 0 || p < best) : p < pos && p > best)
+						best = p;
 		return best;
 	}
 
@@ -219,6 +240,8 @@ public final class TimelineBar extends SeekBar
 		}
 		for (int t = 0; t < TICK_TYPES.length; t++)
 		{
+			if (!shown[t])
+				continue;
 			paint.setColor(TICK_COLOURS[t]);
 			for (int p : ticks[t])
 			{

@@ -78,6 +78,19 @@ final class TestSupport
 
 	static String hash(int n) { return String.format("%032x", n); }
 
+	/** "los" object: a w*w window at (x0, y0) with the given {x, y} cells visible. */
+	static String los(int x0, int y0, int w, int[]... visible)
+	{
+		boolean[] bits = new boolean[(w * w + 3) / 4 * 4];
+		for (int[] p : visible)
+			bits[(p[1] - y0) * w + p[0] - x0] = true;
+		StringBuilder b = new StringBuilder();
+		for (int i = 0; i < bits.length; i += 4)
+			b.append(Integer.toHexString((bits[i] ? 8 : 0) | (bits[i + 1] ? 4 : 0)
+					| (bits[i + 2] ? 2 : 0) | (bits[i + 3] ? 1 : 0)));
+		return "\"los\":{\"x\":" + x0 + ",\"y\":" + y0 + ",\"w\":" + w + ",\"b\":\"" + b + "\"}";
+	}
+
 	static void u32(ByteArrayOutputStream o, int v)
 	{
 		o.write(v >>> 24); o.write(v >>> 16); o.write(v >>> 8); o.write(v);

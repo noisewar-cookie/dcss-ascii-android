@@ -1,6 +1,7 @@
 package com.crawlmb.recording;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,9 +69,10 @@ public final class GameRecorder
 	private boolean awaitKeySnapshot;
 	private long lastCommitMs;
 	private final EventDeriver deriver = new EventDeriver();
-	// Writer thread only. Docs deflate against the previous doc; the chain
-	// restarts each session so an export can drop abandoned session tails.
-	private byte[] docDict;
+	// Writer thread only. Docs deflate against the previous docDictDepth docs;
+	// the chain restarts each session so an export can drop abandoned tails.
+	private final ArrayDeque<byte[]> docWindow = new ArrayDeque<>();
+	private int docDictDepth = 1;
 	private int docChain;
 	// Writer thread only. Blobs deflate against the previous blob in the same
 	// slot (panel name, else kind): successive panel texts differ by a few lines.
@@ -281,8 +283,15 @@ public final class GameRecorder
 		{
 			writeBlobs(s, p);
 			final byte[] raw = p.docJson.getBytes(StandardCharsets.UTF_8);
-			s.writeSnapshot(frame, p, Deflate.deflate(raw, docDict));
-			docDict = ++docChain % DOC_CHAIN_MAX == 0 ? null : raw;
+			s.writeSnapshot(frame, p, Deflate.deflate(raw, Deflate.windowDict(docWindow)));
+			if (++docChain % DOC_CHAIN_MAX == 0)
+				docWindow.clear();
+			else
+			{
+				docWindow.addLast(raw);
+				if (docWindow.size() > docDictDepth)
+					docWindow.removeFirst();
+			}
 			for (EventDeriver.Event e : events)
 				s.writeEvent(frame, turn, e.type, e.label);
 		});
@@ -317,10 +326,11 @@ public final class GameRecorder
 		writer.submit(s -> s.rollbackMessages(count));
 	}
 
-	public synchronized void onGameEnd(int deathType, byte[] reason, byte[] morgueFile)
+	/** False if nothing was being recorded. */
+	public synchronized boolean onGameEnd(int deathType, byte[] reason, byte[] morgueFile)
 	{
 		if (!enabled || state == State.IDLE)
-			return;
+			return false;
 		final String r = new String(reason, StandardCharsets.UTF_8);
 		final String m = new String(morgueFile, StandardCharsets.UTF_8);
 		final int frame = attachFrame();
@@ -336,6 +346,7 @@ public final class GameRecorder
 		state = State.TAIL;
 		tailFrames = 0;
 		nativeBridge.resetSession();
+		return true;
 	}
 
 	// --------------------------------------------------------------- any thread
@@ -398,13 +409,14 @@ public final class GameRecorder
 
 		encoder.flush(); // drop anything encoded out of game
 		state = State.RECORDING;
+		final int depth = r.docDictDepth;
 		if (r.created)
 		{
 			nextFrame = 0;
 			final int first = nextFrame;
 			writer.submit(s ->
 			{
-				resetDocChain();
+				resetDocChain(depth);
 				s.startSession(RecFormat.SESSION_NEW, first, -1, -1);
 				// Recording enabled mid-game (or on an old save).
 				if (turn > 0)
@@ -419,7 +431,7 @@ public final class GameRecorder
 			final int recordedTo = r.lastTurn;
 			writer.submit(s ->
 			{
-				resetDocChain();
+				resetDocChain(depth);
 				s.startSession(RecFormat.SESSION_RESUME, first, turn, aut);
 				s.writeEvent(first, turn, EventDeriver.RESUME, "Resumed");
 				// Played with recording off (or on another device) since the last frame.
@@ -430,9 +442,10 @@ public final class GameRecorder
 		lastCommitMs = clock.nowMs();
 	}
 
-	private void resetDocChain()
+	private void resetDocChain(int depth)
 	{
-		docDict = null;
+		docWindow.clear();
+		docDictDepth = depth;
 		docChain = 0;
 		blobSlots.clear();
 	}

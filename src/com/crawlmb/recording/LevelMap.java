@@ -82,42 +82,79 @@ public final class LevelMap
 		if (MiniJson.getLong(map, "key", 0) != 0)
 			java.util.Arrays.fill(cells, null);
 		List<Object> list = MiniJson.getArray(map, "cells");
-		if (list == null)
-			return;
-		for (Object o : list)
+		if (list != null)
+			for (Object o : list)
+				if (o instanceof List)
+					applyCell((List<Object>) o);
+		applyLos(MiniJson.getObject(map, "los"));
+	}
+
+	// [x,y,g,c,f,t,d,m(,items)], or [x,y] = knowledge lost.
+	@SuppressWarnings("unchecked")
+	private void applyCell(List<Object> a)
+	{
+		int x = (int) num(a, 0, -1);
+		int y = (int) num(a, 1, -1);
+		if (x < 0 || y < 0 || x >= width || y >= height)
+			return; // bounds-checked: untrusted input
+		int idx = y * width + x;
+		if (a.size() < 6)
 		{
-			if (!(o instanceof Map))
-				continue;
-			Map<String, Object> m = (Map<String, Object>) o;
-			int x = (int) MiniJson.getLong(m, "x", -1);
-			int y = (int) MiniJson.getLong(m, "y", -1);
-			if (x < 0 || y < 0 || x >= width || y >= height)
-				continue; // bounds-checked: untrusted input
-			int idx = y * width + x;
-			if (MiniJson.getLong(m, "clr", 0) != 0)
-			{
-				cells[idx] = null;
-				continue;
-			}
-			Cell c = new Cell();
-			c.glyph = (int) MiniJson.getLong(m, "g", ' ');
-			c.colour = (int) MiniJson.getLong(m, "c", 7);
-			c.flags = (int) MiniJson.getLong(m, "f", 0);
-			c.featNameHash = MiniJson.getString(m, "t", null);
-			c.featDescHash = MiniJson.getString(m, "d", null);
-			c.moreItems = MiniJson.getLong(m, "m", 0) != 0;
-			List<Object> its = MiniJson.getArray(m, "i");
-			if (its != null)
-			{
-				c.items = new ArrayList<>();
-				for (Object io : its)
-					if (io instanceof List && ((List<Object>) io).size() >= 2)
-					{
-						List<Object> pair = (List<Object>) io;
-						c.items.add(new Item(String.valueOf(pair.get(0)), String.valueOf(pair.get(1))));
-					}
-			}
-			cells[idx] = c;
+			cells[idx] = null;
+			return;
 		}
+		Cell c = new Cell();
+		c.glyph = (int) num(a, 2, ' ');
+		c.colour = (int) num(a, 3, 7);
+		c.flags = (int) num(a, 4, 0) & ~ExamineCursor.MAP_VISIBLE;
+		c.featNameHash = str(a, 5);
+		c.featDescHash = str(a, 6);
+		c.moreItems = num(a, 7, 0) != 0;
+		if (a.size() > 8 && a.get(8) instanceof List)
+		{
+			c.items = new ArrayList<>();
+			for (Object io : (List<Object>) a.get(8))
+				if (io instanceof List && ((List<Object>) io).size() >= 2)
+				{
+					List<Object> pair = (List<Object>) io;
+					c.items.add(new Item(String.valueOf(pair.get(0)), String.valueOf(pair.get(1))));
+				}
+		}
+		cells[idx] = c;
+	}
+
+	// Visibility lives in the snapshot's LOS bitmap, not the cells.
+	private void applyLos(Map<String, Object> los)
+	{
+		if (los == null)
+			return;
+		for (Cell c : cells)
+			if (c != null)
+				c.flags &= ~ExamineCursor.MAP_VISIBLE;
+		int x0 = (int) MiniJson.getLong(los, "x", 0);
+		int y0 = (int) MiniJson.getLong(los, "y", 0);
+		int w = (int) MiniJson.getLong(los, "w", 0);
+		String b = MiniJson.getString(los, "b", "");
+		if (w <= 0)
+			return;
+		for (int i = 0; i < b.length() * 4; i++)
+		{
+			int nibble = Character.digit(b.charAt(i / 4), 16);
+			if (nibble < 0 || (nibble & (8 >> (i % 4))) == 0)
+				continue;
+			Cell c = get(x0 + i % w, y0 + i / w);
+			if (c != null)
+				c.flags |= ExamineCursor.MAP_VISIBLE;
+		}
+	}
+
+	private static long num(List<Object> a, int i, long def)
+	{
+		return i < a.size() && a.get(i) instanceof Number ? ((Number) a.get(i)).longValue() : def;
+	}
+
+	private static String str(List<Object> a, int i)
+	{
+		return i < a.size() && a.get(i) instanceof String ? (String) a.get(i) : null;
 	}
 }

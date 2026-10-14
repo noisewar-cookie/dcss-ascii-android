@@ -287,6 +287,33 @@ public final class CustomFolderSync
         });
     }
 
+    // Push a clean replay copy to replays/ (not a synced subtree: never
+    // pulled back). The copy is ours to delete.
+    public static void pushReplayAsync(Context ctx, File copy)
+    {
+        final Context app = ctx.getApplicationContext();
+        pushExecutor().submit(() -> {
+            try
+            {
+                DocumentFile root = openRoot(app);
+                DocumentFile dest = root == null ? null
+                        : getOrCreateDir(root, "replays");
+                boolean ok = dest != null
+                        && pushFile(app, copy, dest, copy.getName());
+                Log.i(TAG, "pushReplay " + copy.getName()
+                        + (ok ? " ok" : " FAILED"));
+            }
+            catch (Throwable t)
+            {
+                Log.w(TAG, "pushReplay failed: " + t);
+            }
+            finally
+            {
+                copy.delete();
+            }
+        });
+    }
+
     private static File canonical(File f)
     {
         try

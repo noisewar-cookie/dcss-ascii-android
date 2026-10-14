@@ -23,9 +23,9 @@ import java.util.List;
  *   status line (turn · place · XL · state) / examine summary
  *   timeline scrubber
  *   transport:   |<<  <|  >/||  |>  >>|  1x
- *   modes:       Step: turn   Skip: 10 turns   Clock: as played
+ *   modes:       Step: turn   Skip: 10 turns   Clock: as played   Filter
  *   screens:     Inv  Spells  Abil  Char  Train  Examine     (paused only)
- * In examine mode those rows become Describe / @ Player / Done (the cursor
+ * In examine mode those rows become Examine / @ Player / Done (the cursor
  * moves via ReplayDirectionPad over the map). While a browse screen is open
  * everything but the status line gives way to the Crawl keyboard.
  * Pure view: all decisions are made by ReplayUi through {@link Actions}.
@@ -44,6 +44,7 @@ public final class ReplayControlsView extends LinearLayout
 		void onStepUnit();
 		void onSkipUnit();
 		void onClockMode();
+		void onFilter();
 		void onScreen(ReplayScreens.Kind kind);
 		void onExamine();
 		void onExamineMove(int dx, int dy);
@@ -108,6 +109,7 @@ public final class ReplayControlsView extends LinearLayout
 		stepUnit = button(modes, "Step: turn", v -> actions.onStepUnit(), false);
 		skipUnit = button(modes, "Skip: 10 turns", v -> actions.onSkipUnit(), false);
 		clockMode = button(modes, "As played", v -> actions.onClockMode(), false);
+		button(modes, "Filter", v -> actions.onFilter(), false);
 		normalRows.addView(modes);
 
 		LinearLayout screens = row(ctx);
@@ -122,7 +124,7 @@ public final class ReplayControlsView extends LinearLayout
 		addView(normalRows, new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f));
 
 		examinePad = row(ctx);
-		button(examinePad, "v Describe", v -> actions.onExamineDescribe(), false);
+		button(examinePad, "Examine", v -> actions.onExamineDescribe(), false);
 		button(examinePad, "@ Player", v -> actions.onExamineHome(), false);
 		button(examinePad, "Done", v -> actions.onExamineDone(), false);
 		examinePad.setVisibility(GONE);
