@@ -2034,7 +2034,11 @@ public class GameActivity extends Activity
 		// viewport and (via the auto-fit listener) scales the panel font — like
 		// the message-rows pref. A custom count grows the panel into the free
 		// space above the map, then shrinks the mlist font to fit (never the map).
-		int mlistRowsPref = Preferences.getMlistRows();
+		// Unfolded mode has its own row prefs: the open display has room for
+		// counts that can't fit the single/outer screen (or a HALF-mode half).
+		boolean unfoldedRows = unfoldedActive && foldPosture != null;
+		int mlistRowsPref = unfoldedRows ? Preferences.getUnfoldedMlistRows()
+				: Preferences.getMlistRows();
 		final boolean mlistRowsCustom = mlistRowsPref > 0;
 		final int mlistVisibleRows = mlistRowsCustom ? mlistRowsPref
 				: MLIST_VISIBLE_ROWS;
@@ -2066,7 +2070,8 @@ public class GameActivity extends Activity
 		// (7 normal / 5 compact). A custom count grows the panel into free space
 		// above the map, then shrinks the message font to fit (never the map) —
 		// see the auto-fit listener below.
-		int msgRowsPref = Preferences.getMsgRows();
+		int msgRowsPref = unfoldedRows ? Preferences.getUnfoldedMsgRows()
+				: Preferences.getMsgRows();
 		final boolean msgRowsCustom = msgRowsPref > 0;
 		final int msgVisibleRows = msgRowsCustom ? msgRowsPref
 				: (compactHudActive
@@ -2078,10 +2083,16 @@ public class GameActivity extends Activity
 		// Word wrap or a custom count extends it to msgHistoryRows for
 		// scrollback. Not compact HUD: it applies live, but this is boot-wired.
 		// Never below 7 — the layout (17 view + msg) must stay >= MIN_LINES.
-		int windowRows = wordwrap || msgRowsCustom
+		// On foldables both row prefs count: the window is set once at boot but
+		// fold/unfold swaps the visible count without a relaunch.
+		int windowMsgRows = Preferences.getFoldableSeen()
+				? Math.max(Preferences.getMsgRows(),
+						Preferences.getUnfoldedMsgRows())
+				: msgRowsPref;
+		int windowRows = wordwrap || windowMsgRows > 0
 				? fontConfig.msgHistoryRows : 0;
-		if (msgRowsCustom && msgVisibleRows > 7)
-			windowRows = Math.max(windowRows, msgVisibleRows);
+		if (windowMsgRows > 7)
+			windowRows = Math.max(windowRows, windowMsgRows);
 		int msgEndRow = RegionRouter.MSG_START_ROW
 				+ (windowRows > 0 ? windowRows : 7);
 		RegionTermView msgView = new RegionTermView(this,
@@ -2101,7 +2112,7 @@ public class GameActivity extends Activity
 			msgView.setHorizontalScrollEnabled(true);
 			// Cap the panel: vscroll + sticky-bottom keep the newest lines in
 			// the slot; horizontal scroll still handles wide lines.
-			if (compactHudActive || msgRowsCustom)
+			if (compactHudActive || msgRowsCustom || windowRows > 0)
 			{
 				msgView.setVerticalScrollEnabled(true);
 				msgView.setMaxVisibleRows(msgVisibleRows);

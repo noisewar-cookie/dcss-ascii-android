@@ -41,6 +41,11 @@ final public class Preferences
 	// row count). Java-layout only (no native option), applied on rebuildViews.
 	public static final String KEY_MLISTROWS = "crawl.mlistrows";
 	public static final String MLISTROWS_DEFAULT = "default";
+	// Unfolded-mode (foldable book posture) overrides of the two above; "same"
+	// (default) falls back to the Text Display value.
+	public static final String KEY_UNFOLDEDMSGROWS = "crawl.unfoldedmsgrows";
+	public static final String KEY_UNFOLDEDMLISTROWS = "crawl.unfoldedmlistrows";
+	public static final String UNFOLDEDROWS_SAME = "same";
 	// Which panel scales/fills first when free vertical space is contended.
 	// "msg" = extra space fills MESSAGE rows first (classic); "mlist" (default)
 	// = the MONSTER list fills first up to its set max, then the message panel.
@@ -331,13 +336,35 @@ final public class Preferences
 	// boot, so a change hard-relaunches the game (see PreferencesActivity).
 	public static int getMsgRows()
 	{
-		String s = sharedPreferences.getString(KEY_MSGROWS, MSGROWS_DEFAULT);
+		return parseRows(sharedPreferences.getString(KEY_MSGROWS,
+				MSGROWS_DEFAULT), 15);
+	}
+
+	// Unfolded-mode message rows; "same" defers to getMsgRows().
+	public static int getUnfoldedMsgRows()
+	{
+		String s = sharedPreferences.getString(KEY_UNFOLDEDMSGROWS,
+				UNFOLDEDROWS_SAME);
+		return UNFOLDEDROWS_SAME.equals(s) ? getMsgRows() : parseRows(s, 15);
+	}
+
+	// Unfolded-mode monster-list rows; "same" defers to getMlistRows().
+	public static int getUnfoldedMlistRows()
+	{
+		String s = sharedPreferences.getString(KEY_UNFOLDEDMLISTROWS,
+				UNFOLDEDROWS_SAME);
+		return UNFOLDEDROWS_SAME.equals(s) ? getMlistRows() : parseRows(s, 6);
+	}
+
+	// "3".."max" clamped, or -1 for "default"/unparseable.
+	private static int parseRows(String s, int max)
+	{
 		if (s == null || MSGROWS_DEFAULT.equals(s))
 			return -1;
 		try
 		{
 			int n = Integer.parseInt(s);
-			return Math.max(3, Math.min(15, n));
+			return Math.max(3, Math.min(max, n));
 		}
 		catch (NumberFormatException e)
 		{
@@ -350,18 +377,8 @@ final public class Preferences
 	// viewport/font-scale change — applied on the next rebuildViews, no relaunch.
 	public static int getMlistRows()
 	{
-		String s = sharedPreferences.getString(KEY_MLISTROWS, MLISTROWS_DEFAULT);
-		if (s == null || MLISTROWS_DEFAULT.equals(s))
-			return -1;
-		try
-		{
-			int n = Integer.parseInt(s);
-			return Math.max(3, Math.min(6, n));
-		}
-		catch (NumberFormatException e)
-		{
-			return -1;
-		}
+		return parseRows(sharedPreferences.getString(KEY_MLISTROWS,
+				MLISTROWS_DEFAULT), 6);
 	}
 
 	// True: extra vertical space fills additional message-panel rows first.

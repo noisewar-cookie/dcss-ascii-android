@@ -157,6 +157,24 @@
 	   android:dependency="crawl.dualscreen"
 	   android:title="@string/preferences_reposition_centerline_title"
 	   android:summary="@string/preferences_reposition_centerline_summary" />
+	<ListPreference
+	   android:key="crawl.unfoldedmsgrows"
+	   android:dependency="crawl.dualscreen"
+	   android:defaultValue="same"
+	   android:title="@string/preferences_unfoldedmsgrows_title"
+	   android:summary="@string/preferences_unfoldedrows_summary"
+	   android:dialogTitle="@string/preferences_unfoldedmsgrows_title"
+	   android:entries="@array/unfoldedMsgRowsDescriptions"
+	   android:entryValues="@array/unfoldedMsgRowsValues" />
+	<ListPreference
+	   android:key="crawl.unfoldedmlistrows"
+	   android:dependency="crawl.dualscreen"
+	   android:defaultValue="same"
+	   android:title="@string/preferences_unfoldedmlistrows_title"
+	   android:summary="@string/preferences_unfoldedrows_summary"
+	   android:dialogTitle="@string/preferences_unfoldedmlistrows_title"
+	   android:entries="@array/unfoldedMlistRowsDescriptions"
+	   android:entryValues="@array/unfoldedMlistRowsValues" />
   </PreferenceCategory>
   <PreferenceCategory android:title="@string/control_category">
 	<CheckBoxPreference

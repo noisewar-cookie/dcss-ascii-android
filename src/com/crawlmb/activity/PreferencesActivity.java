@@ -1034,6 +1034,7 @@ public class PreferencesActivity extends PreferenceActivity implements
         if (key.compareTo(Preferences.KEY_WORDWRAP) == 0
                 || key.compareTo(Preferences.KEY_NEWTURNMARK) == 0
                 || key.compareTo(Preferences.KEY_MSGROWS) == 0
+                || key.compareTo(Preferences.KEY_UNFOLDEDMSGROWS) == 0
                 || key.compareTo(Preferences.KEY_LISTSFONTSIZE) == 0
                 || key.compareTo(Preferences.KEY_DESCFONTSIZE) == 0) {
             // These set DCSS options wired once at boot (msg_max_width,

@@ -86,6 +86,59 @@
         <item>6</item>
     </string-array>
 
+    <!-- Unfolded-mode overrides of the two pickers above; "same" = use the
+         Text Display setting (Preferences.getUnfoldedMsgRows/MlistRows). -->
+    <string-array name="unfoldedMsgRowsDescriptions">
+        <item>Same as Text Display setting</item>
+        <item>Default (7, 5 for compact)</item>
+        <item>3 rows</item>
+        <item>4 rows</item>
+        <item>5 rows</item>
+        <item>6 rows</item>
+        <item>7 rows</item>
+        <item>8 rows</item>
+        <item>9 rows</item>
+        <item>10 rows</item>
+        <item>11 rows</item>
+        <item>12 rows</item>
+        <item>13 rows</item>
+        <item>14 rows</item>
+        <item>15 rows</item>
+    </string-array>
+    <string-array name="unfoldedMsgRowsValues" translatable="false">
+        <item>same</item>
+        <item>default</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>10</item>
+        <item>11</item>
+        <item>12</item>
+        <item>13</item>
+        <item>14</item>
+        <item>15</item>
+    </string-array>
+    <string-array name="unfoldedMlistRowsDescriptions">
+        <item>Same as Text Display setting</item>
+        <item>Default (4)</item>
+        <item>3 rows</item>
+        <item>4 rows</item>
+        <item>5 rows</item>
+        <item>6 rows</item>
+    </string-array>
+    <string-array name="unfoldedMlistRowsValues" translatable="false">
+        <item>same</item>
+        <item>default</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+    </string-array>
+
     <!-- Scale-contention priority picker. Order/values must stay in sync;
          values are matched by Preferences.getMsgPanelPriority()
          (SCALEPRIORITY_MSG). The selected entry is shown as the pref title. -->
