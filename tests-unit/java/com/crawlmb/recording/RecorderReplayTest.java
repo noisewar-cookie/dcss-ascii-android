@@ -261,4 +261,101 @@ public class RecorderReplayTest
 		c.setDirection(-1);
 		assertEquals(0, c.advance(tl, p, 1_000_000));
 	}
+
+	@Test
+	public void turnLimitTrimsAtAnchors()
+	{
+		Harness h = new Harness();
+		h.rec.setTurnLimit(100);
+		h.frame(0, 0);
+		h.snapshot("CP", 0, 0, "D:1", 20, mapKey("D:1"));
+		int resets = h.nat.resets;
+		for (int t = 1; t <= 300; t++)
+		{
+			// After a checkpoint reset, native sends a map keyframe.
+			boolean key = h.nat.resets != resets;
+			resets = h.nat.resets;
+			h.turn(t, "D:1", 20, key ? mapKey("D:1") : mapDelta("D:1", 3 + t % 5));
+		}
+		h.rec.close();
+		h.w.drain();
+
+		MemoryRecordingStore s = h.w.store;
+		assertTrue(h.nat.resets > 20);
+		int firstTurn = s.frames.get(0).turn;
+		assertTrue("kept from " + firstTurn, firstTurn >= 300 - 125 && firstTurn <= 200);
+		for (MemoryRecordingStore.Snap sn : s.snaps)
+			assertTrue(sn.row.turn >= firstTurn);
+		assertNull(s.blob(TestSupport.hash(150 + 1000)));
+
+		ReplayTimeline tl = new ReplayTimeline(s.frameIndex(), s.events(), false);
+		KnowledgeResolver r = new KnowledgeResolver(s, tl);
+		for (int i = 0; i < r.rows().size(); i++)
+		{
+			RecordingReader.SnapshotRow row = r.rows().get(i);
+			assertNotNull(r.levelMap("D:1", i));
+			assertEquals("desc " + row.turn, s.blob(TestSupport.hash(row.turn + 1000)));
+		}
+		assertTrue(s.snapshotDoc(s.snaps.get(0).row.id).contains("\"turn\":" + firstTurn));
+	}
+
+	@Test
+	public void crashOrphansDroppedOnResume()
+	{
+		Harness h = new Harness();
+		h.frame(0, 0);
+		h.snapshot("CP", 0, 0, "D:1", 20, mapKey("D:1"));
+		for (int t = 1; t <= 10; t++)
+			h.turn(t, "D:1", 20, mapDelta("D:1", 4));
+		h.rec.onGameSaved();
+		// Committed by the periodic commit, but their frames sit in the open chunk.
+		for (int t = 11; t <= 15; t++)
+			h.turn(t, "D:1", 20, mapDelta("D:1", 5));
+		h.w.drain();
+
+		// Process dies; the next launch restores the turn-10 save.
+		GameRecorder rec = new GameRecorder(h.w.writer, h.nat, h.clock, "test",
+				TestSupport.ROWS, TestSupport.COLS);
+		rec.setEnabled(true);
+		h.clock.t += 50;
+		h.scr.mutate(20);
+		rec.onFrame(h.scr.c.clone(), h.scr.fg.clone(), h.scr.bg.clone(), 10, 100);
+		rec.close();
+		h.w.drain();
+
+		MemoryRecordingStore s = h.w.store;
+		int last = TestSupport.last(s.frames).frame;
+		for (MemoryRecordingStore.Snap x : s.snaps)
+			assertTrue(x.row.turn <= 10 && x.row.frame <= last);
+		for (int[] in : s.inputs)
+			assertTrue(in[0] <= last);
+		for (RecordingReader.EventRow e : s.events)
+			assertTrue(e.frame <= last);
+	}
+
+	@Test
+	public void deathTailStopsAtGameReset()
+	{
+		Harness h = new Harness();
+		h.frame(0, 0);
+		h.snapshot("CP", 0, 0, "D:1", 20, mapKey("D:1"));
+		for (int t = 1; t <= 5; t++)
+			h.turn(t, "D:1", 20, mapDelta("D:1", 3 + t));
+		h.rec.onGameEnd(1, "Killed".getBytes(StandardCharsets.UTF_8),
+				"morgue.txt".getBytes(StandardCharsets.UTF_8));
+		for (int i = 0; i < 4; i++)
+			h.frame(-1, -1); // death screens
+		h.rec.flush();
+		h.w.drain();
+		MemoryRecordingStore s = h.w.store;
+		int recorded = s.frames.size();
+		for (int i = 0; i < 6; i++)
+			h.frame(GameRecorder.TURN_NO_GAME, GameRecorder.TURN_NO_GAME); // next char's menus
+		h.w.drain();
+
+		assertTrue(s.closed);
+		assertFalse(h.rec.isRecording());
+		assertEquals(recorded, s.frames.size());
+		assertTrue((TestSupport.last(s.frames).flags & RecFormat.FRAME_POST_GAME) != 0);
+	}
 }

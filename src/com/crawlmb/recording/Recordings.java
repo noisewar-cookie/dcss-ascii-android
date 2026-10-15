@@ -38,7 +38,7 @@ public final class Recordings
 
 	public static File exportsDir(Context ctx)
 	{
-		// Shared via FileProvider; add <cache-path name="dcrec" path="dcrec-export/"/>.
+		// Temp clean .dcrec copies and encoded .mp4s, deleted once written out.
 		return new File(ctx.getCacheDir(), "dcrec-export");
 	}
 

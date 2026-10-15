@@ -120,6 +120,8 @@ public class PreferencesActivity extends PreferenceActivity implements
 
         gateCompactPrefs();
 
+        gateRecordLength();
+
         addBackupRestorePreferences();
 
         addCustomFolderPreferences();
@@ -716,7 +718,8 @@ public class PreferencesActivity extends PreferenceActivity implements
             Preference p = cat.getPreference(i);
             // Recordings live in app-private storage, not the custom folder.
             if ("recordings".equals(p.getKey())
-                    || "crawl.recordgames".equals(p.getKey()))
+                    || "crawl.recordgames".equals(p.getKey())
+                    || Preferences.KEY_RECORDLENGTH.equals(p.getKey()))
                 continue;
             guardPref(p);
         }
@@ -772,6 +775,45 @@ public class PreferencesActivity extends PreferenceActivity implements
             setSummaryPref(compactBarSidePref);
         } else if (!visible && present) {
             cat.removePreference(compactBarSidePref);
+        }
+    }
+
+    // Record Length only matters while Record games is on; gated live like
+    // the bar-side row. Limiting trims the game in progress, so confirm first.
+    private Preference recordLengthPref;
+
+    private void gateRecordLength() {
+        recordLengthPref = findPreference(Preferences.KEY_RECORDLENGTH);
+        if (recordLengthPref == null)
+            return;
+        recordLengthPref.setOnPreferenceChangeListener((pref, newValue) -> {
+            ListPreference list = (ListPreference) pref;
+            if ("0".equals(newValue) || newValue.equals(list.getValue()))
+                return true;
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.preferences_recordlength_dialogtitle)
+                    .setMessage(R.string.preferences_recordlength_warning)
+                    .setPositiveButton(android.R.string.ok,
+                            (d, w) -> list.setValue((String) newValue))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            return false;
+        });
+        setRecordLengthVisible(Preferences.getRecordGames());
+    }
+
+    private void setRecordLengthVisible(boolean visible) {
+        PreferenceCategory cat = (PreferenceCategory) findPreference("saveFiles");
+        if (recordLengthPref == null || cat == null)
+            return;
+        boolean present =
+                findPreference(Preferences.KEY_RECORDLENGTH) != null;
+        if (visible && !present) {
+            cat.addPreference(recordLengthPref);
+            applyCompactLayout(cat);
+            setSummaryPref(recordLengthPref);
+        } else if (!visible && present) {
+            cat.removePreference(recordLengthPref);
         }
     }
 
@@ -874,13 +916,15 @@ public class PreferencesActivity extends PreferenceActivity implements
     // plays the replay in place.
     private void setRecordingsIntent() {
         Preference p = findPreference("recordings");
-        if (p != null)
-            p.setOnPreferenceClickListener(pref -> {
-                startActivityForResult(
-                        new Intent(this, RecordingsActivity.class),
-                        REQ_RECORDINGS);
-                return true;
-            });
+        if (p == null)
+            return;
+        p.setIcon(tintedIcon(R.drawable.ic_pref_replays));
+        p.setOnPreferenceClickListener(pref -> {
+            startActivityForResult(
+                    new Intent(this, RecordingsActivity.class),
+                    REQ_RECORDINGS);
+            return true;
+        });
     }
 
     private void setCustomizeKeyboardIntent() {
@@ -1018,6 +1062,11 @@ public class PreferencesActivity extends PreferenceActivity implements
             CharSequence entry = ((ListPreference) pref).getEntry();
             if (entry != null)
                 pref.setTitle(entry);
+        } else if (pref instanceof ListPreference
+                && Preferences.KEY_RECORDLENGTH.equals(key)) {
+            CharSequence entry = ((ListPreference) pref).getEntry();
+            pref.setTitle(getString(R.string.preferences_recordlength_title,
+                    entry != null ? entry : ""));
         } else if (pref instanceof PreferenceCategory) {
             PreferenceCategory prefCat = (PreferenceCategory) pref;
             int count = prefCat.getPreferenceCount();
@@ -1058,6 +1107,8 @@ public class PreferencesActivity extends PreferenceActivity implements
                 setCompactBarSideVisible(Preferences.getCompactHud());
             return;
         }
+        if (key.compareTo(Preferences.KEY_RECORDGAMES) == 0)
+            setRecordLengthVisible(Preferences.getRecordGames());
         if (key.compareTo(Preferences.KEY_ACTIVEPROFILE) == 0
                 || key.compareTo(Preferences.KEY_PROFILES) == 0) {
             setSummaryAll(getPreferenceScreen());

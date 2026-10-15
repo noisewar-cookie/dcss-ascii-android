@@ -140,20 +140,6 @@
             style="@style/Widget.Crawl.Button" />
 
         <Button
-            android:id="@+id/btn_share_replays"
-            android:layout_width="wrap_content"
-            android:layout_height="32dp"
-            android:minWidth="0dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:minHeight="0dp"
-            android:layout_marginStart="6dp"
-            android:layout_marginEnd="6dp"
-            android:text="@string/recordings_share"
-            android:textSize="13sp"
-            style="@style/Widget.Crawl.Button" />
-
-        <Button
             android:id="@+id/btn_delete_replays"
             android:layout_width="wrap_content"
             android:layout_height="32dp"

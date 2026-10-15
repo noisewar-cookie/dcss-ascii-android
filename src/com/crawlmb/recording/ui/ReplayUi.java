@@ -1,12 +1,19 @@
 package com.crawlmb.recording.ui;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.Typeface;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.WindowManager;
+import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 
 import com.crawlmb.keyboard.CrawlKeyboardWrapper;
@@ -15,16 +22,23 @@ import com.crawlmb.recording.ExamineCursor;
 import com.crawlmb.recording.EventDeriver;
 import com.crawlmb.recording.KnowledgeResolver;
 import com.crawlmb.recording.RecordingReader;
+import com.crawlmb.recording.Recordings;
 import com.crawlmb.recording.ReplayClock;
 import com.crawlmb.recording.ReplayController;
 import com.crawlmb.recording.ReplayDriver;
+import com.crawlmb.recording.ReplayGifEncoder;
 import com.crawlmb.recording.ReplayReadOnly;
 import com.crawlmb.recording.ReplayRendererAdapter;
 import com.crawlmb.recording.ReplayTimeline;
+import com.crawlmb.recording.ReplayVideoEncoder;
 import com.crawlmb.recording.ScreenState;
 import com.crawlmb.view.TerminalRenderer;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Collections;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Coordinates replay mode inside GameActivity: owns the controller,
@@ -40,12 +54,23 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	{
 		void toast(String msg);
 		void exitReplay();
+		File recordingFile();
+		Typeface consoleTypeface();
+		/** Save-as picker for a GIF; dst is called only if the user picks a file. */
+		void pickGifDestination(String fileName, GifDestination dst);
+		/** Copy a finished GIF to the picked file, then delete it. */
+		void saveGif(File gif, Uri dst);
 	}
 
-	private enum SkipUnit { TURNS_10, TURNS_100, EVENT, LEVEL }
+	public interface GifDestination
+	{
+		void picked(Uri dst);
+	}
+
+	private enum SkipUnit { TURNS_10, TURNS_100, TURNS_1000, EVENT, LEVEL }
 
 	private static final ReplayTimeline.Unit[] STEP_UNITS = { ReplayTimeline.Unit.TURN,
-			ReplayTimeline.Unit.INPUT, ReplayTimeline.Unit.FRAME };
+			ReplayTimeline.Unit.INPUT };
 
 	private final Context ctx;
 	private final Host host;
@@ -65,13 +90,19 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	private ReplayScreens.Kind screenKind; // null = examine description
 	private ReplayDirectionPad pad;
 	private ExamineCursor cursor;
-	private int speedIdx = 2; // 1x
+	private int speedIdx = 1; // 1x
 	private int stepIdx = 0;
 	private SkipUnit skipUnit = SkipUnit.TURNS_10;
 	private final boolean[] ticksShown = TimelineBar.tickTypesAllShown();
 	private boolean wasPlayingBeforeScrub;
 	private boolean started;
 	private int lastNotifiedPos = -1;
+	private boolean rangeOn;
+	private int rangeLo, rangeHi = -1;
+	// Shown in red in place of the status line until clearGapNote.
+	private String gapNote;
+	private final Runnable clearGapNote = this::clearGapNote;
+	private static final int GAP_NOTE_MS = 2000;
 
 	public ReplayUi(Context ctx, Host host, RecordingReader reader, int chunkCacheSize)
 	{
@@ -124,6 +155,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		layout.addView(controls, lp);
 		controls.timeline().setData(controller.timeline(), controller.resolver());
 		controls.timeline().setTickTypesShown(ticksShown);
+		controls.setRange(rangeOn, rangeLo, rangeHi);
 		CrawlKeyboardWrapper kb = new CrawlKeyboardWrapper(ctx, new KeyListener()
 		{
 			@Override
@@ -203,10 +235,37 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 			RecordingReader.EventRow e = tl.events().get(i);
 			if (p > from && p <= pos && isGapNotice(e))
 			{
-				host.toast(e.label);
+				showGapNote(e.label);
 				return;
 			}
 		}
+	}
+
+	private void showGapNote(String text)
+	{
+		if (controls == null)
+			return;
+		gapNote = text;
+		controls.removeCallbacks(clearGapNote);
+		controls.postDelayed(clearGapNote, GAP_NOTE_MS);
+		if (cursor != null || screens != null)
+			return;
+		SpannableString sp = new SpannableString(text);
+		sp.setSpan(new ForegroundColorSpan(0xFFFF5050), 0, sp.length(),
+				Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+		controls.setStatus(sp);
+	}
+
+	private void clearGapNote()
+	{
+		if (gapNote == null)
+			return;
+		gapNote = null;
+		if (controls == null)
+			return;
+		controls.removeCallbacks(clearGapNote);
+		if (cursor == null && screens == null)
+			controls.setStatus(statusLine(controller.position(), controller.isPlaying()));
 	}
 
 	// ============================================================ transport
@@ -253,6 +312,9 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		case TURNS_100:
 			controller.skipTurns(100 * dir);
 			break;
+		case TURNS_1000:
+			controller.skipTurns(1000 * dir);
+			break;
 		}
 		refreshBrowsingForNewPosition();
 	}
@@ -260,9 +322,19 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	@Override
 	public void onSpeed()
 	{
-		speedIdx = (speedIdx + 1) % ReplayClock.SPEEDS.length;
-		controller.setSpeed(ReplayClock.SPEEDS[speedIdx]);
-		updateLabels();
+		CharSequence[] items = new CharSequence[ReplayClock.SPEEDS.length];
+		for (int i = 0; i < items.length; i++)
+			items[i] = speedLabel(i);
+		new AlertDialog.Builder(ctx)
+				.setTitle("Playback speed")
+				.setSingleChoiceItems(items, speedIdx, (d, which) ->
+				{
+					speedIdx = which;
+					controller.setSpeed(ReplayClock.SPEEDS[speedIdx]);
+					updateLabels();
+					d.dismiss();
+				})
+				.show();
 	}
 
 	@Override
@@ -300,7 +372,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 			items[t] = sp;
 		}
 		new AlertDialog.Builder(ctx)
-				.setTitle("Timeline events")
+				.setTitle("Events")
 				.setMultiChoiceItems(items, ticksShown, (d, which, checked) ->
 				{
 					ticksShown[which] = checked;
@@ -319,10 +391,124 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	}
 
 	@Override
-	public void onScrub(int pos, boolean fromUser)
+	public void onScrub(int pos, boolean fromUser, String gap)
 	{
-		if (fromUser)
-			controller.seek(pos);
+		if (!fromUser)
+			return;
+		controller.seek(pos);
+		if (gap != null)
+			showGapNote(gap);
+		else
+			clearGapNote();
+	}
+
+	@Override
+	public void onRangeChanged(boolean on, int lo, int hi)
+	{
+		rangeOn = on;
+		rangeLo = lo;
+		rangeHi = hi;
+	}
+
+	@Override
+	public void onClip()
+	{
+		driver.pause();
+		ReplayTimeline tl = controller.timeline();
+		int[] w = controls == null ? null : controls.windowPositions();
+		if (w == null || tl.size() == 0 || w[1] <= w[0])
+			return;
+		final double speed = ReplayClock.SPEEDS[speedIdx];
+		final ReplayClock.Mode mode = controller.clock().mode();
+		long s = ReplayGifEncoder.durationMs(tl, w[0], w[1], mode, speed) / 1000;
+		final String span = spanLabel(tl.turn(w[0]), tl.turn(w[1]));
+		final String info = span + "\n" + String.format(Locale.US, "%d:%02d", s / 60, s % 60)
+				+ " at " + speedLabel(speedIdx) + ", " + clockLabel().toLowerCase(Locale.US);
+		final int fromFrame = tl.frame(w[0]), toFrame = tl.frame(w[1]);
+		// Live files are <name>_<seed>_<version>.dcrec; keep just the name.
+		String who = host.recordingFile().getName().replace(".dcrec", "")
+				.replaceFirst("_\\d+_[^_]+$", "");
+		final String name = who + " " + span.toLowerCase(Locale.US).replace('\u2013', '-') + ".gif";
+		host.pickGifDestination(name,
+				dst -> encodeGif(fromFrame, toFrame, mode, speed, info, name, dst));
+	}
+
+	private static String spanLabel(int from, int to)
+	{
+		if (to < 0)
+			return "Menus";
+		return from < 0 ? "Menus to turn " + to : "Turns " + from + "\u2013" + to;
+	}
+
+	// Encoded to a temp file, which the host copies to the picked destination.
+	private void encodeGif(int fromFrame, int toFrame, ReplayClock.Mode mode, double speed,
+			String info, String name, Uri dst)
+	{
+		final Activity act = (Activity) ctx;
+		final File src = host.recordingFile();
+		final Typeface tf = host.consoleTypeface();
+		File dir = Recordings.exportsDir(ctx);
+		dir.mkdirs();
+		final File out = new File(dir, name);
+		final AtomicBoolean cancel = new AtomicBoolean();
+		final ProgressBar bar = new ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal);
+		bar.setMax(1000);
+		int pad = Math.round(24 * ctx.getResources().getDisplayMetrics().density);
+		bar.setPadding(pad, pad, pad, pad);
+		final AlertDialog dlg = new AlertDialog.Builder(ctx)
+				.setTitle("Creating GIF\u2026")
+				.setMessage(info)
+				.setView(bar)
+				.setCancelable(false)
+				.setNegativeButton("Cancel", (d, x) -> cancel.set(true))
+				.show();
+		act.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+		final Handler main = new Handler(Looper.getMainLooper());
+		new Thread(() ->
+		{
+			String error = null;
+			try
+			{
+				ReplayGifEncoder.encode(src, fromFrame, toFrame, mode, speed, tf, out,
+						new ReplayVideoEncoder.Progress()
+						{
+							@Override
+							public void update(int done, int total)
+							{
+								int p = (int) (1000L * done / Math.max(1, total));
+								main.post(() -> bar.setProgress(p));
+							}
+
+							@Override
+							public boolean cancelled()
+							{
+								return cancel.get();
+							}
+						});
+			}
+			catch (IOException | RuntimeException e)
+			{
+				error = e.getMessage();
+			}
+			final String err = error;
+			main.post(() ->
+			{
+				if (act.isDestroyed())
+				{
+					out.delete();
+					return;
+				}
+				act.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+				dlg.dismiss();
+				if (cancel.get() || err != null)
+				{
+					out.delete();
+					host.toast(cancel.get() ? "GIF cancelled" : "GIF export failed: " + err);
+				}
+				else
+					host.saveGif(out, dst);
+			});
+		}, "dcrec-gif").start();
 	}
 
 	@Override
@@ -546,7 +732,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		noteGapsCrossed(pos);
 		controls.setPosition(pos);
 		controls.setPlaying(playing);
-		if (cursor == null && screens == null)
+		if (cursor == null && screens == null && gapNote == null)
 			controls.setStatus(statusLine(pos, playing));
 	}
 
@@ -558,12 +744,12 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		int turn = tl.turn(pos);
 		StringBuilder b = new StringBuilder();
 		b.append(turn >= 0 ? "Turn " + turn : "Menus");
+		b.append(" \u00B7 Input ").append(tl.inputCount(pos));
 		int row = controller.resolver().rowAt(tl.frame(pos), tl.aut(pos));
 		if (row >= 0)
 		{
 			RecordingReader.SnapshotRow r = controller.resolver().rows().get(row);
-			b.append(" \u00B7 ").append(r.level).append(" \u00B7 XL ").append(r.xl)
-					.append(" \u00B7 HP ").append(r.hp).append('/').append(r.hpMax);
+			b.append(" \u00B7 ").append(r.level);
 		}
 		b.append(playing ? " \u00B7 Playing" : " \u00B7 Paused");
 		return b.toString();
@@ -573,8 +759,6 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	{
 		if (controls == null)
 			return;
-		double s = ReplayClock.SPEEDS[speedIdx];
-		String speed = s >= 64 ? "Max" : (s < 1 ? (s == 0.25 ? "\u00BCx" : "\u00BDx") : ((int) s) + "x");
 		String step = "Step: " + STEP_UNITS[stepIdx].name().toLowerCase();
 		String skip;
 		switch (skipUnit)
@@ -582,11 +766,22 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		case LEVEL: skip = "Skip: level"; break;
 		case EVENT: skip = "Skip: event"; break;
 		case TURNS_100: skip = "Skip: 100 turns"; break;
+		case TURNS_1000: skip = "Skip: 1000 turns"; break;
 		default: skip = "Skip: 10 turns"; break;
 		}
-		String clock = controller.clock().mode() == ReplayClock.Mode.AS_PLAYED ? "As played" : "Turn time";
-		controls.setLabels(speed, step, skip, clock);
+		controls.setLabels(speedLabel(speedIdx), step, skip, clockLabel());
 		controls.setPlaying(controller.isPlaying());
+	}
+
+	private static String speedLabel(int i)
+	{
+		double s = ReplayClock.SPEEDS[i];
+		return s >= 64 ? "Max" : (s < 1 ? "\u00BDx" : ((int) s) + "x");
+	}
+
+	private String clockLabel()
+	{
+		return controller.clock().mode() == ReplayClock.Mode.AS_PLAYED ? "As played" : "Turn time";
 	}
 
 	// ============================================================ keys

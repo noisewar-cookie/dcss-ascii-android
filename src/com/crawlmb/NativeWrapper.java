@@ -68,6 +68,7 @@ public class NativeWrapper
 		recorder = Recordings.recorder(ctx);
 		pendingRecord = null;
 		applyRecording(Preferences.getRecordGames());
+		recorder.setTurnLimit(Preferences.getRecordLength());
 		recorder.onLayout(currentLayout());
 		initGame(dataDir, settingsDir, morgueDir);
 	}
@@ -191,6 +192,14 @@ public class NativeWrapper
 		GameRecorder rec = recorder;
 		if (rec != null)
 			pendingRecord = rec.isEnabled() != on ? on : null;
+	}
+
+	// Java-side only, so unlike requestRecording it applies from any thread.
+	public void setRecordLength(int turns)
+	{
+		GameRecorder rec = recorder;
+		if (rec != null)
+			rec.setTurnLimit(turns);
 	}
 
 	private void applyRecording(boolean on)

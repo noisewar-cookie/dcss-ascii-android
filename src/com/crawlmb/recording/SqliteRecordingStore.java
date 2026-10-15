@@ -151,6 +151,10 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 		{
 			long next = longQuery("SELECT IFNULL(MAX(frame), -1) + 1 FROM frames");
 			long lastTurn = longQuery("SELECT IFNULL(MAX(turn), -1) FROM frames WHERE turn >= 0");
+			// A crash can commit rows for frames whose chunk was never written;
+			// drop them so the resumed session's frame numbers don't inherit them.
+			for (String t : new String[] { "snapshots", "messages", "inputs", "events" })
+				db.execSQL("DELETE FROM " + t + " WHERE frame >= " + next);
 			setMeta("app_version_last", appVersion);
 			setVersions();
 			return new OpenResult(false, (int) next, (int) lastTurn, fileDocDictDepth());
@@ -227,18 +231,24 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 	}
 
 	@Override
-	public boolean writeBlob(String hash, int kind, byte[] deflated, String base)
+	public boolean writeBlob(String hash, int kind, byte[] deflated, String base, int frame)
 	{
 		ContentValues v = new ContentValues();
 		v.put("hash", hash);
 		v.put("kind", kind);
 		v.put("data", deflated);
 		v.put("base", base);
-		return db.insertWithOnConflict("blobs", null, v, SQLiteDatabase.CONFLICT_IGNORE) != -1;
+		v.put("last_frame", frame);
+		if (db.insertWithOnConflict("blobs", null, v, SQLiteDatabase.CONFLICT_IGNORE) != -1)
+			return true;
+		ContentValues u = new ContentValues();
+		u.put("last_frame", frame);
+		db.update("blobs", u, "hash = ?", new String[] { hash });
+		return false;
 	}
 
 	@Override
-	public void writeSnapshot(int frame, SnapshotPayload p, byte[] docDeflated)
+	public void writeSnapshot(int frame, SnapshotPayload p, byte[] docDeflated, boolean anchor)
 	{
 		ContentValues v = new ContentValues();
 		v.put("frame", frame);
@@ -255,7 +265,44 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 		v.put("xl", p.xl);
 		v.put("depth", p.depth);
 		v.put("doc", docDeflated);
+		if (anchor)
+			v.put("anchor", 1);
 		db.insertOrThrow("snapshots", null, v);
+	}
+
+	@Override
+	public void trimBefore(int turn)
+	{
+		// Only anchors: older session starts can sit mid doc chain with no map keyframe.
+		long id, frame;
+		try (Cursor c = db.rawQuery("SELECT s.id, s.frame FROM snapshots s WHERE s.turn <= " + turn
+				+ " AND s.anchor = 1"
+				+ " AND NOT EXISTS (SELECT 1 FROM abandoned a"
+				+ " WHERE s.frame >= a.from_frame AND s.frame < a.to_frame)"
+				+ " ORDER BY s.id DESC LIMIT 1", null))
+		{
+			if (!c.moveToFirst())
+				return;
+			id = c.getLong(0);
+			frame = c.getLong(1);
+		}
+		if (longQuery("SELECT COUNT(*) FROM snapshots WHERE id < " + id) == 0)
+			return;
+		String f = Long.toString(frame);
+		db.execSQL("DELETE FROM snapshots WHERE id < " + id);
+		db.execSQL("DELETE FROM frames WHERE frame < " + f);
+		db.execSQL("DELETE FROM frame_chunks WHERE last_frame < " + f);
+		for (String t : new String[] { "messages", "inputs", "events" })
+			db.execSQL("DELETE FROM " + t + " WHERE frame < " + f);
+		db.execSQL("DELETE FROM abandoned WHERE to_frame <= " + f);
+		db.execSQL("DELETE FROM sessions WHERE id < (SELECT MAX(id) FROM sessions"
+				+ " WHERE first_frame <= " + f + ")");
+		// A re-sent blob keeps its old row and base: keep the bases of live blobs.
+		db.execSQL("WITH RECURSIVE keep(h) AS (SELECT hash FROM blobs"
+				+ " WHERE last_frame IS NULL OR last_frame >= " + f
+				+ " UNION SELECT b.base FROM blobs b JOIN keep k ON b.hash = k.h"
+				+ " WHERE b.base IS NOT NULL)"
+				+ " DELETE FROM blobs WHERE hash NOT IN (SELECT h FROM keep)");
 	}
 
 	@Override

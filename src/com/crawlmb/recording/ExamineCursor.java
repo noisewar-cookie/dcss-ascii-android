@@ -130,7 +130,7 @@ public final class ExamineCursor
 	public String summary()
 	{
 		if (isPlayerCell())
-			return "You. " + featureName(cell());
+			return "You. " + cap(featureName(cell()));
 		LevelMap.Cell c = cell();
 		if (c == null)
 			return "You have no knowledge of this place.";

@@ -72,6 +72,8 @@ public final class RecordingSchema
 	public static final String[][] ADDED_COLUMNS = {
 		{ "sessions", "version", "INTEGER" },
 		{ "blobs", "base", "TEXT" },
+		{ "blobs", "last_frame", "INTEGER" },
+		{ "snapshots", "anchor", "INTEGER" },
 	};
 
 	public static final Set<String> KNOWN_INDEXES = set("idx_frames_turn", "idx_snapshots_frame",

@@ -26,6 +26,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
@@ -133,6 +134,9 @@ public class GameActivity extends Activity
 	private String replayPath = null;
 	private ReplayUi replayUi = null;
 	private TerminalRenderer replayRenderer = null;
+	static final int SAVE_GIF = 3;
+	// Replay clip waiting on the save-as picker; encoding starts once picked.
+	private ReplayUi.GifDestination pendingGifDst = null;
 
 	public boolean isReplayMode()
 	{
@@ -177,6 +181,42 @@ public class GameActivity extends Activity
 						public void exitReplay()
 						{
 							GameActivity.this.exitReplay();
+						}
+
+						@Override
+						public File recordingFile()
+						{
+							return new File(replayPath);
+						}
+
+						@Override
+						public Typeface consoleTypeface()
+						{
+							return RecordingsActivity.videoTypeface(GameActivity.this);
+						}
+
+						@Override
+						public void pickGifDestination(String fileName,
+								ReplayUi.GifDestination dst)
+						{
+							pendingGifDst = dst;
+							Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+							i.addCategory(Intent.CATEGORY_OPENABLE);
+							i.setType("image/gif");
+							i.putExtra(Intent.EXTRA_TITLE, fileName);
+							startActivityForResult(i, SAVE_GIF);
+						}
+
+						@Override
+						public void saveGif(File gif, Uri dst)
+						{
+							new Thread(() -> {
+								boolean ok = RecordingsActivity.copyTo(GameActivity.this, gif, dst);
+								gif.delete();
+								runOnUiThread(() -> Toast.makeText(GameActivity.this,
+										ok ? "GIF saved" : "Couldn't save the GIF",
+										Toast.LENGTH_LONG).show());
+							}, "dcrec-gif-write").start();
 						}
 					}, store, chunks);
 		}
@@ -694,11 +734,23 @@ public class GameActivity extends Activity
                 enterReplay(data.getStringExtra(EXTRA_REPLAY_PATH));
             return;
         }
+        if (requestCode == SAVE_GIF) {
+            ReplayUi.GifDestination cb = pendingGifDst;
+            pendingGifDst = null;
+            Uri dst = resultCode == RESULT_OK && data != null
+                    ? data.getData() : null;
+            if (cb != null && dst != null)
+                cb.picked(dst);
+            return;
+        }
         if (requestCode == PREFERENCES_FINISHED) {
             // Record toggle applies live (next keypress) on any return.
-            if (gameKeyListener != null && gameKeyListener.nativew != null)
+            if (gameKeyListener != null && gameKeyListener.nativew != null) {
                 gameKeyListener.nativew.requestRecording(
                         Preferences.getRecordGames());
+                gameKeyListener.nativew.setRecordLength(
+                        Preferences.getRecordLength());
+            }
             if (resultCode == RESULT_OK && data != null
                     && data.getStringExtra(EXTRA_REPLAY_PATH) != null) {
                 enterReplay(data.getStringExtra(EXTRA_REPLAY_PATH));

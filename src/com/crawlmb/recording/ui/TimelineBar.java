@@ -20,21 +20,26 @@ import java.util.Set;
 
 /**
  * Timeline scrubber: a SeekBar with branch bands, red spans for
- * turns that weren't recorded, and ticks for new levels (gray), level ups
- * (blue), HP under 10% (light red), first sight of a unique (red) and Zot's
- * malevolent forces (purple). Progress is in bar units, not
- * positions (gaps add units before their post-gap position): convert with
- * posAt()/progressOf().
+ * turns that weren't recorded, and ticks for new floors (gray), temporary
+ * portals (blue), level ups (green), HP under 10% (light red), first sight of
+ * a unique (red) and Zot's malevolent forces (purple). Progress is in bar
+ * units, not positions (gaps add units before their post-gap position), and
+ * relative to the visible window (Range): convert with posAt()/progressOf().
  */
 public final class TimelineBar extends SeekBar
 {
 	private static final int GAP_COLOUR = 0xFFE04040;
+	// Not stored: a LEVEL event into a timed portal branch (by abbreviation).
+	private static final String PORTAL = "portal";
+	private static final Set<String> PORTAL_BRANCHES = new HashSet<>(Arrays.asList("Sewer",
+			"Ossuary", "Bailey", "IceCv", "Volcano", "WizLab", "Desolation", "Gauntlet",
+			"Bazaar", "Trove", "Lab"));
 	// Draw order = priority: later entries paint over earlier ones.
 	private static final String[] TICK_TYPES = { EventDeriver.LOW_HP, EventDeriver.LEVEL,
-			EventDeriver.XL, EventDeriver.UNIQUE, EventDeriver.MALEVOLENCE };
-	private static final int[] TICK_COLOURS = { 0xFFFF9C9C, 0xFF909090, 0xFF4080FF, 0xFFFF2020,
-			0xFFB050FF };
-	static final String[] TICK_LABELS = { "HP under 10%", "New level", "Level up",
+			PORTAL, EventDeriver.XL, EventDeriver.UNIQUE, EventDeriver.MALEVOLENCE };
+	private static final int[] TICK_COLOURS = { 0xFFFF6464, 0xFF909090, 0xFF4080FF, 0xFF40D040,
+			0xFFFF2020, 0xFFB050FF };
+	static final String[] TICK_LABELS = { "HP under 10%", "New floor", "Portals", "Level up",
 			"Unique sighted", "Zot's malevolence" };
 	// A game recorded from turn 5000 would otherwise be almost all red.
 	private static final float MAX_GAP_SHARE = 0.5f;
@@ -46,7 +51,11 @@ public final class TimelineBar extends SeekBar
 	private int[] unitOf = { 0 };
 	private int[] gapPos = new int[0];
 	private int[] gapUnits = new int[0];
+	private String[] gapText = new String[0];
 	private int units = 1;
+	private int winLo, winHi; // visible units, inclusive
+	private boolean shortTicks; // Range on: ticks stay inside the band so the range bar above fits
+	private ReplayTimeline tl;
 	private final Paint paint = new Paint();
 
 	private static final int[] BRANCH_PALETTE = { 0xFF3A3A3A, 0xFF2E4A2E, 0xFF4A3A22, 0xFF22384A,
@@ -59,8 +68,11 @@ public final class TimelineBar extends SeekBar
 
 	public void setData(ReplayTimeline tl, KnowledgeResolver resolver)
 	{
+		this.tl = tl;
 		buildUnits(tl, Math.max(1, tl.size()));
-		setMax(Math.max(0, units - 1));
+		winLo = 0;
+		winHi = units - 1;
+		setMax(winHi);
 		// Bands: one per run of snapshots on the same branch.
 		List<RecordingReader.SnapshotRow> rows = resolver.rows();
 		Map<String, Integer> branchColour = new HashMap<>();
@@ -94,7 +106,7 @@ public final class TimelineBar extends SeekBar
 			for (int i = 0; i < tl.events().size(); i++)
 			{
 				RecordingReader.EventRow e = tl.events().get(i);
-				if (TICK_TYPES[t].equals(e.type)
+				if (TICK_TYPES[t].equals(tickType(e))
 						&& (!EventDeriver.LOW_HP.equals(e.type) || isCriticalHp(e))
 						&& (!EventDeriver.UNIQUE.equals(e.type) || uniques.add(e.label)))
 					l.add(tl.eventPosition(i));
@@ -106,7 +118,39 @@ public final class TimelineBar extends SeekBar
 		invalidate();
 	}
 
+	private static String tickType(RecordingReader.EventRow e)
+	{
+		if (!EventDeriver.LEVEL.equals(e.type) || e.label == null || !e.label.startsWith("Entered "))
+			return e.type;
+		String level = e.label.substring("Entered ".length());
+		int colon = level.indexOf(':');
+		return PORTAL_BRANCHES.contains(colon < 0 ? level : level.substring(0, colon))
+				? PORTAL : e.type;
+	}
+
 	static int tickColour(int type) { return TICK_COLOURS[type]; }
+
+	public int units() { return units; }
+
+	/** Show only units lo..hi (inclusive); the thumb pins to an edge outside it. */
+	public void setWindow(int lo, int hi, boolean shortTicks)
+	{
+		this.shortTicks = shortTicks;
+		winLo = Math.max(0, Math.min(lo, units - 1));
+		winHi = Math.max(winLo, Math.min(hi, units - 1));
+		setMax(winHi - winLo);
+		invalidate();
+	}
+
+	/** Label of the unrecorded span under a bar progress, or null. */
+	public String gapAt(int progress)
+	{
+		int unit = progress + winLo;
+		for (int i = 0; i < gapPos.length; i++)
+			if (unit >= unitOf[gapPos[i]] - gapUnits[i] && unit < unitOf[gapPos[i]])
+				return gapText[i];
+		return null;
+	}
 
 	static boolean[] tickTypesAllShown()
 	{
@@ -125,11 +169,22 @@ public final class TimelineBar extends SeekBar
 	/** Position at a bar progress; inside a gap span snaps to the post-gap position. */
 	public int posAt(int progress)
 	{
+		return posOfUnit(progress + winLo);
+	}
+
+	/** Game turn at a unit of the whole timeline (negative in menus). */
+	public int turnAtUnit(int unit)
+	{
+		return tl == null ? -1 : tl.turn(posOfUnit(unit));
+	}
+
+	private int posOfUnit(int unit)
+	{
 		int lo = 0, hi = unitOf.length - 1;
 		while (lo < hi)
 		{
 			int mid = (lo + hi) >>> 1;
-			if (unitOf[mid] < progress)
+			if (unitOf[mid] < unit)
 				lo = mid + 1;
 			else
 				hi = mid;
@@ -139,7 +194,8 @@ public final class TimelineBar extends SeekBar
 
 	public int progressOf(int pos)
 	{
-		return unitOf[Math.max(0, Math.min(unitOf.length - 1, pos))];
+		int unit = unitOf[Math.max(0, Math.min(unitOf.length - 1, pos))];
+		return Math.max(0, Math.min(winHi - winLo, unit - winLo));
 	}
 
 	/** Nearest ticked position after (dir > 0) or before pos, or -1. */
@@ -158,6 +214,7 @@ public final class TimelineBar extends SeekBar
 	{
 		List<Integer> pos = new ArrayList<>();
 		List<Integer> missed = new ArrayList<>();
+		List<String> text = new ArrayList<>();
 		for (int i = 0; i < tl.events().size(); i++)
 		{
 			RecordingReader.EventRow e = tl.events().get(i);
@@ -169,6 +226,7 @@ public final class TimelineBar extends SeekBar
 			{
 				pos.add(p);
 				missed.add(m);
+				text.add(e.label);
 			}
 		}
 		// Size gaps by the recorded frames-per-turn: as wide as they'd have been.
@@ -184,6 +242,7 @@ public final class TimelineBar extends SeekBar
 			perTurn = cap / totalMissed;
 		gapPos = new int[pos.size()];
 		gapUnits = new int[pos.size()];
+		gapText = text.toArray(new String[0]);
 		for (int i = 0; i < gapPos.length; i++)
 		{
 			gapPos[i] = pos.get(i);
@@ -222,9 +281,12 @@ public final class TimelineBar extends SeekBar
 	@Override
 	protected synchronized void onDraw(Canvas c)
 	{
-		int left = getPaddingLeft(), right = getWidth() - getPaddingRight();
+		int right = getWidth() - getPaddingRight();
 		int h = getHeight();
-		float u = Math.max(1, right - left) / (float) units;
+		float u = Math.max(1, right - getPaddingLeft()) / (float) (winHi - winLo + 1);
+		float left = getPaddingLeft() - u * winLo;
+		c.save();
+		c.clipRect(getPaddingLeft(), 0, right, h);
 		for (int i = 0; i < bandStart.length; i++)
 		{
 			int end = i + 1 < bandStart.length ? unitOf[bandStart[i + 1]] : units;
@@ -246,9 +308,11 @@ public final class TimelineBar extends SeekBar
 			for (int p : ticks[t])
 			{
 				float x = left + u * unitOf[p];
-				c.drawRect(x - 1.5f, h * 0.1f, x + 1.5f, h * 0.9f, paint);
+				c.drawRect(x - 1.5f, h * (shortTicks ? 0.25f : 0.1f), x + 1.5f,
+						h * (shortTicks ? 0.75f : 0.9f), paint);
 			}
 		}
+		c.restore();
 		super.onDraw(c);
 	}
 }

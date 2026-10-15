@@ -30,6 +30,7 @@ final public class Preferences
 	public static final String KEY_WORDWRAP = "crawl.wordwrap";
 	public static final String KEY_NEWTURNMARK = "crawl.newturnmark";
 	public static final String KEY_RECORDGAMES = "crawl.recordgames";
+	public static final String KEY_RECORDLENGTH = "crawl.recordlength";
 	public static final String KEY_COMPACTHUD = "crawl.compacthud";
 	// Compact-mode HP/MP vertical bars: which map edge they dock to, or off.
 	// Values SIDE_RIGHT (default) / SIDE_LEFT / SIDE_OFF.
@@ -321,6 +322,19 @@ final public class Preferences
 	public static boolean getRecordGames()
 	{
 		return sharedPreferences.getBoolean(Preferences.KEY_RECORDGAMES, false);
+	}
+
+	// Turns of the game in progress a recording keeps; 0 = all.
+	public static int getRecordLength()
+	{
+		try
+		{
+			return Integer.parseInt(sharedPreferences.getString(KEY_RECORDLENGTH, "0"));
+		}
+		catch (NumberFormatException e)
+		{
+			return 0;
+		}
 	}
 
 	// Compact HUD mode. Frees three terminal HUD rows (title/vitals to native

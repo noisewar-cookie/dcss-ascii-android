@@ -12,7 +12,7 @@ import java.util.Set;
  */
 public final class ReplayTimeline
 {
-	public enum Unit { FRAME, INPUT, TURN }
+	public enum Unit { INPUT, TURN }
 
 	private final int[] frame;
 	private final long[] tMs;
@@ -20,6 +20,7 @@ public final class ReplayTimeline
 	private final int[] aut;
 	private final int[] flags;
 	private final int[] chunkId;
+	private final int[] inputsUpTo;
 	private final List<RecordingReader.EventRow> events;
 	private final int[] eventPos;
 
@@ -49,6 +50,13 @@ public final class ReplayTimeline
 			chunkId[k] = fi.chunkId[i];
 			k++;
 		}
+		inputsUpTo = new int[n];
+		for (int i = 0, c = 0; i < n; i++)
+		{
+			if ((flags[i] & RecFormat.FRAME_INPUT_WAIT) != 0)
+				c++;
+			inputsUpTo[i] = c;
+		}
 		events = new ArrayList<>();
 		List<Integer> pos = new ArrayList<>();
 		for (RecordingReader.EventRow e : allEvents)
@@ -72,6 +80,8 @@ public final class ReplayTimeline
 	public int aut(int pos) { return aut[pos]; }
 	public int flags(int pos) { return flags[pos]; }
 	public int chunkId(int pos) { return chunkId[pos]; }
+	/** Input waits (Step: input stops) at or before pos. */
+	public int inputCount(int pos) { return inputsUpTo[pos]; }
 	public List<RecordingReader.EventRow> events() { return events; }
 	public int eventPosition(int i) { return eventPos[i]; }
 
@@ -99,8 +109,6 @@ public final class ReplayTimeline
 			return 0;
 		switch (unit)
 		{
-		case FRAME:
-			return clamp(pos + dir);
 		case INPUT:
 			for (int i = pos + dir; i >= 0 && i < size(); i += dir)
 				if ((flags[i] & RecFormat.FRAME_INPUT_WAIT) != 0)

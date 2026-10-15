@@ -10,7 +10,7 @@ public final class ReplayClock
 {
 	public enum Mode { AS_PLAYED, TURN_TIME }
 
-	public static final double[] SPEEDS = { 0.25, 0.5, 1, 2, 4, 8, 16, 64 };
+	public static final double[] SPEEDS = { 0.5, 1, 2, 4, 8, 64 };
 
 	private Mode mode = Mode.AS_PLAYED;
 	private double speed = 1.0;

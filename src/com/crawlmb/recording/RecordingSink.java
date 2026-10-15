@@ -42,12 +42,20 @@ public interface RecordingSink
 	void updateFrameFlags(int frame, int flags);
 
 	/**
-	 * Store a blob deflated (against base's text when base != null). Returns
-	 * false if the hash was already stored; that row keeps its own base.
+	 * Store a blob deflated (against base's text when base != null), sent with
+	 * the snapshot at frame. Returns false if the hash was already stored; that
+	 * row keeps its own base but records frame as its latest use.
 	 */
-	boolean writeBlob(String hash, int kind, byte[] deflated, String base);
+	boolean writeBlob(String hash, int kind, byte[] deflated, String base, int frame);
 
-	void writeSnapshot(int frame, SnapshotPayload p, byte[] docDeflated);
+	/** anchor: the doc chain, map caches and blob dedupe restarted here. */
+	void writeSnapshot(int frame, SnapshotPayload p, byte[] docDeflated, boolean anchor);
+
+	/**
+	 * Delete everything before the latest anchor at or before turn, so the
+	 * file keeps at least the turns after it.
+	 */
+	void trimBefore(int turn);
 
 	void writeMessage(int frame, int turn, int channel, String text, boolean temporary);
 

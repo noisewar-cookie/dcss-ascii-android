@@ -18,8 +18,8 @@ import java.util.Map;
  *   RECORDING     first in-game frame or snapshot resolves the game identity,
  *                 opens/creates the file (new game from frame 0, turn 0) or
  *                 starts a "resume" session in an existing one.
- *   TAIL          after GAME_END, keep recording the death/morgue screens for
- *                 TAIL_MAX_FRAMES, then close.
+ *   TAIL          after GAME_END, keep recording the death/morgue screens until
+ *                 the game resets (TURN_NO_GAME) or TAIL_MAX_FRAMES, then close.
  *   Leaving a game without GAME_END (save & quit) closes the recording on the
  *   first out-of-game frame.
  */
@@ -43,6 +43,8 @@ public final class GameRecorder
 	}
 
 	static final int TAIL_MAX_FRAMES = 300;
+	/** Frame turn once the game is reset (next character's menus). */
+	static final int TURN_NO_GAME = -3;
 	static final long OPEN_TIMEOUT_MS = 5000;
 	static final long COMMIT_INTERVAL_MS = 2000;
 	static final int PERF_LOG_EVERY = 1000;
@@ -67,6 +69,8 @@ public final class GameRecorder
 	private int tailFrames;
 	private GameIdentity identity;
 	private boolean awaitKeySnapshot;
+	private int turnLimit;
+	private int lastAnchorTurn;
 	private long lastCommitMs;
 	private final EventDeriver deriver = new EventDeriver();
 	// Writer thread only. Docs deflate against the previous docDictDepth docs;
@@ -132,6 +136,22 @@ public final class GameRecorder
 			awaitKeySnapshot = true; // caller also resets native session
 	}
 
+	/**
+	 * Keep only about the last n turns of the game in progress (0 = all).
+	 * Cuts land on anchors, added every n/10 turns, so up to n + n/10 remain.
+	 */
+	public synchronized void setTurnLimit(int n)
+	{
+		if (turnLimit == n)
+			return;
+		turnLimit = n;
+		if (n > 0 && state == State.RECORDING)
+		{
+			final int cut = lastTurn - n;
+			writer.submit(s -> s.trimBefore(cut));
+		}
+	}
+
 	public synchronized boolean isEnabled() { return enabled; }
 
 	public synchronized boolean isRecording() { return state != State.IDLE; }
@@ -146,13 +166,19 @@ public final class GameRecorder
 		encoder.layout(clock.nowMs(), layout);
 	}
 
-	/** turn/aut: -1 = not in a game; callers drop UI-thread repaints (-2). */
+	/**
+	 * turn/aut: -1 = not in a game (death screens), TURN_NO_GAME after the game
+	 * is reset; callers drop UI-thread repaints (-2).
+	 */
 	public synchronized void onFrame(char[] chars, int[] fg, int[] bg, int turn, int aut)
 	{
 		if (!enabled)
 			return;
 		long now = clock.nowMs();
 
+		// One character per file: the tail ends at the reset, before the next game.
+		if (state == State.TAIL && (turn == TURN_NO_GAME || turn >= 0))
+			closeRecording();
 		if (turn >= 0 && state == State.IDLE)
 			openRecording(turn, aut);
 		else if (turn < 0 && state == State.RECORDING)
@@ -270,20 +296,25 @@ public final class GameRecorder
 			// against stale caches. Drop it; the next one is a keyframe.
 			return;
 		}
-		if (awaitKeySnapshot)
+		final boolean anchor = awaitKeySnapshot;
+		if (anchor)
 		{
 			if (!p.mapKeyframe)
 				return;
 			awaitKeySnapshot = false;
+			lastAnchorTurn = p.turn;
 		}
 		final int frame = attachFrame();
 		final List<EventDeriver.Event> events = deriver.derive(p);
 		final int turn = p.turn;
+		final int limit = state == State.RECORDING ? turnLimit : 0;
 		writer.submit(s ->
 		{
-			writeBlobs(s, p);
+			if (anchor)
+				resetDocChain(docDictDepth);
+			writeBlobs(s, p, frame);
 			final byte[] raw = p.docJson.getBytes(StandardCharsets.UTF_8);
-			s.writeSnapshot(frame, p, Deflate.deflate(raw, Deflate.windowDict(docWindow)));
+			s.writeSnapshot(frame, p, Deflate.deflate(raw, Deflate.windowDict(docWindow)), anchor);
 			if (++docChain % DOC_CHAIN_MAX == 0)
 				docWindow.clear();
 			else
@@ -294,7 +325,17 @@ public final class GameRecorder
 			}
 			for (EventDeriver.Event e : events)
 				s.writeEvent(frame, turn, e.type, e.label);
+			if (anchor && limit > 0)
+				s.trimBefore(turn - limit);
 		});
+		// Checkpoint: the next snapshot restarts every chain, so a trim can cut there.
+		if (limit > 0 && p.turn - lastAnchorTurn >= limit / 10)
+		{
+			nativeBridge.resetSession();
+			awaitKeySnapshot = true;
+		}
+		// Resting/waiting may not redraw the grid, so frames alone can't drive commits.
+		maybeCommit(clock.nowMs());
 		if (perfLog != null)
 		{
 			perfSnaps++;
@@ -333,6 +374,7 @@ public final class GameRecorder
 			return false;
 		final String r = new String(reason, StandardCharsets.UTF_8);
 		final String m = new String(morgueFile, StandardCharsets.UTF_8);
+		emit(encoder.flush()); // the death frame lands in the same commit as the end meta
 		final int frame = attachFrame();
 		final int turn = lastTurn;
 		writer.submit(s ->
@@ -512,7 +554,7 @@ public final class GameRecorder
 		}
 	}
 
-	private void writeBlobs(RecordingSink s, SnapshotPayload p)
+	private void writeBlobs(RecordingSink s, SnapshotPayload p, int frame)
 	{
 		Map<String, String> panelOf = new HashMap<>();
 		Map<String, Object> panels = MiniJson.getObject(p.doc, "panels");
@@ -529,7 +571,7 @@ public final class GameRecorder
 			if (prev != null && prev.depth + 1 >= DOC_CHAIN_MAX)
 				prev = null;
 			byte[] z = Deflate.deflate(b.utf8, prev == null ? null : prev.raw);
-			if (s.writeBlob(b.hash, b.kind, z, prev == null ? null : prev.hash))
+			if (s.writeBlob(b.hash, b.kind, z, prev == null ? null : prev.hash, frame))
 				blobSlots.put(slot, new BlobLink(b.hash, b.utf8, prev == null ? 0 : prev.depth + 1));
 			else
 				blobSlots.remove(slot); // stored earlier with an unknown chain depth

@@ -4,9 +4,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * In-memory RecordingSink + RecordingReader with the same semantics as
@@ -32,6 +34,7 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 	{
 		SnapshotRow row;
 		byte[] doc;
+		boolean anchor;
 	}
 
 	final Map<String, String> meta = new LinkedHashMap<>();
@@ -40,11 +43,14 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 	final List<Snap> snaps = new ArrayList<>();
 	final Map<String, byte[]> blobs = new HashMap<>();
 	final Map<String, String> blobBases = new HashMap<>();
+	final Map<String, Integer> blobLastFrame = new HashMap<>();
 	final List<Msg> msgs = new ArrayList<>();
 	final List<int[]> inputs = new ArrayList<>();
 	final List<EventRow> events = new ArrayList<>();
 	final List<int[]> abandonedRanges = new ArrayList<>(); // [from, toExclusive)
 	final List<String> sessions = new ArrayList<>();
+	private int nextChunkId = 1;
+	private long nextSnapId = 1;
 	int commits;
 	boolean closed;
 	boolean opened;
@@ -59,6 +65,10 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 			int lastTurn = -1;
 			for (Frame f : frames)
 				lastTurn = Math.max(lastTurn, f.turn);
+			snaps.removeIf(x -> x.row.frame >= next);
+			msgs.removeIf(x -> x.frame >= next);
+			inputs.removeIf(x -> x[0] >= next);
+			events.removeIf(x -> x.frame >= next);
 			return new OpenResult(false, next, lastTurn,
 					Integer.parseInt(meta.getOrDefault("doc_dict_depth", "1")));
 		}
@@ -97,7 +107,7 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 	public void writeChunk(int firstFrame, int lastFrame, byte[] deflated,
 			List<FrameChunkEncoder.FrameInfo> fl)
 	{
-		int id = chunks.size() + 1;
+		int id = nextChunkId++;
 		chunks.put(id, deflated);
 		for (FrameChunkEncoder.FrameInfo i : fl)
 		{
@@ -121,8 +131,9 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 	}
 
 	@Override
-	public boolean writeBlob(String hash, int kind, byte[] deflated, String base)
+	public boolean writeBlob(String hash, int kind, byte[] deflated, String base, int frame)
 	{
+		blobLastFrame.put(hash, frame);
 		if (blobs.containsKey(hash))
 			return false;
 		blobs.put(hash, deflated);
@@ -132,13 +143,51 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 	}
 
 	@Override
-	public void writeSnapshot(int frame, SnapshotPayload p, byte[] docDeflated)
+	public void writeSnapshot(int frame, SnapshotPayload p, byte[] docDeflated, boolean anchor)
 	{
 		Snap s = new Snap();
-		s.row = new SnapshotRow(snaps.size() + 1, frame, p.turn, p.aut, p.kind, p.level,
+		s.anchor = anchor;
+		s.row = new SnapshotRow(nextSnapId++, frame, p.turn, p.aut, p.kind, p.level,
 				p.hasPanels, p.mapKeyframe, p.hp, p.hpMax, p.mp, p.mpMax, p.xl, p.depth);
 		s.doc = docDeflated;
 		snaps.add(s);
+	}
+
+	@Override
+	public void trimBefore(int turn)
+	{
+		List<Integer> sessionFirst = new ArrayList<>();
+		for (String k : sessions)
+			sessionFirst.add(Integer.parseInt(k.substring(k.indexOf('@') + 1)));
+		int cut = -1;
+		for (int i = snaps.size() - 1; i > 0 && cut < 0; i--)
+		{
+			SnapshotRow r = snaps.get(i).row;
+			if (r.turn <= turn && snaps.get(i).anchor && !isAbandoned(r.frame))
+				cut = i;
+		}
+		if (cut < 0)
+			return;
+		int f = snaps.get(cut).row.frame;
+		snaps.subList(0, cut).clear();
+		frames.removeIf(x -> x.frame < f);
+		msgs.removeIf(m -> m.frame < f);
+		inputs.removeIf(in -> in[0] < f);
+		events.removeIf(e -> e.frame < f);
+		abandonedRanges.removeIf(r -> r[1] <= f);
+		for (int i = sessionFirst.size() - 1; i > 0; i--)
+			if (sessionFirst.get(i) <= f)
+			{
+				sessions.subList(0, i).clear();
+				break;
+			}
+		Set<String> keep = new HashSet<>();
+		for (Map.Entry<String, Integer> e : blobLastFrame.entrySet())
+			for (String h = e.getValue() >= f ? e.getKey() : null; h != null && keep.add(h); )
+				h = blobBases.get(h);
+		blobs.keySet().retainAll(keep);
+		blobBases.keySet().retainAll(keep);
+		blobLastFrame.keySet().retainAll(keep);
 	}
 
 	@Override
@@ -229,11 +278,14 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 	public String snapshotDoc(long id)
 	{
 		int depth = Integer.parseInt(meta.getOrDefault("doc_dict_depth", "1"));
-		int start = (int) id - 1;
+		int end = 0;
+		while (snaps.get(end).row.id != id)
+			end++;
+		int start = end;
 		while (Deflate.usesDictionary(snaps.get(start).doc))
 			start--;
 		ArrayDeque<byte[]> window = new ArrayDeque<>();
-		for (int i = start; i < id; i++)
+		for (int i = start; i <= end; i++)
 		{
 			window.addLast(Deflate.inflate(snaps.get(i).doc, Deflate.DEFAULT_MAX_INFLATED,
 					Deflate.windowDict(window)));

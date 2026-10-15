@@ -103,7 +103,11 @@
     <string name="font_size_slider_format">%+d pt</string>
     <string name="preferences_newturnmark_title">New turn indicator</string>
     <string name="preferences_recordgames_title">Record games</string>
-    <string name="preferences_recordgames_summary">Save a turn-by-turn replay of each game. Takes effect on your next move.</string>
+    <string name="preferences_recordgames_summary">Save a turn-by-turn replay of your game.</string>
+    <string name="preferences_recordlength_title">"    Record Length: %1$s"</string>
+    <string name="preferences_recordlength_summary">"      How many of the latest turns the replay keeps."</string>
+    <string name="preferences_recordlength_dialogtitle">Record length</string>
+    <string name="preferences_recordlength_warning">Older turns of the game in progress will be deleted from its replay. This can\'t be undone.</string>
     <string name="preferences_newturnmark_summary">Show turn markers in the message log. Restarts app.</string>
     <string name="preferences_bevelmargin_title">Edge margin</string>
     <string name="preferences_bevelmargin_summary">Margin adjustment (from screen edges). Reopen the game to apply.</string>
@@ -350,7 +354,6 @@
     <string name="recordings_select">Select Files</string>
     <string name="recordings_done">Done</string>
     <string name="recordings_export">Export…</string>
-    <string name="recordings_share">Share</string>
     <string name="recordings_delete">Delete</string>
     <string name="new_prefs_options_message">New options added!\n\nTwo-finger long press to see app menu.</string>
     <string name="font_delete">Delete font</string>

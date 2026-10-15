@@ -620,8 +620,9 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
 // (sendTerminalToScreen) and the UI-thread caller (refreshTerminal) can't
 // race over shared storage.
 // turn/aut tag every frame for Screen<->Knowledge sync in recordings:
-// game-thread frames carry you.num_turns / you.elapsed_time (-1 outside a
-// game); UI-thread repaints pass -2 so the recorder skips them.
+// game-thread frames carry you.num_turns / you.elapsed_time (-1 on the
+// death screens, -3 once the game is reset); UI-thread repaints pass -2 so
+// the recorder skips them.
 static void _send_frame(JNIEnv* e, jobject obj, jint turn, jint aut)
 {
 	const int cells = MENU_LINES * COLS;
@@ -687,9 +688,10 @@ void sendTerminalToScreen()
 	}
 	dirtyTerminalChars.clear();
 	const bool in_game = crawl_state.need_save;
+	const jint none = crawl_state.game_started ? -1 : -3;
 	_send_frame(env, NativeWrapperObj,
-		in_game ? (jint)you.num_turns : -1,
-		in_game ? (jint)you.elapsed_time : -1);
+		in_game ? (jint)you.num_turns : none,
+		in_game ? (jint)you.elapsed_time : none);
 }
 
 void android_send_status_lights(const char** texts, const int* colours,
