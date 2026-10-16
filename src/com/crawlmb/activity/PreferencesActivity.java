@@ -101,6 +101,8 @@ public class PreferencesActivity extends PreferenceActivity implements
 
         setChangelogIntent();
 
+        setDonateClickListener();
+
         setConfigFilePreferences();
 
         setCharacterFilesIntent();
@@ -903,6 +905,30 @@ public class PreferencesActivity extends PreferenceActivity implements
         } catch (PackageManager.NameNotFoundException e) {
             // Keep the plain title.
         }
+    }
+
+    // The URLSpan in the message fires ACTION_VIEW, so the link opens in
+    // the external browser, never an in-app WebView (Play payments policy).
+    private void setDonateClickListener() {
+        Preference p = findPreference("donate");
+        if (p == null)
+            return;
+        p.setIcon(tintedIcon(R.drawable.ic_pref_heart));
+        p.setOnPreferenceClickListener(pref -> {
+            AlertDialog dialog = new AlertDialog.Builder(this)
+                    .setTitle(R.string.preferences_donate_title)
+                    .setMessage(getText(R.string.preferences_donate_message))
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+            TextView msg = dialog.findViewById(android.R.id.message);
+            if (msg != null) {
+                msg.setMovementMethod(
+                        android.text.method.LinkMovementMethod.getInstance());
+                msg.setLinkTextColor(androidx.core.content.ContextCompat
+                        .getColor(this, R.color.crawl_accent));
+            }
+            return true;
+        });
     }
 
     private void setCharacterFilesIntent() {

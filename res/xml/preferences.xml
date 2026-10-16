@@ -480,5 +480,8 @@
             android:defaultValue="true"
             android:title="@string/preferences_settingsbutton_title"
             android:summary="@string/preferences_settingsbutton_summary" />
+        <Preference
+            android:key="donate"
+            android:title="@string/preferences_donate_title" />
     </PreferenceCategory>
 </PreferenceScreen>
