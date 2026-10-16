@@ -27,6 +27,7 @@ import com.crawlmb.recording.ReplayClock;
 import com.crawlmb.recording.ReplayController;
 import com.crawlmb.recording.ReplayDriver;
 import com.crawlmb.recording.ReplayGifEncoder;
+import com.crawlmb.recording.ReplayLayout;
 import com.crawlmb.recording.ReplayReadOnly;
 import com.crawlmb.recording.ReplayRendererAdapter;
 import com.crawlmb.recording.ReplayTimeline;
@@ -60,6 +61,8 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		void pickGifDestination(String fileName, GifDestination dst);
 		/** Copy a finished GIF to the picked file, then delete it. */
 		void saveGif(File gif, Uri dst);
+		/** Rebuild the views from layout(); the recording switched layouts. */
+		void relayout();
 	}
 
 	public interface GifDestination
@@ -78,6 +81,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	private final ReplayController controller;
 	private final ReplayDriver driver;
 	private ReplayRendererAdapter adapter;
+	private final ReplayLayout recLayout;
 
 	private ReplayControlsView controls;
 	private RelativeLayout screenLayout;
@@ -116,7 +120,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 					@Override
 					public void render(ScreenState s, int pos)
 					{
-						if (adapter != null)
+						if (adapter != null && recLayout.accept(s.layout))
 							adapter.render(s, pos);
 					}
 
@@ -127,6 +131,13 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 					}
 				});
 		this.driver = new ReplayDriver(controller);
+		this.recLayout = new ReplayLayout(controller.layoutAt(0), host::relayout);
+	}
+
+	/** Recorded layout to build the views from; null = the viewer's prefs. */
+	public int[] layout()
+	{
+		return recLayout.applied();
 	}
 
 	/**
@@ -144,6 +155,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		confinedLeft = alignLeft;
 		pad = null; // belonged to the old layout
 		adapter = new ReplayRendererAdapter(renderer, this);
+		recLayout.onRebuilt();
 		controls = new ReplayControlsView(ctx, this);
 		RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
 				width > 0 ? width : RelativeLayout.LayoutParams.MATCH_PARENT,

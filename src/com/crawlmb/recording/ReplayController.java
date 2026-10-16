@@ -130,6 +130,15 @@ public final class ReplayController
 
 	public void seekTurn(int turn) { seek(timeline.posForTurn(turn)); }
 
+	/** Recorded layout at p; all zeros for files from before it was recorded. */
+	public int[] layoutAt(int p)
+	{
+		if (timeline.size() == 0)
+			return new int[RecFormat.LAYOUT_SIZE];
+		p = timeline.clamp(p);
+		return cache.state(timeline.chunkId(p), timeline.frame(p)).layout;
+	}
+
 	/** Examine: everything the player could look up at the current position. */
 	public KnowledgeResolver.Knowledge knowledge()
 	{

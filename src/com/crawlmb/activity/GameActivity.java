@@ -92,6 +92,7 @@ import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.recording.Recordings;
+import com.crawlmb.recording.ReplayLayout;
 import com.crawlmb.recording.SqliteRecordingStore;
 import com.crawlmb.recording.ui.ReplayUi;
 import com.crawlmb.view.FoldStateController;
@@ -217,6 +218,17 @@ public class GameActivity extends Activity
 										ok ? "GIF saved" : "Couldn't save the GIF",
 										Toast.LENGTH_LONG).show());
 							}, "dcrec-gif-write").start();
+						}
+
+						@Override
+						public void relayout()
+						{
+							View root = findViewById(android.R.id.content);
+							if (root != null)
+								root.post(() -> {
+									if (isReplayMode())
+										rebuildViews();
+								});
 						}
 					}, store, chunks);
 		}
@@ -2053,7 +2065,11 @@ public class GameActivity extends Activity
 		mapView.setId(View.generateViewId());
 		// Compact frees vertical rows, so let the map grow to width-fill (scale
 		// 1.0); onMeasure's height self-fit backs it off to best-fit the band.
-		compactHudActive = Preferences.getCompactHud();
+		// Replay builds the panels from the recorded layout so the grid routes
+		// as it did for the recorder; null = old file or live game.
+		final int[] replayLayout = isReplayMode() ? replayUi.layout() : null;
+		compactHudActive = replayLayout != null
+				? ReplayLayout.compactHud(replayLayout) : Preferences.getCompactHud();
 		compactBarsLeft = Preferences.getCompactBarSide()
 				.equals(Preferences.SIDE_LEFT);
 		mapView.setFontScaleMultiplier(compactHudActive
@@ -2111,8 +2127,10 @@ public class GameActivity extends Activity
 		// msg window is extended to msgHistoryRows terminal rows. The panel
 		// keeps its classic visual slot (portraitMsgVisibleRows) and pins to
 		// the newest line; dragging up reveals the extra history rows.
-		boolean wordwrap = Preferences.getWordwrap();
-		boolean newturnMark = Preferences.getNewturnMark();
+		boolean wordwrap = replayLayout != null
+				? ReplayLayout.wordwrap(replayLayout) : Preferences.getWordwrap();
+		boolean newturnMark = replayLayout != null
+				? ReplayLayout.newturnMark(replayLayout) : Preferences.getNewturnMark();
 		// When the turn mark is off, start the msg region at col 1 to skip
 		// the phantom space column DCSS puts at col 0 — this aligns message
 		// text flush with the HUD panel's first column.
@@ -2125,7 +2143,7 @@ public class GameActivity extends Activity
 		int msgRowsPref = unfoldedRows ? Preferences.getUnfoldedMsgRows()
 				: Preferences.getMsgRows();
 		final boolean msgRowsCustom = msgRowsPref > 0;
-		final int msgVisibleRows = msgRowsCustom ? msgRowsPref
+		int visibleRows = msgRowsCustom ? msgRowsPref
 				: (compactHudActive
 						? COMPACT_MSG_ROWS : fontConfig.portraitMsgVisibleRows);
 		// When both panels are custom, this decides which one takes the free
@@ -2145,6 +2163,12 @@ public class GameActivity extends Activity
 				? fontConfig.msgHistoryRows : 0;
 		if (windowMsgRows > 7)
 			windowRows = Math.max(windowRows, windowMsgRows);
+		if (replayLayout != null)
+		{
+			windowRows = ReplayLayout.msgRows(replayLayout);
+			visibleRows = Math.min(visibleRows, windowRows > 0 ? windowRows : 7);
+		}
+		final int msgVisibleRows = visibleRows;
 		int msgEndRow = RegionRouter.MSG_START_ROW
 				+ (windowRows > 0 ? windowRows : 7);
 		RegionTermView msgView = new RegionTermView(this,
@@ -2158,6 +2182,9 @@ public class GameActivity extends Activity
 			msgView.setVerticalScrollEnabled(true);
 			msgView.setMaxVisibleRows(msgVisibleRows);
 			msgView.setStickyScrollToBottom(true);
+			// Lines were wrapped for the recorder's panel width, maybe wider.
+			if (replayLayout != null)
+				msgView.setHorizontalScrollEnabled(true);
 		}
 		else
 		{
@@ -2876,6 +2903,7 @@ public class GameActivity extends Activity
 					private int lastStatusH = -1;
 					private int lastMlistH = -1;
 					private int lastCompactH = -1;
+					private int lastMapH = -1;
 
 					@Override
 					public void onGlobalLayout()
@@ -2903,11 +2931,15 @@ public class GameActivity extends Activity
 							}
 						}
 
-						int available = gamePanel.getHeight();
+						// The panels sit inside the window-inset padding.
+						int available = gamePanel.getHeight()
+								- gamePanel.getPaddingTop()
+								- gamePanel.getPaddingBottom();
 						int hudH = hudView.getMeasuredHeight();
 						int msgH = msgView.getMeasuredHeight();
 						int statusH = statusBar.getMeasuredHeight();
 						int mlistH = mlistView.getMeasuredHeight();
+						int mapH = mapView.getMeasuredHeight();
 						// Compact title/vitals rows sit in the hud unit but are
 						// separate views, so their height eats the map budget too.
 						int compactH = 0;
@@ -2927,7 +2959,8 @@ public class GameActivity extends Activity
 								&& hudH == lastHudH && msgH == lastMsgH
 								&& statusH == lastStatusH
 								&& mlistH == lastMlistH
-								&& compactH == lastCompactH)
+								&& compactH == lastCompactH
+								&& mapH == lastMapH)
 							return;
 						lastAvailable = available;
 						lastHudH = hudH;
@@ -2935,6 +2968,7 @@ public class GameActivity extends Activity
 						lastStatusH = statusH;
 						lastMlistH = mlistH;
 						lastCompactH = compactH;
+						lastMapH = mapH;
 
 						// Re-sync the wrap width after a custom row count shrinks
 						// the msg font (smaller font = more cols; boot value would
@@ -2945,54 +2979,59 @@ public class GameActivity extends Activity
 						{
 							// Map is frozen at its width-fit height; the custom
 							// panel(s) take the space above it, shrinking their
-							// own font (never the map). Priority panel fills
-							// first, the other keeps its rows in the remainder.
-							int mapNat = mapView.getMeasuredHeight();
+							// own font. Priority panel fills first, the other
+							// keeps its rows in the remainder.
 							int reserved = hudH + statusH + compactH;
 							if (!msgRowsCustom)
 								reserved += msgH;
 							if (!mlistRowsCustom)
 								reserved += mlistH;
-							int freeForCustom = available - mapNat - reserved;
-							if (freeForCustom <= 0)
-								return;
-							if (msgRowsCustom && mlistRowsCustom)
+							int freeForCustom = available - mapH - reserved;
+							// Short screen: the rows don't fit even at min font,
+							// so shrink the map (below) instead.
+							int customMin = (msgRowsCustom ? panelRowsHeight(msgView,
+									msgVisibleRows, MIN_FONT_SCALE) : 0)
+									+ (mlistRowsCustom ? panelRowsHeight(mlistView,
+											mlistVisibleRows, MIN_FONT_SCALE) : 0);
+							if (freeForCustom >= customMin)
 							{
-								RegionTermView primary = msgPriority
-										? msgView : mlistView;
-								int primaryRows = msgPriority
-										? msgVisibleRows : mlistVisibleRows;
-								RegionTermView secondary = msgPriority
-										? mlistView : msgView;
-								int secondaryRows = msgPriority
-										? mlistVisibleRows : msgVisibleRows;
-								// Reserve the secondary at min font so it keeps
-								// all rows; primary fits the rest.
-								int secondaryReserve = panelRowsHeight(
-										secondary, secondaryRows, MIN_FONT_SCALE);
-								int primaryH = fitPanelRows(primary, primaryRows,
-										freeForCustom - secondaryReserve,
-										MIN_FONT_SCALE, MIN_SCALE_DELTA);
-								fitPanelRows(secondary, secondaryRows,
-										freeForCustom - primaryH,
-										MIN_FONT_SCALE, MIN_SCALE_DELTA);
+								if (msgRowsCustom && mlistRowsCustom)
+								{
+									RegionTermView primary = msgPriority
+											? msgView : mlistView;
+									int primaryRows = msgPriority
+											? msgVisibleRows : mlistVisibleRows;
+									RegionTermView secondary = msgPriority
+											? mlistView : msgView;
+									int secondaryRows = msgPriority
+											? mlistVisibleRows : msgVisibleRows;
+									// Reserve the secondary at min font so it keeps
+									// all rows; primary fits the rest.
+									int secondaryReserve = panelRowsHeight(
+											secondary, secondaryRows, MIN_FONT_SCALE);
+									int primaryH = fitPanelRows(primary, primaryRows,
+											freeForCustom - secondaryReserve,
+											MIN_FONT_SCALE, MIN_SCALE_DELTA);
+									fitPanelRows(secondary, secondaryRows,
+											freeForCustom - primaryH,
+											MIN_FONT_SCALE, MIN_SCALE_DELTA);
+								}
+								else if (msgRowsCustom)
+									fitPanelRows(msgView, msgVisibleRows,
+											freeForCustom, MIN_FONT_SCALE,
+											MIN_SCALE_DELTA);
+								else
+									fitPanelRows(mlistView, mlistVisibleRows,
+											freeForCustom, MIN_FONT_SCALE,
+											MIN_SCALE_DELTA);
+								return;
 							}
-							else if (msgRowsCustom)
-								fitPanelRows(msgView, msgVisibleRows,
-										freeForCustom, MIN_FONT_SCALE,
-										MIN_SCALE_DELTA);
-							else
-								fitPanelRows(mlistView, mlistVisibleRows,
-										freeForCustom, MIN_FONT_SCALE,
-										MIN_SCALE_DELTA);
-							return;
 						}
 
 						int mapTarget = available - hudH - statusH
 								- mlistH - msgH - compactH;
 						if (mapTarget <= 0)
 							return;
-						int mapH = mapView.getMeasuredHeight();
 						if (mapH <= mapTarget)
 							return;
 

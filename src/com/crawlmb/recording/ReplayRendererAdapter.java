@@ -10,12 +10,8 @@ import java.util.Objects;
  * Feeds replayed ScreenStates into the live renderer (RegionRouter) through the
  * same TerminalRenderer calls NativeWrapper makes, so screen classification and
  * region routing behave exactly as in a live game. Side channels are only
- * re-sent when they change.
- *
- * TODO(replay layout): RegionRouter derives msg rows / wrap / compact HUD from
- * the device's prefs. Add RegionRouter.applyReplayLayout(int[] layout) that
- * overrides msgWindowRows, newturnMark and compact-HUD routing, and call it
- * from render() when state.layout changes.
+ * re-sent when they change. The views themselves are built from the recorded
+ * layout (ReplayLayout).
  */
 public final class ReplayRendererAdapter implements ReplayController.RenderTarget
 {
