@@ -645,8 +645,9 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			cancelGridHold();
 
 		// Two-finger long-press: arm when a second finger touches down,
-		// disarm if either finger moves beyond touch slop or any finger
-		// lifts before the timeout fires.
+		// disarm if either finger moves beyond 3x touch slop (a real pinch or
+		// drag — plain slop is too tight for two resting fingertips) or any
+		// finger lifts before the timeout fires.
 		if (actionMasked == MotionEvent.ACTION_POINTER_DOWN
 				&& event.getPointerCount() >= 2 && !twoFingerLongPressFired)
 		{
@@ -666,7 +667,8 @@ public class DirectionalTouchView extends View implements  GestureDetector.OnGes
 			float dy0 = event.getY(0) - p0DownY;
 			float dx1 = event.getX(1) - p1DownX;
 			float dy1 = event.getY(1) - p1DownY;
-			int slopSq = touchSlop * touchSlop;
+			int holdSlop = touchSlop * 3;
+			int slopSq = holdSlop * holdSlop;
 			if (dx0 * dx0 + dy0 * dy0 > slopSq
 					|| dx1 * dx1 + dy1 * dy1 > slopSq)
 			{
