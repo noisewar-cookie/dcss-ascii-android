@@ -75,13 +75,13 @@ public final class RecWriterThread
 
 	/** Close any open sink, then open one for `id`. Blocks the caller. */
 	public RecordingSink.OpenResult open(GameIdentity id, String appVersion, int[] layout,
-			long timeoutMs) throws Exception
+			byte[] docDict, long timeoutMs) throws Exception
 	{
 		return call(() ->
 		{
 			closeSinkQuietly();
 			sink = factory.create(id);
-			return sink.open(id, appVersion, layout);
+			return sink.open(id, appVersion, layout, docDict);
 		}, timeoutMs);
 	}
 

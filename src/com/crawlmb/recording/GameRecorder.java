@@ -49,7 +49,9 @@ public final class GameRecorder
 	static final long COMMIT_INTERVAL_MS = 2000;
 	static final int PERF_LOG_EVERY = 1000;
 	/** Bounds a random-access doc read to this many inflates. */
-	static final int DOC_CHAIN_MAX = 32;
+	static final int DOC_CHAIN_MAX = 128;
+	/** Blobs read by a recursive walk; longer chains saved little on a real game. */
+	static final int BLOB_CHAIN_MAX = 32;
 
 	private enum State { IDLE, RECORDING, TAIL }
 
@@ -78,6 +80,9 @@ public final class GameRecorder
 	private final ArrayDeque<byte[]> docWindow = new ArrayDeque<>();
 	private int docDictDepth = 1;
 	private int docChain;
+	// The open file's dictionary under every chain; -1 adler when it has none.
+	private byte[] docDict;
+	private long docDictAdler = -1;
 	// Writer thread only. Blobs deflate against the previous blob in the same
 	// slot (panel name, else kind): successive panel texts differ by a few lines.
 	private final Map<String, BlobLink> blobSlots = new HashMap<>();
@@ -95,6 +100,7 @@ public final class GameRecorder
 			this.depth = depth;
 		}
 	}
+	private byte[] newFileDocDict;
 	private PerfLog perfLog;
 	private int perfFrames;
 	private long perfFrameNs;
@@ -158,6 +164,13 @@ public final class GameRecorder
 
 	/** Debug timing: Java-side frame encode and snapshot handling costs. */
 	public synchronized void setPerfLog(PerfLog log) { perfLog = log; }
+
+	/** Doc dictionary embedded in files created from now on; null for none. */
+	public synchronized void setDocDict(byte[] dict)
+	{
+		newFileDocDict = dict != null && dict.length > 0 && dict.length <= Deflate.WINDOW
+				? dict.clone() : null;
+	}
 
 	// ------------------------------------------------------------ game thread
 
@@ -311,10 +324,19 @@ public final class GameRecorder
 		writer.submit(s ->
 		{
 			if (anchor)
-				resetDocChain(docDictDepth);
+				resetDocChain(docDictDepth, docDict);
 			writeBlobs(s, p, frame);
 			final byte[] raw = p.docJson.getBytes(StandardCharsets.UTF_8);
-			s.writeSnapshot(frame, p, Deflate.deflate(raw, Deflate.windowDict(docWindow)), anchor);
+			byte[] dict = Deflate.windowDict(docDict, docWindow);
+			// A window with the file dictionary's Adler-32 would read as a chain
+			// start (Deflate.startsDocChain), so start one here.
+			if (!docWindow.isEmpty() && docDictAdler >= 0 && Deflate.adler(dict) == docDictAdler)
+			{
+				docWindow.clear();
+				docChain = 0;
+				dict = docDict;
+			}
+			s.writeSnapshot(frame, p, Deflate.deflate(raw, dict), anchor);
 			if (++docChain % DOC_CHAIN_MAX == 0)
 				docWindow.clear();
 			else
@@ -438,7 +460,8 @@ public final class GameRecorder
 		RecordingSink.OpenResult r;
 		try
 		{
-			r = writer.open(id, appVersion, encoder.state().layout, OPEN_TIMEOUT_MS);
+			r = writer.open(id, appVersion, encoder.state().layout, newFileDocDict,
+					OPEN_TIMEOUT_MS);
 		}
 		catch (Exception e)
 		{
@@ -452,13 +475,14 @@ public final class GameRecorder
 		encoder.flush(); // drop anything encoded out of game
 		state = State.RECORDING;
 		final int depth = r.docDictDepth;
+		final byte[] dict = r.docDict;
 		if (r.created)
 		{
 			nextFrame = 0;
 			final int first = nextFrame;
 			writer.submit(s ->
 			{
-				resetDocChain(depth);
+				resetDocChain(depth, dict);
 				s.startSession(RecFormat.SESSION_NEW, first, -1, -1);
 				// Recording enabled mid-game (or on an old save).
 				if (turn > 0)
@@ -473,7 +497,7 @@ public final class GameRecorder
 			final int recordedTo = r.lastTurn;
 			writer.submit(s ->
 			{
-				resetDocChain(depth);
+				resetDocChain(depth, dict);
 				s.startSession(RecFormat.SESSION_RESUME, first, turn, aut);
 				s.writeEvent(first, turn, EventDeriver.RESUME, "Resumed");
 				// Played with recording off (or on another device) since the last frame.
@@ -484,10 +508,12 @@ public final class GameRecorder
 		lastCommitMs = clock.nowMs();
 	}
 
-	private void resetDocChain(int depth)
+	private void resetDocChain(int depth, byte[] dict)
 	{
 		docWindow.clear();
 		docDictDepth = depth;
+		docDict = dict;
+		docDictAdler = dict != null ? Deflate.adler(dict) : -1;
 		docChain = 0;
 		blobSlots.clear();
 	}
@@ -567,8 +593,8 @@ public final class GameRecorder
 			String panel = panelOf.get(b.hash);
 			String slot = panel != null ? "p:" + panel : "k:" + b.kind;
 			BlobLink prev = blobSlots.get(slot);
-			// Depth bound keeps a random-access read to DOC_CHAIN_MAX inflates.
-			if (prev != null && prev.depth + 1 >= DOC_CHAIN_MAX)
+			// Depth bound keeps a random-access read to BLOB_CHAIN_MAX inflates.
+			if (prev != null && prev.depth + 1 >= BLOB_CHAIN_MAX)
 				prev = null;
 			byte[] z = Deflate.deflate(b.utf8, prev == null ? null : prev.raw);
 			if (s.writeBlob(b.hash, b.kind, z, prev == null ? null : prev.hash, frame))

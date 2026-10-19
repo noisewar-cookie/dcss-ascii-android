@@ -9,7 +9,10 @@ import com.crawlmb.NativeWrapper;
 import com.crawlmb.Paths;
 import com.crawlmb.view.TerminalRenderer;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -56,10 +59,28 @@ public final class Recordings
 				@Override public void resetSession() { NativeWrapper.recResetSession(); }
 			}, System::currentTimeMillis, appVersion(ctx), TerminalRenderer.FRAME_ROWS,
 					TerminalRenderer.FRAME_COLS);
+			recorder.setDocDict(docDict(ctx));
 			if ((ctx.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0)
 				recorder.setPerfLog(line -> android.util.Log.i("dcrec", line));
 		}
 		return recorder;
+	}
+
+	/** Trained doc dictionary new files embed; null (no dictionary) until one ships. */
+	private static byte[] docDict(Context ctx)
+	{
+		try (InputStream in = ctx.getAssets().open("recording/doc_dict.bin"))
+		{
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			byte[] buf = new byte[8192];
+			for (int n; (n = in.read(buf)) > 0; )
+				out.write(buf, 0, n);
+			return out.toByteArray();
+		}
+		catch (IOException e)
+		{
+			return null;
+		}
 	}
 
 	/** First name_seed_version[_n] file that is free or already this game's. */

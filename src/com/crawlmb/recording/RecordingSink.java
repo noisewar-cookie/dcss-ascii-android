@@ -17,18 +17,25 @@ public interface RecordingSink
 		public final int lastTurn;
 		/** The file's doc dictionary depth; appended docs must match it. */
 		public final int docDictDepth;
+		/** The file's own doc dictionary, null if it has none. */
+		public final byte[] docDict;
 
-		public OpenResult(boolean created, int nextFrame, int lastTurn, int docDictDepth)
+		public OpenResult(boolean created, int nextFrame, int lastTurn, int docDictDepth,
+				byte[] docDict)
 		{
 			this.created = created;
 			this.nextFrame = nextFrame;
 			this.lastTurn = lastTurn;
 			this.docDictDepth = docDictDepth;
+			this.docDict = docDict;
 		}
 	}
 
-	/** Create the file for this game or reopen it for appending. */
-	OpenResult open(GameIdentity id, String appVersion, int[] layout);
+	/**
+	 * Create the file for this game or reopen it for appending. A new file
+	 * embeds docDict (may be null); a reopened one keeps its own.
+	 */
+	OpenResult open(GameIdentity id, String appVersion, int[] layout, byte[] docDict);
 
 	/**
 	 * Start a session (new game or resume). For a resume, frames from earlier

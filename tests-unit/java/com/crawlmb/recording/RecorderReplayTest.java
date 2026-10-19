@@ -112,7 +112,7 @@ public class RecorderReplayTest
 			int depth = 0;
 			for (String b = s.blobBases.get(hash); b != null; b = s.blobBases.get(b))
 				depth++;
-			assertTrue(depth < GameRecorder.DOC_CHAIN_MAX);
+			assertTrue(depth < GameRecorder.BLOB_CHAIN_MAX);
 		}
 
 		final List<Integer> rendered = new ArrayList<>();
@@ -207,23 +207,73 @@ public class RecorderReplayTest
 		Harness h = new Harness();
 		h.frame(0, 0);
 		h.snapshot("CP", 0, 0, "D:1", 20, mapKey("D:1"));
-		for (int t = 1; t <= 40; t++)
+		int n = GameRecorder.DOC_CHAIN_MAX + 8;
+		for (int t = 1; t <= n; t++)
 			h.turn(t, "D:1", 20, mapDelta("D:1", 3 + t % 5));
 		h.frame(-1, -1);
-		h.frame(41, 410);
-		h.snapshot("CP", 41, 410, "D:1", 20, mapKey("D:1"));
-		h.turn(42, "D:1", 20, mapDelta("D:1", 4));
+		h.frame(n + 1, (n + 1) * 10);
+		h.snapshot("CP", n + 1, (n + 1) * 10, "D:1", 20, mapKey("D:1"));
+		h.turn(n + 2, "D:1", 20, mapDelta("D:1", 4));
 		h.rec.close();
 		h.w.drain();
 
 		List<MemoryRecordingStore.Snap> snaps = h.w.store.snaps;
-		assertEquals(43, snaps.size());
+		assertNull(h.w.store.docDict);
+		assertEquals(n + 3, snaps.size());
 		assertFalse(Deflate.usesDictionary(snaps.get(0).doc));
 		assertTrue(Deflate.usesDictionary(snaps.get(1).doc));
 		assertFalse(Deflate.usesDictionary(snaps.get(GameRecorder.DOC_CHAIN_MAX).doc));
-		assertFalse("resume restarts the chain", Deflate.usesDictionary(snaps.get(41).doc));
+		assertFalse("resume restarts the chain", Deflate.usesDictionary(snaps.get(n + 1).doc));
 		for (int i = 0; i < snaps.size(); i++) // snapshot i is turn i
 			assertTrue(h.w.store.snapshotDoc(i + 1).contains("\"turn\":" + i + ","));
+	}
+
+	@Test
+	public void docDictionaryEmbeddedAndKeptOnResume()
+	{
+		byte[] dict = TestSupport.doc("CP", 0, 0, "D:1", 20, 20, 1, mapKey("D:1"))
+				.getBytes(StandardCharsets.UTF_8);
+		Harness h = new Harness();
+		h.rec.setDocDict(dict);
+		h.frame(0, 0);
+		h.snapshot("CP", 0, 0, "D:1", 20, mapKey("D:1"));
+		int n = GameRecorder.DOC_CHAIN_MAX + 8;
+		for (int t = 1; t <= n; t++)
+			h.turn(t, "D:1", 20, mapDelta("D:1", 3 + t % 5));
+		h.rec.close();
+		h.w.drain();
+
+		MemoryRecordingStore s = h.w.store;
+		assertArrayEquals(dict, s.docDict);
+		long adler = Deflate.adler(dict);
+		List<MemoryRecordingStore.Snap> snaps = s.snaps;
+		assertTrue(Deflate.startsDocChain(snaps.get(0).doc, adler));
+		assertTrue(Deflate.usesDictionary(snaps.get(0).doc));
+		assertFalse(Deflate.startsDocChain(snaps.get(1).doc, adler));
+		assertTrue(Deflate.startsDocChain(snaps.get(GameRecorder.DOC_CHAIN_MAX).doc, adler));
+		assertTrue("the dictionary pays off on a chain start",
+				snaps.get(0).doc.length < Deflate.deflate(dict).length / 2);
+
+		// A newer app with a different bundled dictionary resumes the file.
+		GameRecorder rec = new GameRecorder(h.w.writer, h.nat, h.clock, "test",
+				TestSupport.ROWS, TestSupport.COLS);
+		rec.setDocDict("another dictionary".getBytes(StandardCharsets.UTF_8));
+		rec.setEnabled(true);
+		h.clock.t += 50;
+		h.scr.mutate(20);
+		rec.onFrame(h.scr.c.clone(), h.scr.fg.clone(), h.scr.bg.clone(), n + 1, (n + 1) * 10);
+		for (int t = n + 1; t <= n + 3; t++)
+			rec.onSnapshot(TestSupport.payload(TestSupport.doc("CP", t, t * 10, "D:1", 20, 20, 1,
+					t == n + 1 ? mapKey("D:1") : mapDelta("D:1", 4)), new String[0][]));
+		rec.close();
+		h.w.drain();
+
+		assertArrayEquals(dict, s.docDict);
+		assertEquals(n + 4, snaps.size());
+		assertTrue("resume restarts on the file's dictionary",
+				Deflate.startsDocChain(snaps.get(n + 1).doc, adler));
+		for (int i = 0; i < snaps.size(); i++) // snapshot i is turn i
+			assertTrue(s.snapshotDoc(i + 1).contains("\"turn\":" + i + ","));
 	}
 
 	@Test

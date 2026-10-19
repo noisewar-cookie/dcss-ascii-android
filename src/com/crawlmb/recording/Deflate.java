@@ -3,6 +3,7 @@ package com.crawlmb.recording;
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.zip.Adler32;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
@@ -11,7 +12,7 @@ import java.util.zip.Inflater;
 public final class Deflate
 {
 	public static final int DEFAULT_MAX_INFLATED = 64 * 1024 * 1024;
-	private static final int WINDOW = 32 * 1024; // deflate can't reach further back
+	public static final int WINDOW = 32 * 1024; // deflate can't reach further back
 
 	private Deflate() {}
 
@@ -42,12 +43,17 @@ public final class Deflate
 		}
 	}
 
-	/** Preset dictionary from consecutive docs, oldest first: their last 32 KB. */
-	public static byte[] windowDict(Collection<byte[]> docs)
+	/**
+	 * Preset dictionary from the file dictionary (may be null) followed by
+	 * consecutive docs, oldest first: their last 32 KB.
+	 */
+	public static byte[] windowDict(byte[] fileDict, Collection<byte[]> docs)
 	{
 		if (docs.isEmpty())
-			return null;
+			return fileDict;
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		if (fileDict != null)
+			out.write(fileDict, 0, fileDict.length);
 		for (byte[] d : docs)
 			out.write(d, 0, d.length);
 		byte[] all = out.toByteArray();
@@ -68,6 +74,28 @@ public final class Deflate
 	public static boolean usesDictionary(byte[] in)
 	{
 		return in.length > 1 && (in[1] & 0x20) != 0;
+	}
+
+	public static long adler(byte[] dict)
+	{
+		Adler32 a = new Adler32();
+		a.update(dict);
+		return a.getValue();
+	}
+
+	/**
+	 * True if the doc starts a chain: no preset dictionary, or exactly the
+	 * file dictionary (fileDictAdler, -1 for none).
+	 */
+	public static boolean startsDocChain(byte[] doc, long fileDictAdler)
+	{
+		if (!usesDictionary(doc))
+			return true;
+		if (fileDictAdler < 0 || doc.length < 6)
+			return false;
+		long id = ((doc[2] & 0xFFL) << 24) | ((doc[3] & 0xFF) << 16) | ((doc[4] & 0xFF) << 8)
+				| (doc[5] & 0xFF);
+		return id == fileDictAdler;
 	}
 
 	public static byte[] inflate(byte[] in, int maxBytes, byte[] dict)

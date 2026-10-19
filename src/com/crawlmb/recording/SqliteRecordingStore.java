@@ -25,6 +25,8 @@ import java.util.Map;
  */
 public final class SqliteRecordingStore implements RecordingSink, RecordingReader
 {
+	private static final String DOC_DICT_HASH = "doc_dict";
+
 	private final File file;
 	private SQLiteDatabase db;
 	private final boolean readOnly;
@@ -32,6 +34,8 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 	private long lastDocId = -1; // reader side: chained-doc cache
 	private ArrayDeque<byte[]> lastWindow = new ArrayDeque<>(); // docs up to lastDocId
 	private int docDictDepth; // 0 until read from meta
+	private byte[] docDict; // reader side, valid once docDictAdler != -2
+	private long docDictAdler = -2;
 	private Boolean blobBases; // reader side: pre-v3 files lack blobs.base
 	// Reader side: recent blob texts, so stepping through a base chain stays cheap.
 	private final Map<String, byte[]> blobCache = new LinkedHashMap<String, byte[]>(64, 0.75f, true)
@@ -144,7 +148,7 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 	// =================================================================== sink
 
 	@Override
-	public OpenResult open(GameIdentity id, String appVersion, int[] layout)
+	public OpenResult open(GameIdentity id, String appVersion, int[] layout, byte[] docDict)
 	{
 		String existing = metaValue("identity");
 		if (existing != null)
@@ -157,7 +161,8 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 				db.execSQL("DELETE FROM " + t + " WHERE frame >= " + next);
 			setMeta("app_version_last", appVersion);
 			setVersions();
-			return new OpenResult(false, (int) next, (int) lastTurn, fileDocDictDepth());
+			return new OpenResult(false, (int) next, (int) lastTurn, fileDocDictDepth(),
+					fileDocDict());
 		}
 		setVersions();
 		setMeta("codec", RecFormat.CODEC_DEFLATE);
@@ -168,7 +173,17 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 		setMeta("created_utc", Long.toString(System.currentTimeMillis()));
 		setMeta("grid", TerminalSize.ROWS + "x" + TerminalSize.COLS);
 		setMeta("layout", join(layout));
-		return new OpenResult(true, 0, -1, RecFormat.DOC_DICT_DEPTH);
+		if (docDict != null)
+		{
+			// NULL last_frame: trimBefore never collects it.
+			ContentValues v = new ContentValues();
+			v.put("hash", DOC_DICT_HASH);
+			v.put("kind", RecFormat.BLOB_DOC_DICT);
+			v.put("data", Deflate.deflate(docDict));
+			db.insertOrThrow("blobs", null, v);
+			setMeta("doc_dict", DOC_DICT_HASH);
+		}
+		return new OpenResult(true, 0, -1, RecFormat.DOC_DICT_DEPTH, docDict);
 	}
 
 	@Override
@@ -455,33 +470,44 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 	{
 		if (id != lastDocId)
 		{
-			// A chained doc (FDICT) inflates against the previous docDictDepth
-			// rows' docs; walk back to the chain start or the cached doc.
+			// A chained doc inflates against the file dictionary and the previous
+			// docDictDepth rows' docs; walk back to the chain start or the cached doc.
 			if (docDictDepth == 0)
 				docDictDepth = fileDocDictDepth();
+			if (docDictAdler == -2)
+			{
+				docDict = fileDocDict();
+				docDictAdler = docDict != null ? Deflate.adler(docDict) : -1;
+			}
 			Deque<byte[]> chain = new ArrayDeque<>();
 			ArrayDeque<byte[]> window = new ArrayDeque<>();
-			for (long cur = id; ; )
+			boolean found = false;
+			try (Cursor c = db.rawQuery("SELECT id, doc FROM snapshots WHERE id <= ?"
+					+ " ORDER BY id DESC LIMIT " + (2 * GameRecorder.DOC_CHAIN_MAX + 1),
+					new String[] { Long.toString(id) }))
 			{
-				byte[] z = rawDoc(cur);
-				chain.push(z);
-				if (!Deflate.usesDictionary(z))
-					break;
-				if (chain.size() > 2 * GameRecorder.DOC_CHAIN_MAX)
-					throw new ByteIO.FormatException("doc chain too long at " + id);
-				cur = longQuery("SELECT IFNULL(MAX(id), -1) FROM snapshots WHERE id < " + cur);
-				if (cur == lastDocId)
+				while (!found && c.moveToNext())
 				{
-					window = new ArrayDeque<>(lastWindow);
-					break;
+					if (c.getLong(0) == lastDocId)
+					{
+						window = new ArrayDeque<>(lastWindow);
+						found = true;
+						break;
+					}
+					byte[] z = c.getBlob(1);
+					chain.push(z);
+					found = Deflate.startsDocChain(z, docDictAdler);
 				}
 			}
+			if (!found)
+				throw new ByteIO.FormatException(chain.isEmpty() ? "missing snapshot " + id
+						: "doc chain too long at " + id);
 			for (byte[] z : chain)
 			{
-				if (!Deflate.usesDictionary(z))
+				if (Deflate.startsDocChain(z, docDictAdler))
 					window.clear();
 				window.addLast(Deflate.inflate(z, SnapshotPayload.MAX_DOC_BYTES,
-						Deflate.windowDict(window)));
+						Deflate.windowDict(docDict, window)));
 				if (window.size() > docDictDepth)
 					window.removeFirst();
 			}
@@ -498,14 +524,16 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 		return d > 0 && d <= 64 ? d : 1;
 	}
 
-	private byte[] rawDoc(long id)
+	private byte[] fileDocDict()
 	{
-		try (Cursor c = db.rawQuery("SELECT doc FROM snapshots WHERE id = ?",
-				new String[] { Long.toString(id) }))
+		String hash = metaValue("doc_dict");
+		if (hash == null)
+			return null;
+		try (Cursor c = db.rawQuery("SELECT data FROM blobs WHERE hash = ?", new String[] { hash }))
 		{
 			if (!c.moveToFirst())
-				throw new ByteIO.FormatException("missing snapshot " + id);
-			return c.getBlob(0);
+				throw new ByteIO.FormatException("missing doc dictionary");
+			return Deflate.inflate(c.getBlob(0), Deflate.WINDOW);
 		}
 	}
 
@@ -523,7 +551,7 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 		byte[] cached = blobCache.get(hash);
 		if (cached != null)
 			return cached;
-		if (depth > 2 * GameRecorder.DOC_CHAIN_MAX)
+		if (depth > 2 * GameRecorder.BLOB_CHAIN_MAX)
 			throw new ByteIO.FormatException("blob chain too long at " + hash);
 		byte[] z;
 		String base;

@@ -49,6 +49,7 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 	final List<EventRow> events = new ArrayList<>();
 	final List<int[]> abandonedRanges = new ArrayList<>(); // [from, toExclusive)
 	final List<String> sessions = new ArrayList<>();
+	byte[] docDict; // the blobs-table dictionary row in SQLite
 	private int nextChunkId = 1;
 	private long nextSnapId = 1;
 	int commits;
@@ -56,7 +57,7 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 	boolean opened;
 
 	@Override
-	public OpenResult open(GameIdentity id, String appVersion, int[] layout)
+	public OpenResult open(GameIdentity id, String appVersion, int[] layout, byte[] dict)
 	{
 		closed = false;
 		if (opened)
@@ -70,7 +71,7 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 			inputs.removeIf(x -> x[0] >= next);
 			events.removeIf(x -> x.frame >= next);
 			return new OpenResult(false, next, lastTurn,
-					Integer.parseInt(meta.getOrDefault("doc_dict_depth", "1")));
+					Integer.parseInt(meta.getOrDefault("doc_dict_depth", "1")), docDict);
 		}
 		opened = true;
 		meta.put("schema_version", Integer.toString(RecFormat.SCHEMA_VERSION));
@@ -78,7 +79,12 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 		meta.put("identity", id.json);
 		meta.put("app_version", appVersion);
 		meta.put("doc_dict_depth", Integer.toString(RecFormat.DOC_DICT_DEPTH));
-		return new OpenResult(true, 0, -1, RecFormat.DOC_DICT_DEPTH);
+		if (dict != null)
+		{
+			docDict = dict.clone();
+			meta.put("doc_dict", "doc_dict");
+		}
+		return new OpenResult(true, 0, -1, RecFormat.DOC_DICT_DEPTH, docDict);
 	}
 
 	@Override
@@ -281,14 +287,15 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 		int end = 0;
 		while (snaps.get(end).row.id != id)
 			end++;
+		long adler = docDict != null ? Deflate.adler(docDict) : -1;
 		int start = end;
-		while (Deflate.usesDictionary(snaps.get(start).doc))
+		while (!Deflate.startsDocChain(snaps.get(start).doc, adler))
 			start--;
 		ArrayDeque<byte[]> window = new ArrayDeque<>();
 		for (int i = start; i <= end; i++)
 		{
 			window.addLast(Deflate.inflate(snaps.get(i).doc, Deflate.DEFAULT_MAX_INFLATED,
-					Deflate.windowDict(window)));
+					Deflate.windowDict(docDict, window)));
 			if (window.size() > depth)
 				window.removeFirst();
 		}
