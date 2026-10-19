@@ -119,6 +119,12 @@ public class GameKeyListener implements KeyListener
 			this.keyBuffer.add(key);
 	}
 
+	public String getCommandHelpIfParked()
+	{
+		KeyBuffer kb = this.keyBuffer;
+		return kb != null ? kb.getCommandHelpIfParked() : null;
+	}
+
 	public int getKey(int v)
 	{
 		if (this.keyBuffer != null)

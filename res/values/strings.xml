@@ -25,9 +25,8 @@
     <string name="preferences_changelog_summary">See what\'s new in each release.</string>
     <string name="preferences_changelog_title_versioned">Changelog: v%1$d (%2$s)</string>
     <string name="preferences_donate_title">Love this app?!</string>
-    <string name="preferences_donate_message">Reviews and shares are the most valuable support for me. Donations are 100% optional and unnecessary, but do help me gauge interest, so you can buy me a coffee <a href="https://ko-fi.com/noisewar">here</a>.</string>
+    <string name="preferences_donate_message">Reviews and shares are the most valuable support for me.\n\nDonations are 100% optional and unnecessary, but do help me gauge interest, so you can buy me a coffee <a href="https://ko-fi.com/noisewar">here</a>.</string>
     <string name="preferences_info_title">Info</string>
-    <string name="preferences_info_summary">How do I work this?</string>
     <string name="preferences_settingsbutton_title">Show settings button</string>
     <string name="preferences_settingsbutton_summary">In-game app preferences button (this menu).</string>
     <string name="settingsbutton_disabled_message">Use two-finger long press to reach this menu in the future.</string>
@@ -74,11 +73,8 @@
     <string name="preferences_vibrate_title">Vibrate</string>
     <string name="preferences_vibrate_summary">Enable or disable vibration in game.</string>
     <string name="preferences_fullscreen_title">Full screen</string>
-    <string name="preferences_fullscreen_summary">Enable or disable game in full screen.</string>
     <string name="preferences_skipsplash_title">Skip splash screen</string>
-    <string name="preferences_skipsplash_summary">Skip the splash screen on startup.</string>
     <string name="preferences_skipcontrolsinfo_title">Skip startup help screens</string>
-    <string name="preferences_skipcontrolsinfo_summary">Skip the controls info screens on startup.</string>
     <string name="preferences_wordwrap_title">Word wrap</string>
     <string name="preferences_wordwrap_summary">Wrap most texts at screen edge. Restarts app.</string>
     <string name="preferences_compacthud_title">Compact UI Mode</string>
@@ -160,16 +156,14 @@
     <string name="preferences_landscapekb_summary">Choose which virtual keyboard to display in landscape orientation.</string>
     <string name="preferences_enablevolkeyfontsize_title">Volume key font sizing</string>
     <string name="preferences_enablevolkeyfontsize_summary">Font size changed by volume up &amp; down keys.</string>
-    <string name="preferences_enabletouch_title">Enable touch directionals</string>
+    <string name="preferences_enabletouch_title">Enable overlay touch controls</string>
     <string name="preferences_enabletouch_summary">Turn on touchscreen directional controls.</string>
     <string name="preferences_alwaysrun_title">Always run</string>
     <string name="preferences_alwaysrun_summary">Always run when using touch directional commands.</string>
     <string name="preferences_haptic_feedback_title">Enable haptic feedback</string>
-    <string name="preferences_haptic_feedback_summary">Vibrate on key-press.</string>
     <string name="preferences_keyboard_arrows_title">Show guide arrows on keyboard</string>
     <string name="preferences_keyboard_arrows_summary">Show red directional arrows on keyboard.</string>
     <string name="preferences_longpress_alt_title">Enable longpress alt keys</string>
-    <string name="preferences_longpress_alt_summary">Long-press a key to type the alt key.</string>
     <string name="preferences_helpbutton_title">Show help button</string>
     <string name="preferences_helpbutton_summary">In-game help button to show keys / controls.</string>
     <string name="preferences_wikibutton_title">Wiki button</string>

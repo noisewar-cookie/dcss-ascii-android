@@ -463,6 +463,8 @@ public class GameActivity extends Activity
 	private boolean pendingCenterlineEntry = false;
 	// Help modal requested from PreferencesActivity ("showHelpModal" extra).
 	private boolean pendingHelpModal = false;
+	// The open help modal came from Preferences; closing it reopens them.
+	private boolean helpModalReturnsToPrefs = false;
 	// Set on launching Preferences, cleared on resume: a double-tap on the
 	// settings cog lands before this activity pauses and would stack two.
 	private boolean preferencesLaunching = false;
@@ -904,7 +906,8 @@ public class GameActivity extends Activity
             		startActivity(getIntent());
             	}
             	if (data.getBooleanExtra("repositionUi", false)
-            			|| data.getBooleanExtra("repositionGrid", false))
+            			|| data.getBooleanExtra("repositionGrid", false)
+            			|| data.getBooleanExtra("showHelpModal", false))
             	{
             		prefsReturnData = new Bundle();
             		prefsReturnData.putInt(PreferencesActivity.EXTRA_LIST_POS,
@@ -1174,9 +1177,16 @@ public class GameActivity extends Activity
 			if (portraitHudView != null && !isReplayMode())
 			{
 				IconConfig iconConfig = IconConfig.load(getAssets());
+				// A rebuild drops any open modal without its dismiss callback.
+				helpModalReturnsToPrefs = false;
 				modalController = new ModalOverlayController(this, screenLayout,
 						iconConfig, () -> {
 							restoreKeyboardAfterReload();
+							if (helpModalReturnsToPrefs) {
+								helpModalReturnsToPrefs = false;
+								reopenPreferencesFromEditor();
+								return;
+							}
 							// Persist seen-version on real dismiss, not at show time:
 							// a fold rebuild tears the modal down without this
 							// callback, so rebuildViews re-shows it until dismissed.
@@ -1488,10 +1498,14 @@ public class GameActivity extends Activity
 			return;
 		wikiModalActive = false;
 		TextView tv = new TextView(this);
-		if (NativeWrapper.gameInProgress())
-			tv.setText(parseCrawlColourString(NativeWrapper.getCommandHelp()));
+		// Keybindings exist from startup, so this works on the main menu too;
+		// null only while the game thread is busy (loading, generating).
+		String help = gameKeyListener != null
+				? gameKeyListener.getCommandHelpIfParked() : null;
+		if (help != null)
+			tv.setText(parseCrawlColourString(help));
 		else
-			tv.setText("Open a game to see the control keys.");
+			tv.setText("Control keys are unavailable while the game is busy.");
 		tv.setTextColor(CRAWL_LIGHTGRAY);
 		float scale = portraitFontConfig != null
 				? portraitFontConfig.helpModalFontScale : 0.8f;
@@ -3942,6 +3956,7 @@ public class GameActivity extends Activity
 		// An editor dropped here never reopens Preferences, so don't let its
 		// list position leak into the next menu open.
 		prefsReturnData = null;
+		helpModalReturnsToPrefs = false;
 		// Drain pushes before the process can be cached and frozen
 		// (MIUI freezes within seconds; queued work would be lost).
 		// onStop runs after the next screen is visible, so the wait is
@@ -3977,6 +3992,10 @@ public class GameActivity extends Activity
 		if (pendingHelpModal) {
 			pendingHelpModal = false;
 			showHelpModal();
+			helpModalReturnsToPrefs = modalController != null
+					&& modalController.isActive();
+			if (!helpModalReturnsToPrefs)
+				prefsReturnData = null;
 		}
 
 		// A compact-HUD / bar-side toggle applied live instead of restarting

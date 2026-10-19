@@ -825,7 +825,8 @@ public class PreferencesActivity extends PreferenceActivity implements
     }
 
     // Returns to GameActivity, which opens the in-game help modal on seeing
-    // the extra (see GameActivity.onActivityResult).
+    // the extra (see GameActivity.onActivityResult) and reopens Preferences
+    // when it closes.
     private void setHelpIntent() {
         findPreference("help").setOnPreferenceClickListener(
                 new Preference.OnPreferenceClickListener() {
@@ -833,6 +834,7 @@ public class PreferencesActivity extends PreferenceActivity implements
                     public boolean onPreferenceClick(Preference pref) {
                         Intent result = new Intent();
                         result.putExtra("showHelpModal", true);
+                        putListPosition(result);
                         setResult(RESULT_OK, result);
                         finish();
                         return true;

@@ -151,6 +151,16 @@ public class KeyBuffer
 		return key;
 	}
 
+	// Command keyhelp, or null unless the game thread is blocked in get()'s
+	// wait. Holding the lock keeps it blocked, so the native read can't race.
+	public String getCommandHelpIfParked()
+	{
+		synchronized (keybuffer)
+		{
+			return wait ? NativeWrapper.getCommandHelp() : null;
+		}
+	}
+
 	public void signalSave()
 	{
 		// Log.d("Crawl", "signalSave");

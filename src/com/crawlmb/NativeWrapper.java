@@ -124,7 +124,8 @@ public class NativeWrapper
 	// DCSS main menu / character creation. Safe from the UI thread.
 	public static native boolean gameInProgress();
 	// The '?' command keyhelp as a colour-tagged string, built from live
-	// keybindings. Call only while a game is in progress (thread parked in getch).
+	// keybindings. Call only while the game thread is parked in getch — use
+	// KeyBuffer.getCommandHelpIfParked.
 	public static native String getCommandHelp();
 	// Game recording (android-recorder.cc). Call on the game thread or before
 	// initGame. getGameIdentity returns UTF-8 JSON bytes.
