@@ -135,9 +135,21 @@ public class GameActivity extends Activity
 	private String replayPath = null;
 	private ReplayUi replayUi = null;
 	private TerminalRenderer replayRenderer = null;
-	static final int SAVE_GIF = 3;
+	static final int SAVE_CLIP = 3;
 	// Replay clip waiting on the save-as picker; encoding starts once picked.
-	private ReplayUi.GifDestination pendingGifDst = null;
+	private ReplayUi.ClipDestination pendingClipDst = null;
+	// Video export from the Replays list: each replay is played through in
+	// turn and encoded from the screen, then saved to doc (several as one zip).
+	public static final String EXTRA_VIDEO_PATHS = "com.crawlmb.VIDEO_PATHS";
+	public static final String EXTRA_VIDEO_SPEED = "com.crawlmb.VIDEO_SPEED";
+	public static final String EXTRA_VIDEO_DOC = "com.crawlmb.VIDEO_DOC";
+	public static final String EXTRA_VIDEO_GRANT = "com.crawlmb.VIDEO_GRANT";
+	private String[] videoPaths = null;
+	private int videoIdx;
+	private double videoSpeed;
+	private Uri videoDoc;
+	private boolean videoGrant; // destination grant taken for this export
+	private final List<File> videos = new ArrayList<>();
 
 	public boolean isReplayMode()
 	{
@@ -191,33 +203,34 @@ public class GameActivity extends Activity
 						}
 
 						@Override
-						public Typeface consoleTypeface()
+						public View gamePanel()
 						{
-							return RecordingsActivity.videoTypeface(GameActivity.this);
+							return screenLayout == null || gamePanelId == View.NO_ID
+									? null : screenLayout.findViewById(gamePanelId);
 						}
 
 						@Override
-						public void pickGifDestination(String fileName,
-								ReplayUi.GifDestination dst)
+						public void pickClipDestination(String fileName, String mime,
+								ReplayUi.ClipDestination dst)
 						{
-							pendingGifDst = dst;
+							pendingClipDst = dst;
 							Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
 							i.addCategory(Intent.CATEGORY_OPENABLE);
-							i.setType("image/gif");
+							i.setType(mime);
 							i.putExtra(Intent.EXTRA_TITLE, fileName);
-							startActivityForResult(i, SAVE_GIF);
+							startActivityForResult(i, SAVE_CLIP);
 						}
 
 						@Override
-						public void saveGif(File gif, Uri dst)
+						public void saveClip(File clip, Uri dst, String what)
 						{
 							new Thread(() -> {
-								boolean ok = RecordingsActivity.copyTo(GameActivity.this, gif, dst);
-								gif.delete();
+								boolean ok = RecordingsActivity.copyTo(GameActivity.this, clip, dst);
+								clip.delete();
 								runOnUiThread(() -> Toast.makeText(GameActivity.this,
-										ok ? "GIF saved" : "Couldn't save the GIF",
+										ok ? what + " saved" : "Couldn't save the " + what,
 										Toast.LENGTH_LONG).show());
-							}, "dcrec-gif-write").start();
+							}, "dcrec-clip-write").start();
 						}
 
 						@Override
@@ -245,15 +258,126 @@ public class GameActivity extends Activity
 		rebuildViews();
 	}
 
+	private boolean startVideoExport(Intent data)
+	{
+		String[] paths = data.getStringArrayExtra(EXTRA_VIDEO_PATHS);
+		if (paths == null || paths.length == 0 || isReplayMode())
+			return false;
+		videoPaths = paths;
+		videoIdx = 0;
+		videoSpeed = data.getDoubleExtra(EXTRA_VIDEO_SPEED, 1);
+		videoDoc = data.getParcelableExtra(EXTRA_VIDEO_DOC);
+		videoGrant = data.getBooleanExtra(EXTRA_VIDEO_GRANT, false);
+		videos.clear();
+		exportNextVideo();
+		return true;
+	}
+
+	private void exportNextVideo()
+	{
+		if (videoIdx == videoPaths.length)
+		{
+			finishVideoExport(null);
+			return;
+		}
+		File src = new File(videoPaths[videoIdx]);
+		File dir = Recordings.exportsDir(this);
+		dir.mkdirs();
+		final File out = new File(dir, src.getName().replace(".dcrec", "") + ".mp4");
+		enterReplay(src.getPath());
+		if (!isReplayMode())
+		{
+			finishVideoExport("couldn't open " + src.getName());
+			return;
+		}
+		String title = videoPaths.length == 1 ? "Exporting video…"
+				: "Exporting video " + (videoIdx + 1) + " of " + videoPaths.length + "…";
+		replayUi.exportVideo(videoSpeed, out, title, (ok, err) -> {
+			if (!ok)
+			{
+				out.delete();
+				finishVideoExport(err == null ? "" : err);
+				return;
+			}
+			videos.add(out);
+			videoIdx++;
+			// The next replay takes this one's place without the Replays list.
+			releaseReplay();
+			exportNextVideo();
+		});
+	}
+
+	// error: null = all encoded, "" = cancelled. Ends on the Replays list.
+	private void finishVideoExport(String error)
+	{
+		final List<File> done = new ArrayList<>(videos);
+		final Uri doc = videoDoc;
+		final Uri grant = videoGrant ? doc : null;
+		final String speed = videoSpeed == 1 ? "Speed: as played"
+				: "Speed: " + (int) videoSpeed + "x";
+		videoPaths = null;
+		videos.clear();
+		if (error == null)
+			new Thread(() -> {
+				String contents = done.size() > 1 ? RecordingsActivity.names(done) : null;
+				File out = done.get(0);
+				boolean ok = false;
+				try
+				{
+					if (done.size() > 1)
+						out = RecordingsActivity.zipAll(this, "videos", done);
+					ok = RecordingsActivity.saveTo(this, out, doc);
+				}
+				catch (IOException e)
+				{
+					// Reported as a failed export below.
+				}
+				final File f = out;
+				final boolean saved = ok;
+				// Before the grant goes: the report reads the destination's name.
+				runOnUiThread(() -> {
+					RecordingsActivity.reportSaved(this, saved, f, doc, contents, speed);
+					if (grant != null)
+						RecordingsActivity.releaseGrant(this, grant);
+				});
+			}, "dcrec-video-write").start();
+		else
+		{
+			for (File v : done)
+				v.delete();
+			RecordingsActivity.deleteDocument(this, doc); // the picker made it empty
+			if (grant != null)
+				RecordingsActivity.releaseGrant(this, grant);
+			if (error.isEmpty())
+				Toast.makeText(this, "Export cancelled", Toast.LENGTH_LONG).show();
+			else
+				RecordingsActivity.report("Export failed", "Video export failed: " + error);
+		}
+		if (isReplayMode())
+			exitReplay();
+		else
+		{
+			// A replay failed to open between two others: views still show the last.
+			rebuildViews();
+			startActivityForResult(new Intent(this, RecordingsActivity.class),
+					RECORDINGS_FINISHED);
+		}
+	}
+
+	private void releaseReplay()
+	{
+		replayUi.release();
+		replayUi = null;
+		replayRenderer = null;
+		replayPath = null;
+	}
+
 	// Back from replay lands on the Replays list; Back there returns to the game.
 	private void exitReplay()
 	{
 		if (!isReplayMode())
 			return;
-		replayUi.release();
-		replayUi = null;
-		replayRenderer = null;
-		replayPath = null;
+		releaseReplay();
 		rebuildViews();
 		if (gameKeyListener != null && gameKeyListener.nativew != null)
 		{
@@ -741,14 +865,16 @@ public class GameActivity extends Activity
 	protected void onActivityResult(int requestCode, int resultCode,
             Intent data) {
         if (requestCode == RECORDINGS_FINISHED) {
+            if (resultCode == RESULT_OK && data != null && startVideoExport(data))
+                return;
             if (resultCode == RESULT_OK && data != null
                     && data.getStringExtra(EXTRA_REPLAY_PATH) != null)
                 enterReplay(data.getStringExtra(EXTRA_REPLAY_PATH));
             return;
         }
-        if (requestCode == SAVE_GIF) {
-            ReplayUi.GifDestination cb = pendingGifDst;
-            pendingGifDst = null;
+        if (requestCode == SAVE_CLIP) {
+            ReplayUi.ClipDestination cb = pendingClipDst;
+            pendingClipDst = null;
             Uri dst = resultCode == RESULT_OK && data != null
                     ? data.getData() : null;
             if (cb != null && dst != null)
@@ -762,7 +888,10 @@ public class GameActivity extends Activity
                         Preferences.getRecordGames());
                 gameKeyListener.nativew.setRecordLength(
                         Preferences.getRecordLength());
+                gameKeyListener.nativew.setRecordUi(Preferences.getRecordUi());
             }
+            if (resultCode == RESULT_OK && data != null && startVideoExport(data))
+                return;
             if (resultCode == RESULT_OK && data != null
                     && data.getStringExtra(EXTRA_REPLAY_PATH) != null) {
                 enterReplay(data.getStringExtra(EXTRA_REPLAY_PATH));

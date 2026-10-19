@@ -52,7 +52,7 @@ public final class RecFormat
 	// ---- Frame flags (frames.flags) ----
 	public static final int FRAME_INPUT_WAIT = 1;   // game waited for a key on this frame
 	public static final int FRAME_KEY_IN_CHUNK = 2; // frame is its chunk's keyframe
-	public static final int FRAME_POST_GAME = 4;    // after GAME_END (morgue/hiscore tail)
+	public static final int FRAME_POST_GAME = 4;    // after GAME_END (morgue/hiscore tail); older files only
 
 	// ---- Snapshot payload from native (android-recorder.cc) ----
 	public static final int SNAPSHOT_MAGIC = 0x44435331; // "DCS1"

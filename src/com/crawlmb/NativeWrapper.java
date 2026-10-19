@@ -69,6 +69,7 @@ public class NativeWrapper
 		pendingRecord = null;
 		applyRecording(Preferences.getRecordGames());
 		recorder.setTurnLimit(Preferences.getRecordLength());
+		recorder.setIncludeUi(Preferences.getRecordUi());
 		recorder.onLayout(currentLayout());
 		initGame(dataDir, settingsDir, morgueDir);
 	}
@@ -202,6 +203,13 @@ public class NativeWrapper
 			rec.setTurnLimit(turns);
 	}
 
+	public void setRecordUi(boolean on)
+	{
+		GameRecorder rec = recorder;
+		if (rec != null)
+			rec.setIncludeUi(on);
+	}
+
 	private void applyRecording(boolean on)
 	{
 		recorder.setEnabled(on);
@@ -307,12 +315,13 @@ public class NativeWrapper
 	// classification, routing and painting all see one consistent grid.
 	// turn/aut: game-thread frames carry you.num_turns / you.elapsed_time
 	// (-1 outside a game); UI-thread repaints (refreshTerminal) pass -2 and
-	// are not recorded.
-	public void frameUpdate(char[] chars, int[] fg, int[] bg, int turn, int aut)
+	// are not recorded. uiScreen: a popup screen is up (ui.cc.patch).
+	public void frameUpdate(char[] chars, int[] fg, int[] bg, int turn, int aut,
+			boolean uiScreen)
 	{
 		GameRecorder rec = recorder;
 		if (rec != null && turn != -2)
-			rec.onFrame(chars, fg, bg, turn, aut);
+			rec.onFrame(chars, fg, bg, turn, aut, uiScreen);
 		synchronized (display_lock)
 		{
 			if (renderer != null)

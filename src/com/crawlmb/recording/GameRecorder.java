@@ -18,8 +18,8 @@ import java.util.Map;
  *   RECORDING     first in-game frame or snapshot resolves the game identity,
  *                 opens/creates the file (new game from frame 0, turn 0) or
  *                 starts a "resume" session in an existing one.
- *   TAIL          after GAME_END, keep recording the death/morgue screens until
- *                 the game resets (TURN_NO_GAME) or TAIL_MAX_FRAMES, then close.
+ *   GAME_END closes the recording: the "You die" frame is the last one, the
+ *   morgue/hiscore screens after it are outside the character's life.
  *   Leaving a game without GAME_END (save & quit) closes the recording on the
  *   first out-of-game frame.
  */
@@ -42,7 +42,6 @@ public final class GameRecorder
 		void log(String line);
 	}
 
-	static final int TAIL_MAX_FRAMES = 300;
 	/** Frame turn once the game is reset (next character's menus). */
 	static final int TURN_NO_GAME = -3;
 	static final long OPEN_TIMEOUT_MS = 5000;
@@ -53,7 +52,7 @@ public final class GameRecorder
 	/** Blobs read by a recursive walk; longer chains saved little on a real game. */
 	static final int BLOB_CHAIN_MAX = 32;
 
-	private enum State { IDLE, RECORDING, TAIL }
+	private enum State { IDLE, RECORDING }
 
 	private final RecWriterThread writer;
 	private final NativeBridge nativeBridge;
@@ -68,10 +67,14 @@ public final class GameRecorder
 	private int nextFrame;
 	private int lastFrame = -1;
 	private int lastTurn = -1;
-	private int tailFrames;
 	private GameIdentity identity;
 	private boolean awaitKeySnapshot;
 	private int turnLimit;
+	private boolean includeUi = true;
+	// Time spent on skipped popup screens is cut from timestamps, so replays
+	// jump over it; skipStart >= 0 while one is up.
+	private long skippedMs;
+	private long skipStart = -1;
 	private int lastAnchorTurn;
 	private long lastCommitMs;
 	private final EventDeriver deriver = new EventDeriver();
@@ -176,90 +179,93 @@ public final class GameRecorder
 
 	public synchronized void onLayout(int[] layout)
 	{
-		encoder.layout(clock.nowMs(), layout);
+		encoder.layout(now(), layout);
+	}
+
+	public synchronized void setIncludeUi(boolean on)
+	{
+		includeUi = on;
 	}
 
 	/**
 	 * turn/aut: -1 = not in a game (death screens), TURN_NO_GAME after the game
-	 * is reset; callers drop UI-thread repaints (-2).
+	 * is reset; callers drop UI-thread repaints (-2). uiScreen: a popup screen
+	 * (menu, description) is up, not the main view.
 	 */
-	public synchronized void onFrame(char[] chars, int[] fg, int[] bg, int turn, int aut)
+	public synchronized void onFrame(char[] chars, int[] fg, int[] bg, int turn, int aut,
+			boolean uiScreen)
 	{
 		if (!enabled)
 			return;
-		long now = clock.nowMs();
+		long real = clock.nowMs();
 
-		// One character per file: the tail ends at the reset, before the next game.
-		if (state == State.TAIL && (turn == TURN_NO_GAME || turn >= 0))
-			closeRecording();
 		if (turn >= 0 && state == State.IDLE)
 			openRecording(turn, aut);
 		else if (turn < 0 && state == State.RECORDING)
 			closeRecording(); // left the game without dying (save & quit)
 		if (state == State.IDLE)
 			return;
-
-		int flags = 0;
-		if (state == State.TAIL)
+		if (uiScreen && !includeUi)
 		{
-			flags |= RecFormat.FRAME_POST_GAME;
-			if (++tailFrames > TAIL_MAX_FRAMES)
-			{
-				closeRecording();
-				return;
-			}
+			if (skipStart < 0)
+				skipStart = real;
+			return;
+		}
+		if (skipStart >= 0)
+		{
+			skippedMs += real - skipStart;
+			skipStart = -1;
 		}
 
 		final long t0 = perfLog != null ? System.nanoTime() : 0;
-		FrameChunkEncoder.Chunk closed = encoder.frame(nextFrame, now, turn, aut, chars, fg, bg);
-		encoder.lastFrame().flags |= flags;
+		FrameChunkEncoder.Chunk closed = encoder.frame(nextFrame, now(), turn, aut, chars, fg, bg);
 		lastFrame = nextFrame++;
 		if (turn >= 0)
 			lastTurn = turn;
 		emit(closed);
-		maybeCommit(now);
+		maybeCommit(real);
 		if (perfLog != null)
 			notePerfFrame(System.nanoTime() - t0);
 	}
 
 	public synchronized void onHudTitle(String texts, int[] colours)
 	{
-		if (enabled) encoder.hudTitle(clock.nowMs(), texts, colours);
+		if (enabled) encoder.hudTitle(now(), texts, colours);
 	}
 
 	public synchronized void onHudVitals(String texts, int[] colours)
 	{
-		if (enabled) encoder.hudVitals(clock.nowMs(), texts, colours);
+		if (enabled) encoder.hudVitals(now(), texts, colours);
 	}
 
 	public synchronized void onHudBars(int[] hp, int[] mp)
 	{
-		if (enabled) encoder.hudBars(clock.nowMs(), hp, mp);
+		if (enabled) encoder.hudBars(now(), hp, mp);
 	}
 
 	public synchronized void onStatusLights(String texts, int[] colours)
 	{
-		if (enabled) encoder.statusLights(clock.nowMs(), texts, colours);
+		if (enabled) encoder.statusLights(now(), texts, colours);
 	}
 
 	public synchronized void onMessageHistoryMode(boolean active)
 	{
-		if (enabled) encoder.messageHistoryMode(clock.nowMs(), active);
+		if (enabled) encoder.messageHistoryMode(now(), active);
 	}
 
 	public synchronized void onMessageHistory(char[] chars, int[] fg, int[] bg)
 	{
-		if (enabled) encoder.messageHistory(clock.nowMs(), chars, fg, bg);
+		if (enabled) encoder.messageHistory(now(), chars, fg, bg);
 	}
 
 	public synchronized void onCharacterLogMode(boolean active)
 	{
-		if (enabled) encoder.characterLogMode(clock.nowMs(), active);
+		if (enabled) encoder.characterLogMode(now(), active);
 	}
 
 	public synchronized void onMapAnchor(int col, int row)
 	{
-		if (enabled) encoder.mapAnchor(clock.nowMs(), col, row);
+		if (enabled) encoder.mapAnchor(now(), col, row);
 	}
 
 	/** Game is about to block for a key: the last frame is what the player saw. */
@@ -407,9 +413,7 @@ public final class GameRecorder
 			s.writeEvent(frame, turn, EventDeriver.GAME_END, r);
 			s.commit();
 		});
-		state = State.TAIL;
-		tailFrames = 0;
-		nativeBridge.resetSession();
+		closeRecording();
 		return true;
 	}
 
@@ -468,6 +472,8 @@ public final class GameRecorder
 			return; // stays IDLE; retried on the next in-game frame
 		}
 		identity = id;
+		skippedMs = 0;
+		skipStart = -1;
 		nativeBridge.resetSession();
 		awaitKeySnapshot = true;
 		deriver.reset();
@@ -531,6 +537,12 @@ public final class GameRecorder
 		identity = null;
 		nextFrame = 0;
 		lastFrame = -1;
+	}
+
+	// Frame/side-channel timestamp: frozen while a skipped popup is up.
+	private long now()
+	{
+		return (skipStart >= 0 ? skipStart : clock.nowMs()) - skippedMs;
 	}
 
 	static String gapLabel(int fromTurn, int toTurn)

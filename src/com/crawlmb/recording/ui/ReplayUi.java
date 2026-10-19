@@ -3,7 +3,6 @@ package com.crawlmb.recording.ui;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
-import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -19,6 +18,7 @@ import android.widget.RelativeLayout;
 import com.crawlmb.keyboard.CrawlKeyboardWrapper;
 import com.crawlmb.keylistener.KeyListener;
 import com.crawlmb.recording.ExamineCursor;
+import com.crawlmb.recording.GameIdentity;
 import com.crawlmb.recording.EventDeriver;
 import com.crawlmb.recording.KnowledgeResolver;
 import com.crawlmb.recording.RecordingReader;
@@ -33,6 +33,7 @@ import com.crawlmb.recording.ReplayRendererAdapter;
 import com.crawlmb.recording.ReplayTimeline;
 import com.crawlmb.recording.ReplayVideoEncoder;
 import com.crawlmb.recording.ScreenState;
+import com.crawlmb.recording.SqliteRecordingStore;
 import com.crawlmb.view.TerminalRenderer;
 
 import java.io.File;
@@ -56,18 +57,30 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		void toast(String msg);
 		void exitReplay();
 		File recordingFile();
-		Typeface consoleTypeface();
-		/** Save-as picker for a GIF; dst is called only if the user picks a file. */
-		void pickGifDestination(String fileName, GifDestination dst);
-		/** Copy a finished GIF to the picked file, then delete it. */
-		void saveGif(File gif, Uri dst);
+		/** The panel exports capture (map, HUD, messages); null mid-rebuild. */
+		View gamePanel();
+		/** Save-as picker for a clip; dst is called only if the user picks a file. */
+		void pickClipDestination(String fileName, String mime, ClipDestination dst);
+		/** Copy a finished clip to the picked file, then delete it. */
+		void saveClip(File clip, Uri dst, String what);
 		/** Rebuild the views from layout(); the recording switched layouts. */
 		void relayout();
 	}
 
-	public interface GifDestination
+	public interface ClipDestination
 	{
 		void picked(Uri dst);
+	}
+
+	/** UI thread. ok false with no error = cancelled. */
+	public interface ExportDone
+	{
+		void done(boolean ok, String error);
+	}
+
+	private interface ExportJob
+	{
+		void run(ViewCapture frames, ReplayVideoEncoder.Progress progress) throws IOException;
 	}
 
 	private enum SkipUnit { TURNS_10, TURNS_100, TURNS_1000, EVENT, LEVEL }
@@ -107,6 +120,13 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	private String gapNote;
 	private final Runnable clearGapNote = this::clearGapNote;
 	private static final int GAP_NOTE_MS = 2000;
+	// Position last drawn on the current views; -1 while a rebuild is due.
+	private int drawnPos = -1;
+	// Export waiting for the views to be drawn (first open, or the rebuild
+	// after returning from the clip picker).
+	private Runnable pendingExport;
+	private AtomicBoolean exportCancel;
+	private AlertDialog exportDialog;
 
 	public ReplayUi(Context ctx, Host host, RecordingReader reader, int chunkCacheSize)
 	{
@@ -121,7 +141,12 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 					public void render(ScreenState s, int pos)
 					{
 						if (adapter != null && recLayout.accept(s.layout))
+						{
 							adapter.render(s, pos);
+							drawnPos = pos;
+						}
+						else
+							drawnPos = -1;
 					}
 
 					@Override
@@ -154,6 +179,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		confined = width > 0;
 		confinedLeft = alignLeft;
 		pad = null; // belonged to the old layout
+		drawnPos = -1;
 		adapter = new ReplayRendererAdapter(renderer, this);
 		recLayout.onRebuilt();
 		controls = new ReplayControlsView(ctx, this);
@@ -197,12 +223,19 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	{
 		if (adapter != null)
 			adapter.reset();
-		if (started)
-		{
+		boolean first = !started;
+		started = true;
+		if (!first)
 			controller.refresh();
+		if (pendingExport != null)
+		{
+			Runnable r = pendingExport;
+			pendingExport = null;
+			r.run();
 			return;
 		}
-		started = true;
+		if (!first)
+			return;
 		controller.seek(0);
 		int gaps = 0;
 		for (RecordingReader.EventRow e : controller.timeline().events())
@@ -224,6 +257,11 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 
 	public void release()
 	{
+		if (exportCancel != null)
+			exportCancel.set(true);
+		exportCancel = null;
+		if (exportDialog != null && exportDialog.isShowing())
+			exportDialog.dismiss();
 		driver.release();
 		reader.close();
 	}
@@ -437,12 +475,22 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		final String info = span + "\n" + String.format(Locale.US, "%d:%02d", s / 60, s % 60)
 				+ " at " + speedLabel(speedIdx) + ", " + clockLabel().toLowerCase(Locale.US);
 		final int fromFrame = tl.frame(w[0]), toFrame = tl.frame(w[1]);
-		// Live files are <name>_<seed>_<version>.dcrec; keep just the name.
-		String who = host.recordingFile().getName().replace(".dcrec", "")
-				.replaceFirst("_\\d+_[^_]+$", "");
-		final String name = who + " " + span.toLowerCase(Locale.US).replace('\u2013', '-') + ".gif";
-		host.pickGifDestination(name,
-				dst -> encodeGif(fromFrame, toFrame, mode, speed, info, name, dst));
+		// Menu-only stretches (turn < 0) count as turn 0.
+		int t0 = Math.max(0, tl.turn(w[0])), t1 = Math.max(0, tl.turn(w[1]));
+		GameIdentity id = SqliteRecordingStore.identity(host.recordingFile());
+		final String base = id != null ? id.clipName(t0, t1)
+				: host.recordingFile().getName().replace(".dcrec", "") + "_" + t0 + "-" + t1;
+		new AlertDialog.Builder(ctx)
+				.setTitle("Clip as")
+				.setItems(new String[] { "Animated GIF (.gif)", "Video (.mp4)" }, (d, which) ->
+				{
+					final boolean video = which == 1;
+					final String name = base + (video ? ".mp4" : ".gif");
+					host.pickClipDestination(name, video ? "video/mp4" : "image/gif",
+							dst -> encodeClip(video, fromFrame, toFrame, mode, speed, info,
+									name, dst));
+				})
+				.show();
 	}
 
 	private static String spanLabel(int from, int to)
@@ -453,27 +501,108 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	}
 
 	// Encoded to a temp file, which the host copies to the picked destination.
-	private void encodeGif(int fromFrame, int toFrame, ReplayClock.Mode mode, double speed,
-			String info, String name, Uri dst)
+	private void encodeClip(final boolean video, final int fromFrame, final int toFrame,
+			final ReplayClock.Mode mode, final double speed, String info, String name,
+			final Uri dst)
 	{
-		final Activity act = (Activity) ctx;
+		final String what = video ? "Video" : "GIF";
 		final File src = host.recordingFile();
-		final Typeface tf = host.consoleTypeface();
 		File dir = Recordings.exportsDir(ctx);
 		dir.mkdirs();
 		final File out = new File(dir, name);
+		final int back = controller.position();
+		Runnable run = () -> runExport(video ? "Creating video…" : "Creating GIF…", info,
+				(frames, p) ->
+				{
+					if (video)
+						ReplayVideoEncoder.encode(src, fromFrame, toFrame, mode, speed, frames,
+								out, p);
+					else
+						ReplayGifEncoder.encode(src, fromFrame, toFrame, mode, speed, frames,
+								out, p);
+				},
+				(ok, err) ->
+				{
+					controller.seek(back);
+					if (!ok)
+					{
+						out.delete();
+						host.toast(err == null ? what + " cancelled"
+								: what + " export failed: " + err);
+					}
+					else
+						host.saveClip(out, dst, what);
+				});
+		// Returning from the picker rebuilt the views; they aren't measured yet.
+		View panel = host.gamePanel();
+		if (panel == null || panel.getWidth() == 0)
+			pendingExport = run;
+		else
+			run.run();
+	}
+
+	/**
+	 * Plays the whole recording into an MP4 at out once the views are first
+	 * drawn (call before onRendererReady). done runs unless the replay is
+	 * released first.
+	 */
+	public void exportVideo(final double speed, final File out, String title,
+			final ExportDone done)
+	{
+		final File src = host.recordingFile();
+		pendingExport = () -> runExport(title, null,
+				(frames, p) -> ReplayVideoEncoder.encode(src, out, speed, frames, p),
+				done);
+	}
+
+	// Frames come from these views, so the screen can't be touched meanwhile:
+	// a non-cancelable progress dialog covers it.
+	private void runExport(String title, String info, final ExportJob job,
+			final ExportDone done)
+	{
+		driver.pause();
+		leaveBrowsing();
+		final Activity act = (Activity) ctx;
+		View panel = host.gamePanel();
+		if (panel == null || panel.getWidth() == 0)
+		{
+			done.done(false, "the screen isn't ready");
+			return;
+		}
 		final AtomicBoolean cancel = new AtomicBoolean();
+		exportCancel = cancel;
+		final ViewCapture frames = new ViewCapture(new ViewCapture.Source()
+		{
+			@Override
+			public View panel()
+			{
+				return host.gamePanel();
+			}
+
+			@Override
+			public void seek(int pos)
+			{
+				controller.seek(pos);
+			}
+
+			@Override
+			public boolean drawn(int pos)
+			{
+				return drawnPos == pos;
+			}
+		}, panel, cancel);
 		final ProgressBar bar = new ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal);
 		bar.setMax(1000);
 		int pad = Math.round(24 * ctx.getResources().getDisplayMetrics().density);
 		bar.setPadding(pad, pad, pad, pad);
 		final AlertDialog dlg = new AlertDialog.Builder(ctx)
-				.setTitle("Creating GIF\u2026")
+				.setTitle(title)
 				.setMessage(info)
 				.setView(bar)
 				.setCancelable(false)
 				.setNegativeButton("Cancel", (d, x) -> cancel.set(true))
 				.show();
+		exportDialog = dlg;
 		act.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		final Handler main = new Handler(Looper.getMainLooper());
 		new Thread(() ->
@@ -481,22 +610,21 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 			String error = null;
 			try
 			{
-				ReplayGifEncoder.encode(src, fromFrame, toFrame, mode, speed, tf, out,
-						new ReplayVideoEncoder.Progress()
-						{
-							@Override
-							public void update(int done, int total)
-							{
-								int p = (int) (1000L * done / Math.max(1, total));
-								main.post(() -> bar.setProgress(p));
-							}
+				job.run(frames, new ReplayVideoEncoder.Progress()
+				{
+					@Override
+					public void update(int done, int total)
+					{
+						int p = (int) (1000L * done / Math.max(1, total));
+						main.post(() -> bar.setProgress(p));
+					}
 
-							@Override
-							public boolean cancelled()
-							{
-								return cancel.get();
-							}
-						});
+					@Override
+					public boolean cancelled()
+					{
+						return cancel.get();
+					}
+				});
 			}
 			catch (IOException | RuntimeException e)
 			{
@@ -505,22 +633,17 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 			final String err = error;
 			main.post(() ->
 			{
-				if (act.isDestroyed())
-				{
-					out.delete();
+				// Released (replay left, activity destroyed): nothing to report to.
+				if (exportCancel != cancel)
 					return;
-				}
+				exportCancel = null;
+				exportDialog = null;
 				act.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 				dlg.dismiss();
-				if (cancel.get() || err != null)
-				{
-					out.delete();
-					host.toast(cancel.get() ? "GIF cancelled" : "GIF export failed: " + err);
-				}
-				else
-					host.saveGif(out, dst);
+				boolean ok = !cancel.get() && err == null;
+				done.done(ok, ok || cancel.get() ? null : String.valueOf(err));
 			});
-		}, "dcrec-gif").start();
+		}, "dcrec-export").start();
 	}
 
 	@Override

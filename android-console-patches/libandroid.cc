@@ -38,6 +38,8 @@
 #include "viewgeom.h"
 #include "android-recorder.h"
 
+namespace ui { bool android_ui_screen_open(); } // ui.cc.patch
+
 // main.h was removed in 0.34.1; forward-declare main() directly
 extern int main(int argc, char *argv[]);
 
@@ -276,7 +278,7 @@ static bool _cache_native_wrapper_methods(JNIEnv* e)
 	NativeWrapper_getch = e->GetMethodID(NativeWrapperClass,
 		"getch", "(I)I");
 	NativeWrapper_frameUpdate = e->GetMethodID(NativeWrapperClass,
-		"frameUpdate", "([C[I[III)V");
+		"frameUpdate", "([C[I[IIIZ)V");
 	NativeWrapper_updateStatusLights = e->GetMethodID(NativeWrapperClass,
 		"updateStatusLights", "(Ljava/lang/String;[I)V");
 	NativeWrapper_setMessageHistoryMode = e->GetMethodID(NativeWrapperClass,
@@ -622,8 +624,9 @@ void Java_com_crawlmb_NativeWrapper_initGame( JNIEnv* env, jobject object , jstr
 // turn/aut tag every frame for Screen<->Knowledge sync in recordings:
 // game-thread frames carry you.num_turns / you.elapsed_time (-1 on the
 // death screens, -3 once the game is reset); UI-thread repaints pass -2 so
-// the recorder skips them.
-static void _send_frame(JNIEnv* e, jobject obj, jint turn, jint aut)
+// the recorder skips them. ui_screen: a popup screen (menu, description) is up.
+static void _send_frame(JNIEnv* e, jobject obj, jint turn, jint aut,
+	jboolean ui_screen)
 {
 	const int cells = MENU_LINES * COLS;
 	jcharArray jchars = e->NewCharArray(cells);
@@ -654,7 +657,7 @@ static void _send_frame(JNIEnv* e, jobject obj, jint turn, jint aut)
 		e->SetIntArrayRegion(jbg, i * COLS, COLS, rowBg);
 	}
 	e->CallVoidMethod(obj, NativeWrapper_frameUpdate, jchars, jfg, jbg,
-		turn, aut);
+		turn, aut, ui_screen);
 	if (e->ExceptionCheck())
 		e->ExceptionClear();
 	e->DeleteLocalRef(jchars);
@@ -668,7 +671,7 @@ void Java_com_crawlmb_NativeWrapper_refreshTerminal( JNIEnv* env, jobject object
 	// from the UI thread. May run before initGame: terminalWindow is
 	// zero-initialized then, which Java renders as blanks — don't deref
 	// crawl globals here.
-	_send_frame(env, object, -2, -2);
+	_send_frame(env, object, -2, -2, JNI_FALSE);
 }
 
 void set_mouse_enabled(bool enabled)
@@ -691,7 +694,8 @@ void sendTerminalToScreen()
 	const jint none = crawl_state.game_started ? -1 : -3;
 	_send_frame(env, NativeWrapperObj,
 		in_game ? (jint)you.num_turns : none,
-		in_game ? (jint)you.elapsed_time : none);
+		in_game ? (jint)you.elapsed_time : none,
+		ui::android_ui_screen_open() ? JNI_TRUE : JNI_FALSE);
 }
 
 void android_send_status_lights(const char** texts, const int* colours,

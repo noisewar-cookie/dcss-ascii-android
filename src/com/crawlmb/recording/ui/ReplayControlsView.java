@@ -26,7 +26,7 @@ import java.util.List;
  * Replay controls hosted in the keyboard area (replaces the Crawl keyboard in
  * replay mode). Rows:
  *   status line (turn · input · place · state) / examine summary
- *   range picker over the whole game   [clip to GIF] (Range on only)
+ *   range picker over the whole game   [clip to GIF/MP4] (Range on only)
  *   timeline scrubber (centred alone in the same box while Range is off)
  *   transport:   1x  |<<  <|  >/||  |>  >>|  [events]
  *   modes:       Step: turn   Skip: 10 turns   As played   Range
@@ -126,7 +126,7 @@ public final class ReplayControlsView extends LinearLayout
 		clip.setImageResource(R.drawable.ic_replay_clip);
 		clip.setBackgroundResource(flat());
 		clip.setPadding(0, 0, 0, 0);
-		clip.setContentDescription("Clip range to GIF");
+		clip.setContentDescription("Clip range to GIF or video");
 		clip.setOnClickListener(v -> actions.onClip());
 		LayoutParams clipLp = new LayoutParams(dp(CLIP_DP), dp(RANGE_DP));
 		rangeRow.addView(clip, clipLp);

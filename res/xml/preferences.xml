@@ -442,6 +442,11 @@
     <PreferenceCategory android:key="configFiles" android:title="Config Files" >
     </PreferenceCategory>
     <PreferenceCategory android:key="saveFiles" android:title="@string/save_files">
+        <Preference
+            android:key="recordings"
+            android:title="Replays..."
+            android:summary="Watch, export and import recorded games">
+        </Preference>
         <CheckBoxPreference
             android:key="crawl.recordgames"
             android:defaultValue="false"
@@ -454,11 +459,11 @@
             android:dialogTitle="@string/preferences_recordlength_dialogtitle"
             android:entries="@array/recordLengthDescriptions"
             android:entryValues="@array/recordLengthValues" />
-        <Preference
-            android:key="recordings"
-            android:title="Replays..."
-            android:summary="Watch, export and import recorded games">
-        </Preference>
+        <CheckBoxPreference
+            android:key="crawl.recordui"
+            android:defaultValue="false"
+            android:title="@string/preferences_recordui_title"
+            android:summary="@string/preferences_recordui_summary" />
     </PreferenceCategory>
     <PreferenceCategory android:key="morgue" android:title="@string/morgue">
         <Preference

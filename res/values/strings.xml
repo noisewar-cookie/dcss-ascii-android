@@ -32,10 +32,10 @@
     <string name="preferences_settingsbutton_summary">In-game app preferences button (this menu).</string>
     <string name="settingsbutton_disabled_message">Use two-finger long press to reach this menu in the future.</string>
     <string name="preferences_help_summary">Show the control keys.</string>
-    <string name="backup_save_directory">Backup save directory</string>
-    <string name="backup_morgue_directory">Backup morgue directory</string>
-    <string name="restore_save_directory">Restore save directory</string>
-    <string name="restore_morgue_directory">Restore morgue directory</string>
+    <string name="backup_save_directory">Backup characters save folder</string>
+    <string name="backup_morgue_directory">Backup morgue folder</string>
+    <string name="restore_save_directory">Restore characters save folder</string>
+    <string name="restore_morgue_directory">Restore morgue folder</string>
     <string name="copying_files">Copying files...</string>
     <string name="files_copied_successfully">Files copied successfully</string>
     <string name="error_copying_files">Error copying files</string>
@@ -106,9 +106,11 @@
     <string name="preferences_newturnmark_title">New turn indicator</string>
     <string name="preferences_recordgames_title">Record games</string>
     <string name="preferences_recordgames_summary">Save a turn-by-turn replay of your game.</string>
-    <string name="preferences_recordlength_title">"    Record Length: %1$s"</string>
+    <string name="preferences_recordlength_title">"    Record length: %1$s"</string>
     <string name="preferences_recordlength_summary">"      How many of the latest turns the replay keeps."</string>
     <string name="preferences_recordlength_dialogtitle">Record length</string>
+    <string name="preferences_recordui_title">"    Include UI screens"</string>
+    <string name="preferences_recordui_summary">"      Record all non-gameplay screens too."</string>
     <string name="preferences_recordlength_warning">Older turns of the game in progress will be deleted from its replay. This can\'t be undone.</string>
     <string name="preferences_newturnmark_summary">Show turn markers in the message log. Restarts app.</string>
     <string name="preferences_bevelmargin_title">Edge margin</string>
@@ -355,7 +357,7 @@
     <string name="recordings_win">Win</string>
     <string name="recordings_select">Select Files</string>
     <string name="recordings_done">Done</string>
-    <string name="recordings_export">Export…</string>
+    <string name="recordings_export">Batch Export…</string>
     <string name="recordings_delete">Delete</string>
     <string name="new_prefs_options_message">New options added!\n\nTwo-finger long press to see app menu.</string>
     <string name="font_delete">Delete font</string>

@@ -1,5 +1,5 @@
 diff --git a/crawl-ref/source/ui.cc b/crawl-ref/source/ui.cc
-index 744b710626..6eb5d2b843 100644
+index 744b710..584f0ac 100644
 --- a/crawl-ref/source/ui.cc
 +++ b/crawl-ref/source/ui.cc
 @@ -40,6 +40,13 @@
@@ -37,3 +37,19 @@ index 744b710626..6eb5d2b843 100644
      // don't recalculate if the previous calculation imposed no constraints
      // on the text, and the new calculation would be the same or greater in
      // size. This can happen through a sequence of _get_preferred_size calls
+@@ -3326,6 +3347,15 @@ bool has_layout()
+     return ui_root.num_children() > 0;
+ }
+ 
++#ifndef USE_TILE_LOCAL
++// Android recording: a popup screen is up. Targeting is a layout too, but
++// it draws on the main view, so it doesn't count.
++bool android_ui_screen_open()
++{
++    return ui_root.num_children() > 0 && ui_root.state.keymap != KMC_TARGETING;
++}
++#endif
++
+ NORETURN void restart_layout()
+ {
+     throw UIRoot::RestartAllocation();

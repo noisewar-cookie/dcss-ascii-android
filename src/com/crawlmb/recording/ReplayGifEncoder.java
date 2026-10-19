@@ -1,30 +1,29 @@
 package com.crawlmb.recording;
 
-import android.graphics.Typeface;
+import android.graphics.Bitmap;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
- * Clips part of a recording into a looping animated GIF of the classic
- * console, drawn by the MP4 export's painter. A frame is written only when the
- * screen changes, as the rectangle that differs from the previous frame.
+ * Clips part of a recording into a looping animated GIF of frames captured
+ * off the replay views. A frame is written only when the screen changes, as
+ * the rectangle that differs from the previous frame, with its own palette.
  * Runs on a background thread.
  */
 public final class ReplayGifEncoder
 {
-	private static final float CELL_PX = 10;
 	// Browsers stretch delays under 20 ms, so briefer screens are dropped.
 	private static final int MIN_DELAY_MS = 20;
 	private static final long END_HOLD_MS = 2000;
-	private static final int MAX_BASE_COLOURS = 64;
 
 	private ReplayGifEncoder() {}
 
@@ -41,7 +40,8 @@ public final class ReplayGifEncoder
 	}
 
 	public static void encode(File src, int fromFrame, int toFrame, ReplayClock.Mode mode,
-			double speed, Typeface tf, File out, ReplayVideoEncoder.Progress progress)
+			double speed, ReplayVideoEncoder.Frames frames, File out,
+			ReplayVideoEncoder.Progress progress)
 			throws IOException
 	{
 		SqliteRecordingStore store = SqliteRecordingStore.openForReplay(src);
@@ -56,21 +56,15 @@ public final class ReplayGifEncoder
 			ReplayClock clock = new ReplayClock();
 			clock.setMode(mode);
 
-			int first = from;
-			while (first < to && tl.turn(first) < 0)
-				first++;
-			ReplayVideoEncoder.ConsolePainter painter = new ReplayVideoEncoder.ConsolePainter(tf);
-			int[] size = painter.sizeFor(cache.state(tl.chunkId(first), tl.frame(first)), CELL_PX);
-			int w = size[0];
-			painter.setSize(w, size[1]);
-			// Gameplay layouts reserve rows the console never fills; crop them off.
-			int h = usedHeight(tl, cache, painter, from, to);
+			int w = frames.width(), h = frames.height();
+			frames.setOutputSize(w, h);
 
 			try (OutputStream os = new BufferedOutputStream(new FileOutputStream(out)))
 			{
-				Gif gif = new Gif(os, w, h, palette(tl, cache, from, to));
-				int[] pending = new int[w * h];
+				Gif gif = new Gif(os, w, h);
+				int[] px = new int[w * h];
 				ScreenState shown = null;
+				int pending = from; // position on screen, captured once it's kept
 				double heldMs = 0; // how long the pending screen has been up
 				for (int pos = from; pos <= to; pos++)
 				{
@@ -81,19 +75,21 @@ public final class ReplayGifEncoder
 					if (pos > from)
 						heldMs += clock.cost(tl, pos - 1, pos) / speed;
 					ScreenState s = cache.state(tl.chunkId(pos), tl.frame(pos));
-					if (shown != null && (s == shown || s.gridEquals(shown)))
+					if (shown != null && (s == shown
+							|| (s.gridEquals(shown) && s.sideChannelsEqual(shown))))
 						continue;
 					// A screen too brief to show is replaced; its time carries over.
 					if (shown != null && heldMs >= MIN_DELAY_MS)
 					{
-						gif.frame(pending, heldMs);
+						capture(frames, pending, px, w, h);
+						gif.frame(px, heldMs);
 						heldMs = 0;
 					}
 					shown = s;
-					painter.paint(s);
-					painter.bitmap.getPixels(pending, 0, w, 0, 0, w, h);
+					pending = pos;
 				}
-				gif.frame(pending, heldMs + END_HOLD_MS);
+				capture(frames, pending, px, w, h);
+				gif.frame(px, heldMs + END_HOLD_MS);
 				gif.finish();
 			}
 			ok = true;
@@ -106,87 +102,36 @@ public final class ReplayGifEncoder
 		}
 	}
 
-	private static int usedHeight(ReplayTimeline tl, ChunkCache cache,
-			ReplayVideoEncoder.ConsolePainter painter, int from, int to)
+	private static void capture(ReplayVideoEncoder.Frames frames, int pos, int[] px, int w,
+			int h) throws IOException
 	{
-		int h = 1;
-		ScreenState prev = null;
-		for (int pos = from; pos <= to; pos++)
-		{
-			ScreenState s = cache.state(tl.chunkId(pos), tl.frame(pos));
-			if (s != prev)
-				h = Math.max(h, painter.usedHeight(s));
-			prev = s;
-		}
-		return h;
+		Bitmap bm = frames.frame(pos);
+		bm.getPixels(px, 0, w, 0, 0, w, h);
 	}
 
-	/** The clip's cell colours plus their anti-aliased blends against black. */
-	private static int[] palette(ReplayTimeline tl, ChunkCache cache, int from, int to)
-	{
-		Set<Integer> base = new LinkedHashSet<>();
-		base.add(0);
-		ScreenState prev = null;
-		for (int pos = from; pos <= to && base.size() < MAX_BASE_COLOURS; pos++)
-		{
-			ScreenState s = cache.state(tl.chunkId(pos), tl.frame(pos));
-			if (s == prev)
-				continue;
-			prev = s;
-			for (int i = 0; i < s.fg.length && base.size() < MAX_BASE_COLOURS; i++)
-			{
-				base.add(s.fg[i] & 0xFFFFFF);
-				// Checked per add: 65 base colours plus blends would overflow the 256 table.
-				if (base.size() < MAX_BASE_COLOURS)
-					base.add(s.bg[i] & 0xFFFFFF);
-			}
-		}
-		int[] pal = new int[256];
-		int n = 0;
-		for (int c : base)
-			pal[n++] = c;
-		for (int c : base)
-			for (int a = 1; a <= 3 && c != 0; a++)
-				pal[n++] = scale(c, a, 4);
-		return pal;
-	}
-
-	private static int scale(int rgb, int num, int den)
-	{
-		int r = (rgb >> 16 & 0xFF) * num / den, g = (rgb >> 8 & 0xFF) * num / den,
-				b = (rgb & 0xFF) * num / den;
-		return r << 16 | g << 8 | b;
-	}
-
-	/** GIF89a writer: global palette, infinite loop, delta frames kept on screen. */
+	/** GIF89a writer: per-frame palettes, infinite loop, delta frames kept on screen. */
 	private static final class Gif
 	{
 		private final OutputStream out;
 		private final int w, h;
-		private final int[] pal;
+		private final int[] pal = new int[256];
+		private int palSize;
 		private final Map<Integer, Integer> nearest = new HashMap<>();
 		private int[] shown;
 		private double elapsedMs;
 		private long writtenCs;
 
-		Gif(OutputStream out, int w, int h, int[] pal) throws IOException
+		Gif(OutputStream out, int w, int h) throws IOException
 		{
 			this.out = out;
 			this.w = w;
 			this.h = h;
-			this.pal = pal;
 			out.write(new byte[] { 'G', 'I', 'F', '8', '9', 'a' });
 			short16(w);
 			short16(h);
-			out.write(0xF7); // global table, 8-bit colour, 256 entries
+			out.write(0x70); // no global table, 8-bit colour
 			out.write(0);
 			out.write(0);
-			for (int c : pal)
-			{
-				out.write(c >> 16 & 0xFF);
-				out.write(c >> 8 & 0xFF);
-				out.write(c & 0xFF);
-			}
 			out.write(new byte[] { 0x21, (byte) 0xFF, 11, 'N', 'E', 'T', 'S', 'C', 'A', 'P', 'E',
 					'2', '.', '0', 3, 1, 0, 0, 0 });
 		}
@@ -232,7 +177,14 @@ public final class ReplayGifEncoder
 			short16(y0);
 			short16(fw);
 			short16(fh);
-			out.write(0);
+			out.write(0x87); // local table, 256 entries
+			palette(px, x0, y0, fw, fh);
+			for (int c : pal)
+			{
+				out.write(c >> 16 & 0xFF);
+				out.write(c >> 8 & 0xFF);
+				out.write(c & 0xFF);
+			}
 			byte[] idx = new byte[fw * fh];
 			for (int y = 0, k = 0; y < fh; y++)
 				for (int x = 0; x < fw; x++)
@@ -245,6 +197,33 @@ public final class ReplayGifEncoder
 			out.write(0x3B);
 		}
 
+		// The rect's 256 commonest colours; anti-aliased edges take the nearest.
+		private void palette(int[] px, int x0, int y0, int fw, int fh)
+		{
+			Map<Integer, int[]> counts = new HashMap<>();
+			for (int y = 0; y < fh; y++)
+				for (int x = 0, i = (y0 + y) * w + x0; x < fw; x++, i++)
+				{
+					int rgb = px[i] & 0xFFFFFF;
+					int[] n = counts.get(rgb);
+					if (n == null)
+						counts.put(rgb, new int[] { 1 });
+					else
+						n[0]++;
+				}
+			List<Map.Entry<Integer, int[]>> byCount = new ArrayList<>(counts.entrySet());
+			Collections.sort(byCount, (a, b) -> Integer.compare(b.getValue()[0], a.getValue()[0]));
+			nearest.clear();
+			palSize = Math.min(pal.length, byCount.size());
+			for (int i = 0; i < palSize; i++)
+			{
+				pal[i] = byCount.get(i).getKey();
+				nearest.put(pal[i], i);
+			}
+			for (int i = palSize; i < pal.length; i++)
+				pal[i] = 0;
+		}
+
 		private int index(int rgb)
 		{
 			Integer hit = nearest.get(rgb);
@@ -252,7 +231,7 @@ public final class ReplayGifEncoder
 				return hit;
 			int best = 0;
 			long bestD = Long.MAX_VALUE;
-			for (int i = 0; i < pal.length; i++)
+			for (int i = 0; i < palSize; i++)
 			{
 				int dr = (rgb >> 16 & 0xFF) - (pal[i] >> 16 & 0xFF);
 				int dg = (rgb >> 8 & 0xFF) - (pal[i] >> 8 & 0xFF);

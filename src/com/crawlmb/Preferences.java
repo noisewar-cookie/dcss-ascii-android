@@ -31,6 +31,7 @@ final public class Preferences
 	public static final String KEY_NEWTURNMARK = "crawl.newturnmark";
 	public static final String KEY_RECORDGAMES = "crawl.recordgames";
 	public static final String KEY_RECORDLENGTH = "crawl.recordlength";
+	public static final String KEY_RECORDUI = "crawl.recordui";
 	public static final String KEY_COMPACTHUD = "crawl.compacthud";
 	// Compact-mode HP/MP vertical bars: which map edge they dock to, or off.
 	// Values SIDE_RIGHT (default) / SIDE_LEFT / SIDE_OFF.
@@ -335,6 +336,12 @@ final public class Preferences
 		{
 			return 0;
 		}
+	}
+
+	// Record popup screens (menus, descriptions) too, not just the main view.
+	public static boolean getRecordUi()
+	{
+		return sharedPreferences.getBoolean(KEY_RECORDUI, false);
 	}
 
 	// Compact HUD mode. Frees three terminal HUD rows (title/vitals to native

@@ -1,10 +1,6 @@
 package com.crawlmb.recording;
 
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.Typeface;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
@@ -26,9 +22,10 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 
 /**
- * Renders a recording as the classic 80-column console into an H.264 MP4.
- * Variable frame rate: a frame is submitted only when the screen changes
- * (plus a keep-alive each second), with exact timestamps via EGL.
+ * Encodes a recording into an H.264 MP4 from frames captured off the replay
+ * views, at the game panel's size. Variable frame rate: a frame is submitted
+ * only when the screen changes (plus a keep-alive each second), with exact
+ * timestamps via EGL.
  * Runs on a background thread.
  */
 public final class ReplayVideoEncoder
@@ -39,13 +36,22 @@ public final class ReplayVideoEncoder
 		boolean cancelled();
 	}
 
+	/** Screen images by timeline position, all one size. Encoder thread. */
+	public interface Frames
+	{
+		int width();
+		int height();
+		/** Size of the bitmaps frame() returns; the screen is scaled to fit. */
+		void setOutputSize(int w, int h);
+		Bitmap frame(int pos) throws IOException;
+	}
+
 	private static final String MIME = MediaFormat.MIMETYPE_VIDEO_AVC;
 	private static final int FPS = 30;
 	private static final long KEEPALIVE_MS = 1000;
 	private static final long END_HOLD_MS = 2000;
 	private static final int EGL_RECORDABLE_ANDROID = 0x3142;
-	// Native view_max_height (libandroid.cc); the message panel sits below it.
-	private static final int GAMEPLAY_VIEW_LINES = 17;
+	private static final int MAX_PIXELS = 1920 * 1088;
 
 	private ReplayVideoEncoder() {}
 
@@ -76,8 +82,17 @@ public final class ReplayVideoEncoder
 		return new ReplayTimeline(store.frameIndex(), store.events(), false);
 	}
 
-	public static void encode(File src, File out, double speed, Typeface tf, Progress progress)
-			throws IOException
+	/** The whole recording, as played. */
+	public static void encode(File src, File out, double speed, Frames frames,
+			Progress progress) throws IOException
+	{
+		encode(src, 0, Integer.MAX_VALUE, ReplayClock.Mode.AS_PLAYED, speed, frames, out,
+				progress);
+	}
+
+	/** Recorded frames fromFrame..toFrame, paced like the replay clock in mode. */
+	public static void encode(File src, int fromFrame, int toFrame, ReplayClock.Mode mode,
+			double speed, Frames frames, File out, Progress progress) throws IOException
 	{
 		SqliteRecordingStore store = SqliteRecordingStore.openForReplay(src);
 		Encoder enc = null;
@@ -87,52 +102,55 @@ public final class ReplayVideoEncoder
 			ReplayTimeline tl = timeline(store);
 			if (tl.size() == 0)
 				throw new IOException("recording is empty");
+			int from = Math.max(0, tl.posOfFrame(fromFrame)), to = tl.posOfFrame(toFrame);
+			if (to < from)
+				throw new IOException("nothing to clip");
 			ChunkCache cache = new ChunkCache(store, 2);
-			ConsolePainter painter = new ConsolePainter(tf);
-			// Orientation from the first gameplay screen: portrait phone layouts
-			// (tall message panel) would be tiny in a landscape frame.
-			int first = 0;
-			while (first < tl.size() - 1 && tl.turn(first) < 0)
-				first++;
-			enc = new Encoder(out, painter.isTall(cache.state(tl.chunkId(first), tl.frame(first))));
-			painter.setSize(enc.width, enc.height);
+			enc = new Encoder(out, frames.width(), frames.height());
+			frames.setOutputSize(enc.width, enc.height);
 			ReplayClock clock = new ReplayClock();
+			clock.setMode(mode);
 			clock.setSpeed(speed);
 
-			int pos = 0;
+			int pos = from;
 			long frameNo = 0, videoMs = 0, lastSubmitMs = 0;
-			ScreenState shown = cache.state(tl.chunkId(0), tl.frame(0));
-			painter.paint(shown);
-			enc.submit(painter.bitmap, true, 0);
-			while (!clock.atEnd(tl, pos))
+			ScreenState shown = cache.state(tl.chunkId(from), tl.frame(from));
+			Bitmap bm = frames.frame(from);
+			enc.submit(bm, true, 0);
+			while (pos < to)
 			{
 				if (progress.cancelled())
 					throw new IOException("cancelled");
 				frameNo++;
 				long t = frameNo * 1000 / FPS;
-				pos = clock.advance(tl, pos, t - videoMs);
+				pos = Math.min(to, clock.advance(tl, pos, t - videoMs));
 				videoMs = t;
 				ScreenState s = cache.state(tl.chunkId(pos), tl.frame(pos));
-				if (s != shown && !s.gridEquals(shown))
+				if (s != shown && !(s.gridEquals(shown) && s.sideChannelsEqual(shown)))
 				{
 					shown = s;
-					painter.paint(s);
-					enc.submit(painter.bitmap, true, videoMs);
+					bm = frames.frame(pos);
+					enc.submit(bm, true, videoMs);
 					lastSubmitMs = videoMs;
 				}
 				else if (videoMs - lastSubmitMs >= KEEPALIVE_MS)
 				{
-					enc.submit(painter.bitmap, false, videoMs);
+					enc.submit(bm, false, videoMs);
 					lastSubmitMs = videoMs;
 				}
 				if ((frameNo & 63) == 0)
-					progress.update(pos, tl.size() - 1);
+					progress.update(pos - from, to - from);
 			}
-			// Hold the final screen (death/win) so it doesn't flash past. The
+			// Hold the final screen (death/win, clip end) so it doesn't flash past. The
 			// near-duplicate pins the last sample's muxed duration to one frame.
-			enc.submit(painter.bitmap, false, videoMs + END_HOLD_MS - 1000 / FPS);
-			enc.submit(painter.bitmap, false, videoMs + END_HOLD_MS);
+			enc.submit(bm, false, videoMs + END_HOLD_MS - 1000 / FPS);
+			enc.submit(bm, false, videoMs + END_HOLD_MS);
 			enc.finish();
+			enc.release();
+			enc = null;
+			GameIdentity id = SqliteRecordingStore.identity(src);
+			Mp4Tags.write(out, id == null ? null : id.name + " - DCSS " + id.dcssVersion,
+					id == null ? null : id.name + ", Dungeon Crawl Stone Soup " + id.dcssVersion);
 			ok = true;
 		}
 		finally
@@ -142,126 +160,6 @@ public final class ReplayVideoEncoder
 			store.close();
 			if (!ok)
 				out.delete();
-		}
-	}
-
-	/** Draws a ScreenState as a centred cell grid on black. Shared with ReplayGifEncoder. */
-	static final class ConsolePainter
-	{
-		Bitmap bitmap;
-		private Canvas canvas;
-		private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
-		private final Paint fill = new Paint();
-		private int width, height;
-		private final float advancePerSize, spacingPerSize, ascentPerSize;
-
-		ConsolePainter(Typeface tf)
-		{
-			text.setTypeface(tf);
-			text.setTextSize(100);
-			Paint.FontMetrics fm = text.getFontMetrics();
-			advancePerSize = text.measureText("M") / 100;
-			spacingPerSize = (fm.descent - fm.ascent) / 100;
-			ascentPerSize = -fm.ascent / 100;
-		}
-
-		void setSize(int width, int height)
-		{
-			this.width = width;
-			this.height = height;
-			bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-			canvas = new Canvas(bitmap);
-		}
-
-		/** Width and height whose cells are cellW px wide at s's gameplay row count. */
-		int[] sizeFor(ScreenState s, float cellW)
-		{
-			float size = cellW / advancePerSize;
-			return new int[] { Math.round(s.cols * cellW), Math.round(rows(s) * spacingPerSize * size) };
-		}
-
-		boolean isTall(ScreenState s)
-		{
-			return rows(s) * spacingPerSize > s.cols * advancePerSize;
-		}
-
-		private static int rows(ScreenState s)
-		{
-			return Math.min(s.rows, Math.max(layoutRows(s), lastUsedRow(s) + 1));
-		}
-
-		/** Bottom pixel of s's last non-blank row when painted at the current size. */
-		int usedHeight(ScreenState s)
-		{
-			int rows = rows(s);
-			float ch = spacingPerSize * textSize(s, rows);
-			float top = (height - ch * rows) / 2;
-			return Math.min(height, (int) Math.ceil(top + (lastUsedRow(s) + 1) * ch));
-		}
-
-		private float textSize(ScreenState s, int rows)
-		{
-			float size = height / (rows * spacingPerSize);
-			if (s.cols * advancePerSize * size > width)
-				size = width / (s.cols * advancePerSize);
-			return size;
-		}
-
-		void paint(ScreenState s)
-		{
-			int rows = rows(s);
-			float size = textSize(s, rows);
-			text.setTextSize(size);
-			float cw = advancePerSize * size, ch = spacingPerSize * size;
-			float left = (width - cw * s.cols) / 2, top = (height - ch * rows) / 2;
-			float ascent = ascentPerSize * size;
-
-			canvas.drawColor(Color.BLACK);
-			for (int r = 0; r < rows; r++)
-			{
-				float y0 = top + r * ch;
-				for (int c = 0; c < s.cols; c++)
-				{
-					int i = r * s.cols + c;
-					float x0 = left + c * cw;
-					if (!isBlack(s.bg[i]))
-					{
-						fill.setColor(s.bg[i] | 0xFF000000);
-						canvas.drawRect(Math.round(x0), Math.round(y0),
-								Math.round(x0 + cw), Math.round(y0 + ch), fill);
-					}
-					char k = s.chars[i];
-					if (k > ' ')
-					{
-						text.setColor(s.fg[i] | 0xFF000000);
-						canvas.drawText(s.chars, i, 1, x0, y0 + ascent, text);
-					}
-				}
-			}
-		}
-
-		// Gameplay keeps a fixed scale; only taller menus shrink the cells.
-		private static int layoutRows(ScreenState s)
-		{
-			int msgRows = s.layout[RecFormat.LAYOUT_MSG_ROWS];
-			return msgRows > 0 ? GAMEPLAY_VIEW_LINES + msgRows : 24;
-		}
-
-		private static int lastUsedRow(ScreenState s)
-		{
-			for (int r = s.rows - 1; r >= 0; r--)
-				for (int c = 0; c < s.cols; c++)
-				{
-					int i = r * s.cols + c;
-					if (s.chars[i] > ' ' || !isBlack(s.bg[i]))
-						return r;
-				}
-			return 0;
-		}
-
-		private static boolean isBlack(int argb)
-		{
-			return (argb & 0xFFFFFF) == 0;
 		}
 	}
 
@@ -278,31 +176,29 @@ public final class ReplayVideoEncoder
 		private EGLSurface surface = EGL14.EGL_NO_SURFACE;
 		private int track = -1;
 		private boolean muxing;
+		private int samples;
 		private int texture;
 
-		Encoder(File out, boolean portrait) throws IOException
+		Encoder(File out, int srcWidth, int srcHeight) throws IOException
 		{
 			codec = MediaCodec.createEncoderByType(MIME);
 			MediaCodecInfo.CodecCapabilities caps =
 					codec.getCodecInfo().getCapabilitiesForType(MIME);
 			MediaCodecInfo.VideoCapabilities vc = caps.getVideoCapabilities();
-			// Some encoders cap height below width; fall back to landscape.
-			if (portrait && !vc.isSizeSupported(1080, 1920) && !vc.isSizeSupported(720, 1280))
-				portrait = false;
-			int big = 1920, small = 1080;
-			boolean fullHd = portrait ? vc.isSizeSupported(1080, 1920) : vc.isSizeSupported(1920, 1080);
-			if (!fullHd)
+			int[] size = fit(vc, srcWidth, srcHeight);
+			if (size == null)
 			{
-				big = 1280;
-				small = 720;
+				codec.release();
+				throw new IOException("no video size fits " + srcWidth + "x" + srcHeight);
 			}
-			width = portrait ? small : big;
-			height = portrait ? big : small;
+			width = size[0];
+			height = size[1];
 			MediaFormat f = MediaFormat.createVideoFormat(MIME, width, height);
 			f.setInteger(MediaFormat.KEY_COLOR_FORMAT,
 					MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
 			// Sharp text on mostly static frames: generous bitrate, sparse keyframes.
-			f.setInteger(MediaFormat.KEY_BIT_RATE, fullHd ? 5_000_000 : 3_000_000);
+			f.setInteger(MediaFormat.KEY_BIT_RATE, vc.getBitrateRange().clamp(
+					(int) Math.min(Integer.MAX_VALUE, 2.5 * width * height)));
 			f.setInteger(MediaFormat.KEY_FRAME_RATE, FPS);
 			f.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2);
 			if (caps.getEncoderCapabilities().isBitrateModeSupported(
@@ -322,6 +218,20 @@ public final class ReplayVideoEncoder
 				release();
 				throw e;
 			}
+		}
+
+		// Largest 16-aligned scale of the screen the encoder takes, capped at
+		// 1080p's area: larger sizes the caps accept can still encode nothing.
+		private static int[] fit(MediaCodecInfo.VideoCapabilities vc, int w, int h)
+		{
+			for (double s = 1; s > 0.2; s *= 0.9)
+			{
+				int fw = (int) (w * s) & ~15, fh = (int) (h * s) & ~15;
+				if (fw >= 16 && fh >= 16 && fw * fh <= MAX_PIXELS
+						&& vc.areSizeAndRateSupported(fw, fh, FPS))
+					return new int[] { fw, fh };
+			}
+			return null;
 		}
 
 		private void setUpGl()
@@ -411,10 +321,14 @@ public final class ReplayVideoEncoder
 			drain(false);
 		}
 
-		void finish()
+		void finish() throws IOException
 		{
 			codec.signalEndOfInputStream();
 			drain(true);
+			if (samples == 0)
+				throw new IOException("the encoder produced no video at " + width + "x" + height);
+			muxing = false;
+			muxer.stop(); // writes the index; a failure here leaves an unplayable file
 		}
 
 		private void drain(boolean toEnd)
@@ -442,6 +356,7 @@ public final class ReplayVideoEncoder
 						buf.position(info.offset);
 						buf.limit(info.offset + info.size);
 						muxer.writeSampleData(track, buf, info);
+						samples++;
 					}
 					codec.releaseOutputBuffer(i, false);
 					if ((info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0)

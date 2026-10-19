@@ -51,7 +51,7 @@ public class RecorderReplayTest
 		{
 			clock.t += 50;
 			scr.mutate(20);
-			rec.onFrame(scr.c.clone(), scr.fg.clone(), scr.bg.clone(), turn, aut);
+			rec.onFrame(scr.c.clone(), scr.fg.clone(), scr.bg.clone(), turn, aut, false);
 		}
 
 		void snapshot(String kind, int turn, int aut, String level, int hp, String extra)
@@ -261,7 +261,7 @@ public class RecorderReplayTest
 		rec.setEnabled(true);
 		h.clock.t += 50;
 		h.scr.mutate(20);
-		rec.onFrame(h.scr.c.clone(), h.scr.fg.clone(), h.scr.bg.clone(), n + 1, (n + 1) * 10);
+		rec.onFrame(h.scr.c.clone(), h.scr.fg.clone(), h.scr.bg.clone(), n + 1, (n + 1) * 10, false);
 		for (int t = n + 1; t <= n + 3; t++)
 			rec.onSnapshot(TestSupport.payload(TestSupport.doc("CP", t, t * 10, "D:1", 20, 20, 1,
 					t == n + 1 ? mapKey("D:1") : mapDelta("D:1", 4)), new String[0][]));
@@ -369,7 +369,7 @@ public class RecorderReplayTest
 		rec.setEnabled(true);
 		h.clock.t += 50;
 		h.scr.mutate(20);
-		rec.onFrame(h.scr.c.clone(), h.scr.fg.clone(), h.scr.bg.clone(), 10, 100);
+		rec.onFrame(h.scr.c.clone(), h.scr.fg.clone(), h.scr.bg.clone(), 10, 100, false);
 		rec.close();
 		h.w.drain();
 
@@ -384,7 +384,7 @@ public class RecorderReplayTest
 	}
 
 	@Test
-	public void deathTailStopsAtGameReset()
+	public void deathClosesRecording()
 	{
 		Harness h = new Harness();
 		h.frame(0, 0);
@@ -393,19 +393,40 @@ public class RecorderReplayTest
 			h.turn(t, "D:1", 20, mapDelta("D:1", 3 + t));
 		h.rec.onGameEnd(1, "Killed".getBytes(StandardCharsets.UTF_8),
 				"morgue.txt".getBytes(StandardCharsets.UTF_8));
-		for (int i = 0; i < 4; i++)
-			h.frame(-1, -1); // death screens
-		h.rec.flush();
 		h.w.drain();
 		MemoryRecordingStore s = h.w.store;
 		int recorded = s.frames.size();
+		assertTrue(s.closed);
+		assertFalse(h.rec.isRecording());
+		for (int i = 0; i < 4; i++)
+			h.frame(-1, -1); // death screens
 		for (int i = 0; i < 6; i++)
 			h.frame(GameRecorder.TURN_NO_GAME, GameRecorder.TURN_NO_GAME); // next char's menus
 		h.w.drain();
 
-		assertTrue(s.closed);
 		assertFalse(h.rec.isRecording());
 		assertEquals(recorded, s.frames.size());
-		assertTrue((TestSupport.last(s.frames).flags & RecFormat.FRAME_POST_GAME) != 0);
+		assertEquals(5, TestSupport.last(s.frames).turn);
+	}
+
+	@Test
+	public void skippedUiScreensTakeNoTime()
+	{
+		Harness h = new Harness();
+		h.rec.setIncludeUi(false);
+		h.frame(0, 0);
+		h.frame(1, 10);
+		for (int i = 0; i < 100; i++)
+		{
+			h.clock.t += 100;
+			h.rec.onFrame(h.scr.c.clone(), h.scr.fg.clone(), h.scr.bg.clone(), 1, 10, true);
+		}
+		h.frame(2, 20);
+		h.rec.flush();
+		h.w.drain();
+		List<MemoryRecordingStore.Frame> f = h.w.store.frames;
+		assertEquals(3, f.size());
+		// Only the 100 ms before the popup opened counts, not the 10 s on it.
+		assertEquals(f.get(1).tMs + 100, f.get(2).tMs);
 	}
 }

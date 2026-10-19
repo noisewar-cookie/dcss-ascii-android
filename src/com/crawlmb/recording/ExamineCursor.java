@@ -15,10 +15,8 @@ import java.util.Map;
  */
 public final class ExamineCursor
 {
-	// map_cell flag bits recorded by android-recorder.cc (map-cell.h)
-	public static final int MAP_MAGIC_MAPPED = 0x01;
-	public static final int MAP_SEEN = 0x02;
-	public static final int MAP_DETECTED_ITEM = 0x20;
+	// Set by LevelMap from the snapshot's LOS bitmap, never read from the
+	// recorded flags (whose bits are DCSS's; see RecordingImplementation.md).
 	public static final int MAP_VISIBLE = 0x40;
 
 	private static final int HIGHLIGHT_BG = 0xFFBBBBBB;

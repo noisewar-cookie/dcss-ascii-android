@@ -4,27 +4,24 @@ import android.app.AlertDialog;
 import android.app.ListActivity;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Typeface;
+import android.content.UriPermission;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.DocumentsContract;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.ListView;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.documentfile.provider.DocumentFile;
 
-import com.crawlmb.CustomFontManager;
-import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.recording.GameIdentity;
@@ -33,10 +30,10 @@ import com.crawlmb.recording.RecordingImporter;
 import com.crawlmb.recording.Recordings;
 import com.crawlmb.recording.ReplayVideoEncoder;
 import com.crawlmb.recording.SqliteRecordingStore;
-import com.crawlmb.view.GameFontShaper;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -48,19 +45,21 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Recordings library: list, watch, export as .dcrec or encoded .mp4 to a
- * picked file/folder (SAF), import, delete; Select mode applies export/delete
- * to several. Opened from Preferences > Replays. Watch returns the path to the
- * caller (GameActivity plays it in place).
+ * picked file (SAF; several go as one .zip), import, delete; Select mode
+ * applies export/delete to several. Opened from Preferences > Replays. Watch
+ * and video export return to the caller (GameActivity plays the replay in
+ * place, or plays it through while encoding).
  */
 public class RecordingsActivity extends ListActivity
 {
 	private static final int REQ_IMPORT = 1;
 	private static final int REQ_EXPORT_ONE = 2;
-	private static final int REQ_EXPORT_DIR = 3;
+	private static final int REQ_VIDEO = 4;
 	// kill_method_type KILLED_BY_WINNING (kill-method-type.h).
 	private static final int KILLED_BY_WINNING = 11;
 	private static final double[] VIDEO_SPEEDS = { 1, 2, 4, 8 };
@@ -71,12 +70,12 @@ public class RecordingsActivity extends ListActivity
 	private final Handler main = new Handler(Looper.getMainLooper());
 	private final Set<File> selected = new HashSet<>();
 	private boolean selecting;
-	// Awaiting the SAF picker: originals for a folder export, finished files
-	// (encoded videos) for a folder export, or one finished file.
-	private List<File> pendingExport = Collections.emptyList();
-	private List<File> pendingReady = Collections.emptyList();
+	// Awaiting the SAF picker: one finished file (and, for a zip, the names
+	// in it), or originals and speed for a video export.
 	private File exportedOne;
-	private AtomicBoolean encodeCancel;
+	private String exportedContents;
+	private List<File> pendingVideo = Collections.emptyList();
+	private double pendingVideoSpeed;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState)
@@ -106,18 +105,72 @@ public class RecordingsActivity extends ListActivity
 	}
 
 	@Override
-	protected void onDestroy()
-	{
-		if (encodeCancel != null)
-			encodeCancel.set(true);
-		super.onDestroy();
-	}
-
-	@Override
 	protected void onResume()
 	{
 		super.onResume();
 		reload();
+		resumed = this;
+		showReport();
+	}
+
+	@Override
+	protected void onPause()
+	{
+		super.onPause();
+		if (resumed == this)
+			resumed = null;
+	}
+
+	// Video exports finish in GameActivity, so reports queue here until the
+	// Replays list is showing. Main thread only.
+	private static String[] pendingReport;
+	private static RecordingsActivity resumed;
+
+	static void report(String title, String body)
+	{
+		pendingReport = new String[] { title, body };
+		if (resumed != null)
+			resumed.showReport();
+	}
+
+	private void showReport()
+	{
+		if (pendingReport == null)
+			return;
+		String[] r = pendingReport;
+		pendingReport = null;
+		new AlertDialog.Builder(this)
+				.setTitle(r[0])
+				.setMessage(r[1])
+				.setPositiveButton("OK", null)
+				.show();
+	}
+
+	// contents: names inside a batch zip; extra: a closing line, e.g. speed.
+	static void reportSaved(Context ctx, boolean ok, File f, Uri doc, String contents,
+			String extra)
+	{
+		if (!ok)
+		{
+			report("Export failed", "Couldn't write " + f.getName() + ".");
+			return;
+		}
+		DocumentFile d = DocumentFile.fromSingleUri(ctx, doc);
+		StringBuilder b = new StringBuilder("Saved as ").append(d == null || d.getName() == null
+				? f.getName() : d.getName()).append('.');
+		if (contents != null)
+			b.append("\n\nContains:\n").append(contents);
+		if (extra != null)
+			b.append("\n\n").append(extra);
+		report("Export complete", b.toString());
+	}
+
+	static String names(List<File> files)
+	{
+		StringBuilder b = new StringBuilder();
+		for (File f : files)
+			b.append(b.length() == 0 ? "" : "\n").append(f.getName());
+		return b.toString();
 	}
 
 	private void reload()
@@ -272,13 +325,8 @@ public class RecordingsActivity extends ListActivity
 				.show();
 	}
 
-	private interface CopiesReady
-	{
-		void run(List<File> copies);
-	}
-
 	// Never hand out the live file: WAL sidecars may hold recent writes.
-	private void cleanCopies(final List<File> src, final CopiesReady done)
+	private void cleanCopies(final List<File> src)
 	{
 		if (src.isEmpty())
 			return;
@@ -288,12 +336,14 @@ public class RecordingsActivity extends ListActivity
 			try
 			{
 				List<File> out = copiesNow(src);
-				main.post(() -> done.run(out));
+				String contents = out.size() > 1 ? names(out) : null;
+				File one = out.size() > 1 ? zipAll(this, "replays", out) : out.get(0);
+				main.post(() -> saveReady(one, contents));
 			}
 			catch (Exception e)
 			{
-				main.post(() -> Toast.makeText(this, "Export failed: " + e.getMessage(),
-						Toast.LENGTH_LONG).show());
+				main.post(() -> report("Export failed", "Couldn't prepare the replay: "
+						+ e.getMessage()));
 			}
 		}, "dcrec-export").start();
 	}
@@ -319,47 +369,42 @@ public class RecordingsActivity extends ListActivity
 				.setItems(new CharSequence[] { "Replay (.dcrec)", "Video (.mp4)" }, (d, which) ->
 				{
 					if (which == 0)
-						exportReplays(src);
+						cleanCopies(src);
 					else
 						pickVideoSpeed(src);
 				})
 				.show();
 	}
 
-	// One file: save-as picker named after the clean copy. Several: pick a folder.
-	private void exportReplays(List<File> src)
+	// One clean copy (or zip of several) already built in exportsDir: save-as picker.
+	private void saveReady(File f, String contents)
 	{
-		if (src.size() == 1)
-			cleanCopies(src, this::saveReady);
-		else
-		{
-			pendingExport = src;
-			startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQ_EXPORT_DIR);
-		}
+		exportedOne = f;
+		exportedContents = contents;
+		Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+		i.addCategory(Intent.CATEGORY_OPENABLE);
+		i.setType(mimeOf(exportedOne));
+		i.putExtra(Intent.EXTRA_TITLE, exportedOne.getName());
+		startActivityForResult(i, REQ_EXPORT_ONE);
 	}
 
-	// Files already built in exportsDir: save-as for one, folder picker for several.
-	private void saveReady(List<File> ready)
+	// Destination first, like the GIF export: an .mp4, or a zip of several.
+	private void pickVideoDestination(List<File> src, double speed)
 	{
-		if (ready.size() == 1)
-		{
-			exportedOne = ready.get(0);
-			Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-			i.addCategory(Intent.CATEGORY_OPENABLE);
-			i.setType(mimeOf(exportedOne));
-			i.putExtra(Intent.EXTRA_TITLE, exportedOne.getName());
-			startActivityForResult(i, REQ_EXPORT_ONE);
-		}
-		else
-		{
-			pendingReady = ready;
-			startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQ_EXPORT_DIR);
-		}
+		pendingVideo = src;
+		pendingVideoSpeed = speed;
+		Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+		i.addCategory(Intent.CATEGORY_OPENABLE);
+		i.setType(src.size() == 1 ? "video/mp4" : "application/zip");
+		i.putExtra(Intent.EXTRA_TITLE, src.size() == 1
+				? src.get(0).getName().replace(".dcrec", "") + ".mp4" : batchName("videos"));
+		startActivityForResult(i, REQ_VIDEO);
 	}
 
 	private static String mimeOf(File f)
 	{
-		return f.getName().endsWith(".mp4") ? "video/mp4" : "application/octet-stream";
+		return f.getName().endsWith(".mp4") ? "video/mp4"
+				: f.getName().endsWith(".zip") ? "application/zip" : "application/octet-stream";
 	}
 
 	private void pickVideoSpeed(final List<File> src)
@@ -391,7 +436,7 @@ public class RecordingsActivity extends ListActivity
 							+ (est == null ? "" : "  (" + duration(est[i]) + ")");
 				new AlertDialog.Builder(this)
 						.setTitle("Video speed")
-						.setItems(items, (d, which) -> encodeVideos(src, VIDEO_SPEEDS[which]))
+						.setItems(items, (d, which) -> pickVideoDestination(src, VIDEO_SPEEDS[which]))
 						.show();
 			});
 		}, "dcrec-estimate").start();
@@ -404,141 +449,127 @@ public class RecordingsActivity extends ListActivity
 				: String.format(Locale.US, "%d:%02d", s / 60, s % 60);
 	}
 
-	// Encode first, then pick the destination: the picker gets a finished file.
-	private void encodeVideos(final List<File> src, final double speed)
+	// GameActivity plays each replay through on screen and encodes what it shows.
+	private void exportVideos(List<File> src, double speed, Uri doc, boolean grant)
 	{
-		final Typeface tf = videoTypeface(this);
-		final AtomicBoolean cancel = new AtomicBoolean();
-		encodeCancel = cancel;
-		final ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-		bar.setMax(1000);
-		int pad = Math.round(24 * getResources().getDisplayMetrics().density);
-		bar.setPadding(pad, pad, pad, pad);
-		final AlertDialog dlg = new AlertDialog.Builder(this)
-				.setTitle(src.size() == 1 ? "Encoding video\u2026" : "Encoding videos\u2026")
-				.setView(bar)
-				.setCancelable(false)
-				.setNegativeButton("Cancel", (d, w) -> cancel.set(true))
-				.show();
-		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-		new Thread(() ->
-		{
-			List<File> videos = new ArrayList<>();
-			String error = null;
-			try
-			{
-				List<File> copies = copiesNow(src);
-				for (int n = 0; n < copies.size(); n++)
-				{
-					File c = copies.get(n);
-					try
-					{
-						if (error != null || cancel.get())
-							continue;
-						File v = new File(c.getParentFile(),
-								c.getName().replace(".dcrec", "") + ".mp4");
-						final int idx = n, count = copies.size();
-						ReplayVideoEncoder.encode(c, v, speed, tf, new ReplayVideoEncoder.Progress()
-						{
-							@Override
-							public void update(int done, int total)
-							{
-								int p = (int) ((1000L * idx + 1000L * done / Math.max(1, total)) / count);
-								main.post(() -> bar.setProgress(p));
-							}
-
-							@Override
-							public boolean cancelled()
-							{
-								return cancel.get();
-							}
-						});
-						videos.add(v);
-					}
-					catch (IOException | RuntimeException e)
-					{
-						error = e.getMessage();
-					}
-					finally
-					{
-						c.delete();
-					}
-				}
-			}
-			catch (IOException | RuntimeException e)
-			{
-				error = e.getMessage();
-			}
-			final String err = error;
-			main.post(() ->
-			{
-				if (encodeCancel == cancel)
-					encodeCancel = null;
-				boolean failed = isDestroyed() || cancel.get() || err != null;
-				if (failed)
-					for (File v : videos)
-						v.delete();
-				if (isDestroyed())
-					return;
-				getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-				dlg.dismiss();
-				if (failed)
-					Toast.makeText(this, cancel.get() ? "Export cancelled"
-							: "Video export failed: " + err, Toast.LENGTH_LONG).show();
-				else
-					saveReady(videos);
-			});
-		}, "dcrec-video").start();
+		String[] paths = new String[src.size()];
+		for (int i = 0; i < paths.length; i++)
+			paths[i] = src.get(i).getPath();
+		Intent i = new Intent();
+		i.putExtra(GameActivity.EXTRA_VIDEO_PATHS, paths);
+		i.putExtra(GameActivity.EXTRA_VIDEO_SPEED, speed);
+		i.putExtra(GameActivity.EXTRA_VIDEO_DOC, doc);
+		i.putExtra(GameActivity.EXTRA_VIDEO_GRANT, grant);
+		setResult(RESULT_OK, i);
+		finish();
 	}
 
-	// The game's font, so videos and GIFs look like the user's console.
-	static Typeface videoTypeface(Context ctx)
+	// The picker's grant ends with this activity, before GameActivity writes.
+	// False if already held (e.g. the custom sync folder): not ours to release.
+	private boolean holdGrant(Uri uri, int flags)
+	{
+		for (UriPermission p : getContentResolver().getPersistedUriPermissions())
+			if (p.getUri().equals(uri) && p.isWritePermission())
+				return false;
+		try
+		{
+			getContentResolver().takePersistableUriPermission(uri, flags
+					& (Intent.FLAG_GRANT_READ_URI_PERMISSION
+					| Intent.FLAG_GRANT_WRITE_URI_PERMISSION));
+			return true;
+		}
+		catch (SecurityException e)
+		{
+			return false;
+		}
+	}
+
+	static void releaseGrant(Context ctx, Uri uri)
 	{
 		try
 		{
-			String key = Preferences.getFontFace();
-			if (CustomFontManager.isCustomFont(key))
-				return Typeface.createFromFile(CustomFontManager.getCustomFontFile(ctx,
-						CustomFontManager.customFontFilename(key)));
-			return Typeface.createFromAsset(ctx.getAssets(), key);
+			ctx.getContentResolver().releasePersistableUriPermission(uri,
+					Intent.FLAG_GRANT_READ_URI_PERMISSION
+					| Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 		}
-		catch (RuntimeException e)
+		catch (SecurityException e)
 		{
-			return GameFontShaper.referenceTypeface(ctx);
+			// Gone already, e.g. the document was deleted.
 		}
 	}
 
-	// Background: write each copy to doc (single) or a new file in tree, then drop it.
-	private void writeOut(final List<File> copies, final Uri doc, final Uri tree)
+	static void deleteDocument(Context ctx, Uri doc)
+	{
+		if (doc == null)
+			return;
+		try
+		{
+			DocumentsContract.deleteDocument(ctx.getContentResolver(), doc);
+		}
+		catch (Exception e)
+		{
+			// Provider refused; an empty file is left behind.
+		}
+	}
+
+	private void writeOut(final File f, final Uri doc, final String contents)
 	{
 		new Thread(() ->
 		{
-			int ok = 0;
-			DocumentFile dir = tree == null ? null : DocumentFile.fromTreeUri(this, tree);
-			for (File c : copies)
-			{
-				try
-				{
-					Uri dst = doc;
-					if (dir != null)
-					{
-						DocumentFile d = dir.createFile(mimeOf(c), c.getName());
-						dst = d == null ? null : d.getUri();
-					}
-					if (dst != null && copyTo(this, c, dst))
-						ok++;
-				}
-				finally
-				{
-					c.delete();
-				}
-			}
-			final int n = ok;
-			final String noun = copies.get(0).getName().endsWith(".mp4") ? " video" : " replay";
-			main.post(() -> Toast.makeText(this, n == copies.size()
-					? "Exported " + n + noun + (n == 1 ? "" : "s")
-					: "Exported " + n + " of " + copies.size() + noun + "s", Toast.LENGTH_LONG).show());
+			final boolean ok = saveTo(this, f, doc);
+			main.post(() -> reportSaved(this, ok, f, doc, contents, null));
 		}, "dcrec-export-write").start();
+	}
+
+	// Background: copy f to doc, then drop it.
+	static boolean saveTo(Context ctx, File f, Uri doc)
+	{
+		try
+		{
+			return copyTo(ctx, f, doc);
+		}
+		finally
+		{
+			f.delete();
+		}
+	}
+
+	// Background: packs files into one zip in exportsDir and drops them. The
+	// folder picker can't choose Download on Android 11+, so batches go as one file.
+	static File zipAll(Context ctx, String what, List<File> files) throws IOException
+	{
+		File zip = new File(Recordings.exportsDir(ctx), batchName(what));
+		boolean ok = false;
+		try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(zip)))
+		{
+			byte[] buf = new byte[64 * 1024];
+			for (File f : files)
+			{
+				out.putNextEntry(new ZipEntry(f.getName()));
+				try (InputStream in = new FileInputStream(f))
+				{
+					int n;
+					while ((n = in.read(buf)) > 0)
+						out.write(buf, 0, n);
+				}
+				out.closeEntry();
+			}
+			ok = true;
+		}
+		finally
+		{
+			for (File f : files)
+				f.delete();
+			if (!ok)
+				zip.delete();
+		}
+		return zip;
+	}
+
+	static String batchName(String what)
+	{
+		return "dcss-" + what + "_" + new SimpleDateFormat("yyyyMMdd-HHmm", Locale.US)
+				.format(new Date()) + ".zip";
 	}
 
 	static boolean copyTo(Context ctx, File src, Uri dst)
@@ -599,27 +630,19 @@ public class RecordingsActivity extends ListActivity
 		if (requestCode == REQ_EXPORT_ONE)
 		{
 			if (exportedOne != null && picked != null)
-				writeOut(Collections.singletonList(exportedOne), picked, null);
+				writeOut(exportedOne, picked, exportedContents);
 			else if (exportedOne != null)
 				exportedOne.delete();
 			exportedOne = null;
+			exportedContents = null;
 			return;
 		}
-		if (requestCode == REQ_EXPORT_DIR && !pendingReady.isEmpty())
+		if (requestCode == REQ_VIDEO)
 		{
-			if (picked != null)
-				writeOut(pendingReady, null, picked);
-			else
-				for (File f : pendingReady)
-					f.delete();
-			pendingReady = Collections.emptyList();
-			return;
-		}
-		if (requestCode == REQ_EXPORT_DIR)
-		{
-			if (picked != null)
-				cleanCopies(pendingExport, copies -> writeOut(copies, null, picked));
-			pendingExport = Collections.emptyList();
+			if (picked != null && !pendingVideo.isEmpty())
+				exportVideos(pendingVideo, pendingVideoSpeed, picked,
+						holdGrant(picked, data.getFlags()));
+			pendingVideo = Collections.emptyList();
 			return;
 		}
 		if (requestCode != REQ_IMPORT || resultCode != RESULT_OK || data == null || data.getData() == null)

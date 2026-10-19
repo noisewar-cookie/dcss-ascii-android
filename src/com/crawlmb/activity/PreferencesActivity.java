@@ -297,11 +297,10 @@ public class PreferencesActivity extends PreferenceActivity implements
         if (resultCode != RESULT_OK || data == null)
             return;
         if (requestCode == REQ_RECORDINGS) {
-            String path = data.getStringExtra(GameActivity.EXTRA_REPLAY_PATH);
-            if (path != null) {
-                Intent result = new Intent();
-                result.putExtra(GameActivity.EXTRA_REPLAY_PATH, path);
-                setResult(RESULT_OK, result);
+            // Watch or video export: GameActivity does either in place.
+            if (data.hasExtra(GameActivity.EXTRA_REPLAY_PATH)
+                    || data.hasExtra(GameActivity.EXTRA_VIDEO_PATHS)) {
+                setResult(RESULT_OK, new Intent().putExtras(data));
                 finish();
             }
             return;
@@ -721,7 +720,8 @@ public class PreferencesActivity extends PreferenceActivity implements
             // Recordings live in app-private storage, not the custom folder.
             if ("recordings".equals(p.getKey())
                     || "crawl.recordgames".equals(p.getKey())
-                    || Preferences.KEY_RECORDLENGTH.equals(p.getKey()))
+                    || Preferences.KEY_RECORDLENGTH.equals(p.getKey())
+                    || Preferences.KEY_RECORDUI.equals(p.getKey()))
                 continue;
             guardPref(p);
         }
@@ -780,11 +780,13 @@ public class PreferencesActivity extends PreferenceActivity implements
         }
     }
 
-    // Record Length only matters while Record games is on; gated live like
-    // the bar-side row. Limiting trims the game in progress, so confirm first.
-    private Preference recordLengthPref;
+    // Record length and Include UI screens only matter while Record games is
+    // on; gated live like the bar-side row. Limiting trims the game in
+    // progress, so confirm first.
+    private Preference recordLengthPref, recordUiPref;
 
     private void gateRecordLength() {
+        recordUiPref = findPreference(Preferences.KEY_RECORDUI);
         recordLengthPref = findPreference(Preferences.KEY_RECORDLENGTH);
         if (recordLengthPref == null)
             return;
@@ -801,21 +803,24 @@ public class PreferencesActivity extends PreferenceActivity implements
                     .show();
             return false;
         });
-        setRecordLengthVisible(Preferences.getRecordGames());
+        setRecordOptionsVisible(Preferences.getRecordGames());
     }
 
-    private void setRecordLengthVisible(boolean visible) {
+    private void setRecordOptionsVisible(boolean visible) {
         PreferenceCategory cat = (PreferenceCategory) findPreference("saveFiles");
-        if (recordLengthPref == null || cat == null)
+        if (cat == null)
             return;
-        boolean present =
-                findPreference(Preferences.KEY_RECORDLENGTH) != null;
-        if (visible && !present) {
-            cat.addPreference(recordLengthPref);
-            applyCompactLayout(cat);
-            setSummaryPref(recordLengthPref);
-        } else if (!visible && present) {
-            cat.removePreference(recordLengthPref);
+        for (Preference p : new Preference[] { recordLengthPref, recordUiPref }) {
+            if (p == null)
+                continue;
+            boolean present = findPreference(p.getKey()) != null;
+            if (visible && !present) {
+                cat.addPreference(p);
+                applyCompactLayout(cat);
+                setSummaryPref(p);
+            } else if (!visible && present) {
+                cat.removePreference(p);
+            }
         }
     }
 
@@ -1134,7 +1139,7 @@ public class PreferencesActivity extends PreferenceActivity implements
             return;
         }
         if (key.compareTo(Preferences.KEY_RECORDGAMES) == 0)
-            setRecordLengthVisible(Preferences.getRecordGames());
+            setRecordOptionsVisible(Preferences.getRecordGames());
         if (key.compareTo(Preferences.KEY_ACTIVEPROFILE) == 0
                 || key.compareTo(Preferences.KEY_PROFILES) == 0) {
             setSummaryAll(getPreferenceScreen());

@@ -47,9 +47,23 @@ public final class GameIdentity
 	 */
 	public String fileName(int n)
 	{
-		String base = (name.isEmpty() ? "game" : name).replaceAll("[^A-Za-z0-9_-]", "_")
-				+ "_" + seed.replaceAll("[^0-9]", "")
-				+ "_" + dcssVersion.replaceAll("[^A-Za-z0-9._-]", "_");
+		String base = safeName() + "_" + seed.replaceAll("[^0-9]", "") + "_" + safeVersion();
 		return (n > 1 ? base + "_" + n : base) + RecFormat.FILE_EXTENSION;
+	}
+
+	/** Clip filename without extension: character_from-to_version. */
+	public String clipName(int fromTurn, int toTurn)
+	{
+		return safeName() + "_" + fromTurn + "-" + toTurn + "_" + safeVersion();
+	}
+
+	private String safeName()
+	{
+		return (name.isEmpty() ? "game" : name).replaceAll("[^A-Za-z0-9_-]", "_");
+	}
+
+	private String safeVersion()
+	{
+		return dcssVersion.replaceAll("[^A-Za-z0-9._-]", "_");
 	}
 }
