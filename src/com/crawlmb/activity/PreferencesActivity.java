@@ -1022,7 +1022,10 @@ public class PreferencesActivity extends PreferenceActivity implements
     }
 
     private void setRepositionCenterlineClickListener() {
-        findPreference("reposition_centerline").setOnPreferenceClickListener(
+        Preference centerlinePreference =
+                findPreference("reposition_centerline");
+        centerlinePreference.setIcon(tintedIcon(R.drawable.ic_pref_centerline));
+        centerlinePreference.setOnPreferenceClickListener(
                 new Preference.OnPreferenceClickListener() {
                     @Override
                     public boolean onPreferenceClick(Preference pref) {
@@ -1100,6 +1103,11 @@ public class PreferencesActivity extends PreferenceActivity implements
             CharSequence entry = ((ListPreference) pref).getEntry();
             pref.setTitle(getString(R.string.preferences_recordlength_title,
                     entry != null ? entry : ""));
+        } else if (pref instanceof com.crawlmb.CenterlineMarginPreference) {
+            pref.setTitle(getString(R.string.preferences_centerlinemargin_title,
+                    com.crawlmb.CenterlineMarginPreference.valueLabel(this,
+                            ((com.crawlmb.CenterlineMarginPreference) pref)
+                                    .getDp())));
         } else if (pref instanceof PreferenceCategory) {
             PreferenceCategory prefCat = (PreferenceCategory) pref;
             int count = prefCat.getPreferenceCount();

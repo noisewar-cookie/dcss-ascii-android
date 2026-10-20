@@ -3352,6 +3352,11 @@ public class GameActivity extends Activity
 
 		boolean mapLeft = Preferences.getUnfoldedMapSide()
 				.equals(Preferences.SIDE_LEFT);
+		// Pad the map half's hinge side (clears the compact bars from the
+		// centerline); the map width-refits to the narrower half.
+		int cm = Math.round(Preferences.getCenterlineMarginDp()
+				* getResources().getDisplayMetrics().density);
+		mapHalf.setPadding(mapLeft ? 0 : cm, 0, mapLeft ? cm : 0, 0);
 		View leftContent = mapLeft ? mapHalf : panelHalf;
 		View rightContent = mapLeft ? panelHalf : mapHalf;
 

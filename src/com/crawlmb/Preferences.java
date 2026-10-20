@@ -48,6 +48,8 @@ final public class Preferences
 	public static final String KEY_UNFOLDEDMSGROWS = "crawl.unfoldedmsgrows";
 	public static final String KEY_UNFOLDEDMLISTROWS = "crawl.unfoldedmlistrows";
 	public static final String UNFOLDEDROWS_SAME = "same";
+	// Compact-mode dp added to the unfolded map half's hinge side.
+	public static final String KEY_CENTERLINEMARGIN = "crawl.centerlinemargin";
 	// Which panel scales/fills first when free vertical space is contended.
 	// "msg" = extra space fills MESSAGE rows first (classic); "mlist" (default)
 	// = the MONSTER list fills first up to its set max, then the message panel.
@@ -375,6 +377,20 @@ final public class Preferences
 		String s = sharedPreferences.getString(KEY_UNFOLDEDMLISTROWS,
 				UNFOLDEDROWS_SAME);
 		return UNFOLDEDROWS_SAME.equals(s) ? getMlistRows() : parseRows(s, 6);
+	}
+
+	public static int getCenterlineMarginDp()
+	{
+		try
+		{
+			int dp = Integer.parseInt(sharedPreferences.getString(
+					KEY_CENTERLINEMARGIN, "0"));
+			return Math.max(0, Math.min(dp, 20));
+		}
+		catch (NumberFormatException e)
+		{
+			return 0;
+		}
 	}
 
 	// "3".."max" clamped, or -1 for "default"/unparseable.
