@@ -1,17 +1,17 @@
 {
   "android-console-patches/libandroid.cc": {
-    "mtime": 1791332615.441329,
-    "ast_hash": "04b29e7c0c95f12f90c94a60254590b8",
+    "mtime": 1792462593.194235,
+    "ast_hash": "f9d9eeb80ef0103637be9ecf9b347528",
     "semantic_hash": ""
   },
   "android-console-patches/setup.sh": {
-    "mtime": 1790131004.699545,
-    "ast_hash": "275b58765513d59064faf90ce3730ce2",
-    "semantic_hash": "275b58765513d59064faf90ce3730ce2"
+    "mtime": 1791850246.8562586,
+    "ast_hash": "8383d5a0249a6a236b4b9d2095724ddd",
+    "semantic_hash": ""
   },
   "build.gradle": {
-    "mtime": 1791335982.5953057,
-    "ast_hash": "1ed41ae5b0a818bf47b66596c1fa54c0",
+    "mtime": 1792461682.9581249,
+    "ast_hash": "e4e4b905e08bf924e588d8e30b03f1f1",
     "semantic_hash": ""
   },
   "gradlew": {
@@ -40,9 +40,9 @@
     "semantic_hash": "63d50eeb4f856fd080fddcbd9050f844"
   },
   "src/com/crawlmb/CrawlDialog.java": {
-    "mtime": 1776494222.0393744,
-    "ast_hash": "2d5633436ab465ebb60c6bc6673b5c02",
-    "semantic_hash": "2d5633436ab465ebb60c6bc6673b5c02"
+    "mtime": 1791851264.7533774,
+    "ast_hash": "2a2bf1a2f0c1b0be306af06d5c28dee5",
+    "semantic_hash": ""
   },
   "src/com/crawlmb/CrawlInputConnection.java": {
     "mtime": 1776494221.8132956,
@@ -50,9 +50,9 @@
     "semantic_hash": "9aa4000a3a02b0d01dee63f3d9931c7b"
   },
   "src/com/crawlmb/CustomFolderSync.java": {
-    "mtime": 1785542699.833515,
-    "ast_hash": "6ea282a7a5cdc6260d668fe62bfc826d",
-    "semantic_hash": "6ea282a7a5cdc6260d668fe62bfc826d"
+    "mtime": 1791933856.9944313,
+    "ast_hash": "1592681cdc60c1db2be114127f73771f",
+    "semantic_hash": ""
   },
   "src/com/crawlmb/EditConfigFilePreference.java": {
     "mtime": 1777241121.7074027,
@@ -70,13 +70,13 @@
     "semantic_hash": "0403271be920630c747ff5d4fde24807"
   },
   "src/com/crawlmb/KeyBuffer.java": {
-    "mtime": 1790119952.2262144,
-    "ast_hash": "028aa03fce1ad64a466bf7a2e84924ac",
-    "semantic_hash": "028aa03fce1ad64a466bf7a2e84924ac"
+    "mtime": 1792402492.0746715,
+    "ast_hash": "5b2ddb0c21cae4dff7f0c46449bfd1e4",
+    "semantic_hash": ""
   },
   "src/com/crawlmb/NativeWrapper.java": {
-    "mtime": 1791332670.6986678,
-    "ast_hash": "e9523f3d6bf30a221daf90b6e22e4d46",
+    "mtime": 1792402492.1691265,
+    "ast_hash": "c036a8d4b56478f5255b85d0af849328",
     "semantic_hash": ""
   },
   "src/com/crawlmb/PassThroughListener.java": {
@@ -95,9 +95,9 @@
     "semantic_hash": "daff9d197d7d2ea7c55b2ac9cf419622"
   },
   "src/com/crawlmb/Preferences.java": {
-    "mtime": 1790818297.1514683,
-    "ast_hash": "601c8bcd76d646b7fc6c82bc04b105cf",
-    "semantic_hash": "601c8bcd76d646b7fc6c82bc04b105cf"
+    "mtime": 1792462143.5471363,
+    "ast_hash": "c6fd064fa62dcdc6dd1edfb526100cd3",
+    "semantic_hash": ""
   },
   "src/com/crawlmb/TouchDirectionRepeatPreference.java": {
     "mtime": 1783818906.831584,
@@ -125,8 +125,8 @@
     "semantic_hash": "cc79c34b25313a0eefdcaaab815a5b18"
   },
   "src/com/crawlmb/activity/GameActivity.java": {
-    "mtime": 1791331978.267618,
-    "ast_hash": "1033c58a4877d9793c51dfbda2e35b2e",
+    "mtime": 1792460860.4539618,
+    "ast_hash": "9c53ca57564edeb8c3fecb7743b461ce",
     "semantic_hash": ""
   },
   "src/com/crawlmb/activity/HelpActivity.java": {
@@ -135,9 +135,9 @@
     "semantic_hash": "d8a453c0c1f165b572f9f956520f6b7c"
   },
   "src/com/crawlmb/activity/PreferencesActivity.java": {
-    "mtime": 1790814395.256807,
-    "ast_hash": "858dc451366f05ac59f2f1f7048a07cb",
-    "semantic_hash": "858dc451366f05ac59f2f1f7048a07cb"
+    "mtime": 1792460867.4812217,
+    "ast_hash": "8f4c80a9802b61fa1968c4229e52b0d4",
+    "semantic_hash": ""
   },
   "src/com/crawlmb/activity/SplashActivity.java": {
     "mtime": 1789448612.2548294,
@@ -155,9 +155,9 @@
     "semantic_hash": "7c020781e1b721e4916041ca2a1569b3"
   },
   "src/com/crawlmb/keyboard/DirectionalTouchView.java": {
-    "mtime": 1790812192.3286204,
-    "ast_hash": "e49c2659c10d2bcf2985a806f8b6e79c",
-    "semantic_hash": "e49c2659c10d2bcf2985a806f8b6e79c"
+    "mtime": 1792401586.2173069,
+    "ast_hash": "4263619040230f44f6912b855007318d",
+    "semantic_hash": ""
   },
   "src/com/crawlmb/keyboard/KeyboardLayoutSpinnerAdapter.java": {
     "mtime": 1776494221.8208447,
@@ -165,9 +165,9 @@
     "semantic_hash": "fce52042c3589c46382317866b6bd187"
   },
   "src/com/crawlmb/keylistener/GameKeyListener.java": {
-    "mtime": 1783163291.114803,
-    "ast_hash": "330e8d5b942f8862e5f0d1a08b7b8854",
-    "semantic_hash": "330e8d5b942f8862e5f0d1a08b7b8854"
+    "mtime": 1792402492.1238804,
+    "ast_hash": "d995f9e2daeb4e43faa7bd3cb870a63a",
+    "semantic_hash": ""
   },
   "src/com/crawlmb/keylistener/KeyListener.java": {
     "mtime": 1776494221.861705,
@@ -215,8 +215,8 @@
     "semantic_hash": "ed212c173d4c3e7af645672e8c4f1edb"
   },
   "src/com/crawlmb/view/RegionRouter.java": {
-    "mtime": 1791333816.5137608,
-    "ast_hash": "ac91f1051261d621847bdc4a37c82df2",
+    "mtime": 1792448700.7492201,
+    "ast_hash": "a4edc347963c194d9841dfe902ff370e",
     "semantic_hash": ""
   },
   "src/com/crawlmb/view/RegionTermView.java": {
@@ -447,6 +447,296 @@
   "src/com/crawlmb/view/WindowVto.java": {
     "mtime": 1791328381.9861555,
     "ast_hash": "3bad173321ae8b7c6ff320bf23033e75",
+    "semantic_hash": ""
+  },
+  "android-console-patches/android-recorder.cc": {
+    "mtime": 1792462598.0785084,
+    "ast_hash": "1f6d23d0ade68475ed8d2b38511ed5c4",
+    "semantic_hash": ""
+  },
+  "android-console-patches/android-recorder.h": {
+    "mtime": 1792462593.1927216,
+    "ast_hash": "2310b5eb7f28879b4e4524f64fabb8be",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/CenterlineMarginPreference.java": {
+    "mtime": 1792460461.4972818,
+    "ast_hash": "437939168d3d7b8eadc137b25d268431",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/activity/RecordingsActivity.java": {
+    "mtime": 1792458786.6652057,
+    "ast_hash": "028005291264f4099ddb1099750a9a53",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ByteIO.java": {
+    "mtime": 1791884890.5724785,
+    "ast_hash": "d211c6cf7c97bb0733f44072b5927fe9",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ChunkCache.java": {
+    "mtime": 1791884890.5724785,
+    "ast_hash": "ca8a90de4d0888b54e069e9f31b4263c",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/Deflate.java": {
+    "mtime": 1792369776.971602,
+    "ast_hash": "7f2d3b90c9b96460f8fc8d7b6b9ed2e7",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/EventDeriver.java": {
+    "mtime": 1791884890.5684786,
+    "ast_hash": "563a1566828d5a36c62bc451126017a6",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ExamineCursor.java": {
+    "mtime": 1792397590.9794307,
+    "ast_hash": "a26e12c9332cace491887beced4e6d76",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/FrameChunkDecoder.java": {
+    "mtime": 1791884904.906282,
+    "ast_hash": "971676d1007cadcc68ac9aa696c01c9a",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/FrameChunkEncoder.java": {
+    "mtime": 1791928285.2004843,
+    "ast_hash": "702d197d40ccc71c6e69e0f557013d79",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/GameIdentity.java": {
+    "mtime": 1792396235.1310127,
+    "ast_hash": "85f4373c404633e811ee16276545fb93",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/GameRecorder.java": {
+    "mtime": 1792399575.027306,
+    "ast_hash": "2a1cad6ff9ce931d79e6bb47c9fd08ab",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ImportValidator.java": {
+    "mtime": 1791884890.5694788,
+    "ast_hash": "f3a53011500866e344fa6bd8dbd0ea2e",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/KnowledgeResolver.java": {
+    "mtime": 1791884904.909464,
+    "ast_hash": "2c43d71c3b02db886cfdfcb95d942d49",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/LevelMap.java": {
+    "mtime": 1791933609.232583,
+    "ast_hash": "25874da75fa2c7eaa9e1f3ab57088a33",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/MiniJson.java": {
+    "mtime": 1791884904.9099665,
+    "ast_hash": "80e1af74756d527f8ad945f21d87e7da",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/Mp4Tags.java": {
+    "mtime": 1792396250.6252515,
+    "ast_hash": "455baaf544e4f6ac40831c43d0419cf6",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/RecFormat.java": {
+    "mtime": 1792394958.7599854,
+    "ast_hash": "691fe91d74d578b3e2082616840683bd",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/RecWriterThread.java": {
+    "mtime": 1792369786.3099384,
+    "ast_hash": "91e4f896eebbcb9e41907b69a1a0e68c",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/RecordingExporter.java": {
+    "mtime": 1791884904.9109704,
+    "ast_hash": "686a77012c7b626308215c38b373d5cd",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/RecordingImporter.java": {
+    "mtime": 1791884904.9119723,
+    "ast_hash": "e25255a055baf1c53be6a97b6f7db0b1",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/RecordingReader.java": {
+    "mtime": 1791884904.9119723,
+    "ast_hash": "89d263fb30005bd8cd915c72af24b5df",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/RecordingSchema.java": {
+    "mtime": 1792017795.3078823,
+    "ast_hash": "06d2d7f8b6d18a5dd22f47a3a4404b0f",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/RecordingSink.java": {
+    "mtime": 1792369786.3094265,
+    "ast_hash": "73bdcbeaf27124b83ddc0c2a2c382158",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/Recordings.java": {
+    "mtime": 1792369842.3513606,
+    "ast_hash": "e807328b5b8a9da286f0f457ecf708f4",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ReplayClock.java": {
+    "mtime": 1792042837.908051,
+    "ast_hash": "f4e030bba9180f9b58361793f93f41f1",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ReplayController.java": {
+    "mtime": 1792104546.0666382,
+    "ast_hash": "2eaea9ea212d4cbc899b7b98a08a80e3",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ReplayDriver.java": {
+    "mtime": 1791884904.9144795,
+    "ast_hash": "b4d36e802a23d5667bde553e099e1f12",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ReplayGifEncoder.java": {
+    "mtime": 1792382553.8706663,
+    "ast_hash": "cc773cd233760f87059467322c2278d7",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ReplayLayout.java": {
+    "mtime": 1792104530.5191877,
+    "ast_hash": "b8ddae5c3763b552c6391227dca38484",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ReplayReadOnly.java": {
+    "mtime": 1791884904.9154797,
+    "ast_hash": "82888a365da66dea241d2cceb3a7e5e2",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ReplayRendererAdapter.java": {
+    "mtime": 1792104546.0697727,
+    "ast_hash": "8e4ee72636a84a20afbc34ea5f380b66",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ReplayTimeline.java": {
+    "mtime": 1792029029.8649123,
+    "ast_hash": "16092f790d881c60526282e37444ec06",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ReplayVideoEncoder.java": {
+    "mtime": 1792457091.3440578,
+    "ast_hash": "062ab16e3b6536caef4c5e46b017dcc0",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ScreenState.java": {
+    "mtime": 1791884904.9169831,
+    "ast_hash": "11eb7fbdf81509e5f489f040f09a584a",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/SnapshotPayload.java": {
+    "mtime": 1791884904.917987,
+    "ast_hash": "83350bf8f43641865830a2646537242b",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/SqliteRecordingStore.java": {
+    "mtime": 1792374051.648038,
+    "ast_hash": "cf1d1945a34bb82d6b095e012b953eda",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ui/CrawlText.java": {
+    "mtime": 1791884904.917987,
+    "ast_hash": "217d086b4d219fbb3f5109920b675479",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ui/RangeBar.java": {
+    "mtime": 1792057264.2788055,
+    "ast_hash": "84bd3fe229cddbd9f212b9a867d0df8d",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ui/ReplayControlsView.java": {
+    "mtime": 1792395736.001969,
+    "ast_hash": "d04de3cdb5e1cd74db3eb1ad17a0196b",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ui/ReplayDirectionPad.java": {
+    "mtime": 1791862179.4401586,
+    "ast_hash": "cf18460c43607927025a027d0046110b",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ui/ReplayScreens.java": {
+    "mtime": 1791872997.6849303,
+    "ast_hash": "0e57098f39a1de468ded19ccd680e011",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ui/ReplayUi.java": {
+    "mtime": 1792448700.7462053,
+    "ast_hash": "4fc36f021cf5d64a9c8f985ce2fce791",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ui/TimelineBar.java": {
+    "mtime": 1792045009.0872989,
+    "ast_hash": "7f5f393c5ad087b224eb48c33b6dea92",
+    "semantic_hash": ""
+  },
+  "src/com/crawlmb/recording/ui/ViewCapture.java": {
+    "mtime": 1792455851.006497,
+    "ast_hash": "54236e139aa9c4a95416a5bb02a6b62b",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/ExamineAndReadOnlyTest.java": {
+    "mtime": 1791933688.9142194,
+    "ast_hash": "1d26a1414ad5e1c34f88379f203faef6",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/FixtureRecordingsTest.java": {
+    "mtime": 1792397661.2904835,
+    "ast_hash": "fd59397bfb3892aaf1fb3eef792f0231",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/FrameCodecTest.java": {
+    "mtime": 1791928355.924004,
+    "ast_hash": "6ccc14b33cb5aaa23e3602d48c74a401",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/ImportValidatorTest.java": {
+    "mtime": 1791874363.7800512,
+    "ast_hash": "310dbe06dd6b6522a8b1076c46f5cde0",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/JsonAndPayloadTest.java": {
+    "mtime": 1791850766.5708053,
+    "ast_hash": "3c1bcaf7fca3d120e798cd53a108f1cf",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/LevelMapTest.java": {
+    "mtime": 1791933739.8566115,
+    "ast_hash": "73ae95bc424f505231f4dfbad5de18e9",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/MemoryRecordingStore.java": {
+    "mtime": 1792373670.7789018,
+    "ast_hash": "23de180a2e91a293667c04015193adfa",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/Mp4TagsTest.java": {
+    "mtime": 1792396274.0416796,
+    "ast_hash": "32b9a7ecfa6d1e465f93dc80ccf5a59c",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/RecorderReplayTest.java": {
+    "mtime": 1792394966.322597,
+    "ast_hash": "f7aed8b040a07b9dda36339f46e100f9",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/ReplayLayoutTest.java": {
+    "mtime": 1792104630.7405732,
+    "ast_hash": "dc456b444b89d027e4de5ee553878323",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/ReplayScreensTest.java": {
+    "mtime": 1791873021.057029,
+    "ast_hash": "b0453571934cbc609550c5f405e004f0",
+    "semantic_hash": ""
+  },
+  "tests-unit/java/com/crawlmb/recording/TestSupport.java": {
+    "mtime": 1791933688.9142194,
+    "ast_hash": "0b569e5a14cceb28831d136906980b39",
     "semantic_hash": ""
   }
 }
