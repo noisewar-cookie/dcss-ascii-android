@@ -5,23 +5,27 @@ import android.app.ListActivity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.UriPermission;
+import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.DocumentsContract;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.FrameLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.documentfile.provider.DocumentFile;
 
+import com.crawlmb.Preferences;
 import com.crawlmb.R;
 import com.crawlmb.WindowCompatAdapter;
 import com.crawlmb.recording.GameIdentity;
@@ -30,6 +34,7 @@ import com.crawlmb.recording.RecordingImporter;
 import com.crawlmb.recording.Recordings;
 import com.crawlmb.recording.ReplayVideoEncoder;
 import com.crawlmb.recording.SqliteRecordingStore;
+import com.crawlmb.view.FoldStateController;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -76,6 +81,7 @@ public class RecordingsActivity extends ListActivity
 	private String exportedContents;
 	private List<File> pendingVideo = Collections.emptyList();
 	private double pendingVideoSpeed;
+	private FoldStateController foldStateController;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState)
@@ -102,6 +108,50 @@ public class RecordingsActivity extends ListActivity
 				return true;
 			}
 		});
+	}
+
+	@Override
+	protected void onStart()
+	{
+		super.onStart();
+		if (foldStateController == null)
+			foldStateController = new FoldStateController(this, this::onFoldStateChanged);
+		foldStateController.start();
+	}
+
+	@Override
+	protected void onStop()
+	{
+		super.onStop();
+		if (foldStateController != null)
+			foldStateController.stop();
+	}
+
+	// Open foldable: fill the display (the portrait lock letterboxes it) and keep
+	// the list on the keyboard's half (Both => right), like the game's menus.
+	// Applied in place (manifest configChanges): a relaunch drops the report dialog.
+	private void onFoldStateChanged(boolean unfoldedActive, FoldStateController.Posture posture)
+	{
+		View root = findViewById(R.id.recordings_root);
+		FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) root.getLayoutParams();
+		if (posture != null)
+		{
+			// The user's fold centerline, as GameActivity applies it to the game's halves.
+			float cl = Preferences.getFoldCenterline();
+			if (unfoldedActive && Math.abs(cl - Preferences.FOLD_CENTERLINE_DEFAULT) > 0.001f)
+				posture = posture.withCenterline(cl);
+			boolean left = Preferences.SIDE_LEFT.equals(Preferences.getUnfoldedKeyboardSide());
+			lp.width = left ? posture.leftWidth : posture.totalWidth - posture.rightStart;
+			lp.gravity = left ? Gravity.LEFT : Gravity.RIGHT;
+			setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+		}
+		else
+		{
+			lp.width = FrameLayout.LayoutParams.MATCH_PARENT;
+			lp.gravity = FrameLayout.LayoutParams.UNSPECIFIED_GRAVITY;
+			setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+		}
+		root.setLayoutParams(lp);
 	}
 
 	@Override

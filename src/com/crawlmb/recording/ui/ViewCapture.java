@@ -11,6 +11,7 @@ import android.view.View;
 import com.crawlmb.recording.ReplayVideoEncoder;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -30,6 +31,8 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 		void seek(int pos);
 		/** pos has been drawn on the current views. */
 		boolean drawn(int pos);
+		/** Repaint every cell: routing is diff-only, so a resize can leave stale pixels. */
+		void repaint();
 	}
 
 	// A view that keeps requesting layout can't stall the export.
@@ -41,6 +44,8 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 	private final int width, height;
 	private Bitmap bitmap;
 	private Canvas canvas;
+	// Panel size + padding at the last frame; insets settling mid-export resize it.
+	private int geometry;
 
 	/** UI thread, once the panel is laid out. */
 	ViewCapture(Source src, View panel, AtomicBoolean cancel)
@@ -49,6 +54,7 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 		this.cancel = cancel;
 		width = contentWidth(panel);
 		height = contentHeight(panel);
+		geometry = geometry(panel);
 	}
 
 	@Override
@@ -115,6 +121,14 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 					t -> settle(pos, 2, ready ? waits + 1 : waits, done));
 			return;
 		}
+		int g = geometry(panel);
+		if (g != geometry)
+		{
+			geometry = g;
+			src.repaint();
+			Choreographer.getInstance().postFrameCallback(t -> settle(pos, 2, waits, done));
+			return;
+		}
 		draw(panel);
 		done.countDown();
 	}
@@ -137,6 +151,12 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 	private static int contentWidth(View v)
 	{
 		return v.getWidth() - v.getPaddingLeft() - v.getPaddingRight();
+	}
+
+	private static int geometry(View v)
+	{
+		return Objects.hash(v.getWidth(), v.getHeight(), v.getPaddingLeft(),
+				v.getPaddingTop(), v.getPaddingRight(), v.getPaddingBottom());
 	}
 
 	private static int contentHeight(View v)

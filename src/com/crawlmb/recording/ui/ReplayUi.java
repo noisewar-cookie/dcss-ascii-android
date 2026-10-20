@@ -65,6 +65,8 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		void saveClip(File clip, Uri dst, String what);
 		/** Rebuild the views from layout(); the recording switched layouts. */
 		void relayout();
+		/** Repaint every cell of the current screen into the views. */
+		void repaint();
 	}
 
 	public interface ClipDestination
@@ -589,6 +591,12 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 			public boolean drawn(int pos)
 			{
 				return drawnPos == pos;
+			}
+
+			@Override
+			public void repaint()
+			{
+				host.repaint();
 			}
 		}, panel, cancel);
 		final ProgressBar bar = new ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal);

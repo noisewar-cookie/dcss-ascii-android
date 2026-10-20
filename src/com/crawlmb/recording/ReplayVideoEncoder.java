@@ -178,6 +178,9 @@ public final class ReplayVideoEncoder
 		private boolean muxing;
 		private int samples;
 		private int texture;
+		// Client-side vertex array: GL reads it at every draw, so it must outlive
+		// setUpGl. A local was collected mid-export, smearing or freezing the video.
+		private FloatBuffer quad;
 
 		Encoder(File out, int srcWidth, int srcHeight) throws IOException
 		{
@@ -263,7 +266,7 @@ public final class ReplayVideoEncoder
 					+ " void main() { gl_FragColor = texture2D(s, v); }");
 			GLES20.glUseProgram(prog);
 			// Strip BL, BR, TL, TR; bitmap row 0 is t=0, the top of the frame.
-			FloatBuffer quad = ByteBuffer.allocateDirect(16 * 4).order(ByteOrder.nativeOrder())
+			quad = ByteBuffer.allocateDirect(16 * 4).order(ByteOrder.nativeOrder())
 					.asFloatBuffer().put(new float[] {
 							-1, -1, 0, 1, 1, -1, 1, 1, -1, 1, 0, 0, 1, 1, 1, 0 });
 			int p = GLES20.glGetAttribLocation(prog, "p");

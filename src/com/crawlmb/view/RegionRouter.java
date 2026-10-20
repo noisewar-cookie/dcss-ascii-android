@@ -3069,7 +3069,7 @@ public class RegionRouter implements TerminalRenderer
 	// drawPoint. UI thread, after a layout pass recreated bitmaps. Must hold
 	// display_lock: cells routed under a torn mid-recompute anchor state are
 	// never repaired (steady-state routing is diff-only).
-	private void replayAllFromShadow()
+	public void replayAllFromShadow()
 	{
 		synchronized (NativeWrapper.display_lock)
 		{

@@ -243,6 +243,13 @@ public class GameActivity extends Activity
 										rebuildViews();
 								});
 						}
+
+						@Override
+						public void repaint()
+						{
+							if (portraitRouter != null)
+								portraitRouter.replayAllFromShadow();
+						}
 					}, store, chunks);
 		}
 		catch (RuntimeException e)
