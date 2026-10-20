@@ -1,0 +1,10 @@
+Release 27 (0.34.1)
+
+New Features:
+• EXPERIMENTAL: Replay feature to record, rewatch and share games!
+• Folding devices: Separate message and monster list row counts.
+• Folding devices: Centerline margin adjustment.
+
+Bug Fixes:
+• Preferences menu cleanup.
+• Folding devices bug fixes.
