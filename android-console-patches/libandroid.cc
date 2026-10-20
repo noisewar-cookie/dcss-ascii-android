@@ -1432,6 +1432,16 @@ void android_rec_emit_message_rollback(int count)
 		env->ExceptionClear();
 }
 
+void android_rec_emit_final_frame()
+{
+	if (!_on_game_thread() || env == NULL || NativeWrapperObj == NULL)
+		return;
+	dirtyTerminalChars.clear();
+	_send_frame(env, NativeWrapperObj, (jint)you.num_turns,
+		(jint)you.elapsed_time,
+		ui::android_ui_screen_open() ? JNI_TRUE : JNI_FALSE);
+}
+
 void android_rec_emit_game_end(int death_type, const std::string &reason,
 	const std::string &morgue_file)
 {

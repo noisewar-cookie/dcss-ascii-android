@@ -57,5 +57,8 @@ void android_rec_emit_snapshot(const std::string &payload);
 void android_rec_emit_message(const std::string &tagged_text, int channel,
                               int turn, bool temporary);
 void android_rec_emit_message_rollback(int count);
+// The current screen as an in-game frame, even after end_game cleared
+// need_save: nothing else pushes the final death/escape messages.
+void android_rec_emit_final_frame();
 void android_rec_emit_game_end(int death_type, const std::string &reason,
                                const std::string &morgue_file);

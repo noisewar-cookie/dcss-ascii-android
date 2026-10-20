@@ -65,6 +65,7 @@
 #include "level-id.h"
 #include "libutil.h"
 #include "map-cell.h"
+#include "message.h"
 #include "mon-info.h"
 #include "mon-util.h"
 #include "mutation.h"
@@ -929,6 +930,10 @@ void android_rec_on_game_end(int death_type, const string &reason,
 {
     if (!g.enabled)
         return;
+    // Death/escape messages are drawn but no key wait follows before
+    // end_game, so push them as the recording's last frame.
+    flush_prev_message();
+    android_rec_emit_final_frame();
     take_snapshot("END");
     android_rec_emit_game_end(death_type, reason, morgue_file);
 }
