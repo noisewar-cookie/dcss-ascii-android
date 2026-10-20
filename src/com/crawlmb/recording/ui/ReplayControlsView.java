@@ -3,6 +3,7 @@ package com.crawlmb.recording.ui;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Typeface;
@@ -26,10 +27,10 @@ import java.util.List;
  * Replay controls hosted in the keyboard area (replaces the Crawl keyboard in
  * replay mode). Rows:
  *   status line (turn · input · place · state) / examine summary
- *   range picker over the whole game   [clip to GIF/MP4] (Range on only)
+ *   [level trim]  range picker over the whole game  [clip to GIF/MP4] (Range on only)
  *   timeline scrubber (centred alone in the same box while Range is off)
- *   transport:   1x  |<<  <|  >/||  |>  >>|  [events]
- *   modes:       Step: turn   Skip: 10 turns   As played   Range
+ *   transport:   [events]  |<<  <|  >/||  |>  >>|  1x
+ *   modes:       Range   Step: turn   Skip: 10 turns   Turn time
  *   screens:     @  Items  Spells  Abilities  Skills  [examine]     (paused only)
  * In examine mode those rows become Examine / Center on Player / Exit (the cursor
  * moves via ReplayDirectionPad over the map). While a browse screen is open
@@ -54,6 +55,7 @@ public final class ReplayControlsView extends LinearLayout
 		void onFilter();
 		void onRangeChanged(boolean on, int lo, int hi);
 		void onClip();
+		void onLevelTrim();
 		void onScreen(ReplayScreens.Kind kind);
 		void onExamine();
 		void onExamineMove(int dx, int dy);
@@ -68,6 +70,9 @@ public final class ReplayControlsView extends LinearLayout
 	private final RangeBar rangeBar;
 	private final Button rangeButton;
 	private final ImageButton clip;
+	private final ImageButton trim;
+	// Range bar's line when level-trimmed, in units; trimLast < 0 = whole game.
+	private int trimFirst, trimLast = -1;
 	private final LinearLayout timelineBox;
 	private final LinearLayout rangeRow;
 	private boolean rangeOn;
@@ -119,20 +124,32 @@ public final class ReplayControlsView extends LinearLayout
 
 		rangeRow = row(ctx);
 		rangeRow.setVisibility(GONE);
+		trim = new ImageButton(ctx);
+		trim.setImageResource(R.drawable.ic_replay_clip);
+		trim.setBackgroundResource(flat());
+		// Inner half of each icon button is shaved off so its hitbox starts at the icon,
+		// leaving that strip to the range bar's caret.
+		int shave = dp((CLIP_DP - 20) / 2);
+		trim.setPadding(shave, 0, 0, 0);
+		trim.setContentDescription("Trim to a range of experience levels");
+		trim.setOnClickListener(v -> actions.onLevelTrim());
+		LayoutParams trimLp = new LayoutParams(dp(CLIP_DP) - shave, dp(RANGE_DP));
+		rangeRow.addView(trim, trimLp);
+		trim.setTranslationY(dp(RangeBar.LINE_DP) - dp(RANGE_DP) / 2f);
 		rangeBar = new RangeBar(ctx);
 		rangeBar.setListener((lo, hi) -> applyRange());
 		rangeRow.addView(rangeBar, new LayoutParams(0, dp(RANGE_DP), 1f));
 		clip = new ImageButton(ctx);
-		clip.setImageResource(R.drawable.ic_replay_clip);
+		clip.setImageResource(R.drawable.ic_replay_movie);
 		clip.setBackgroundResource(flat());
-		clip.setPadding(0, 0, 0, 0);
+		clip.setPadding(0, 0, shave, 0);
 		clip.setContentDescription("Clip range to GIF or video");
 		clip.setOnClickListener(v -> actions.onClip());
-		LayoutParams clipLp = new LayoutParams(dp(CLIP_DP), dp(RANGE_DP));
+		LayoutParams clipLp = new LayoutParams(dp(CLIP_DP) - shave, dp(RANGE_DP));
 		rangeRow.addView(clip, clipLp);
 		clip.setTranslationY(dp(RangeBar.LINE_DP) - dp(RANGE_DP) / 2f); // centre on RangeBar's line, not its labels
 		timelineBox.addView(rangeRow, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
-		// The raised clip icon pokes above the box.
+		// The raised icons poke above the box.
 		rangeRow.setClipChildren(false);
 		timelineBox.setClipChildren(false);
 		setClipChildren(false);
@@ -157,20 +174,21 @@ public final class ReplayControlsView extends LinearLayout
 		timelineBox.addView(timeline, tlp);
 		// The 20dp icon is centred and its path stops 2/24 short of its edge.
 		float inkInset = (dp(CLIP_DP) - dp(20)) / 2f + dp(20) / 12f;
-		// Scissors ink ends where the scrubber does; the range line closes half the gap to it.
+		// Icon ink ends where the scrubber does; the range line closes half the gap to it.
 		clipLp.rightMargin = Math.round(timeline.getPaddingRight() - inkInset);
-		rangeBar.setPadding(timeline.getPaddingLeft(), 0, clipLp.rightMargin / 2, 0);
+		trimLp.leftMargin = Math.round(timeline.getPaddingLeft() - inkInset);
+		rangeBar.setPadding(trimLp.leftMargin / 2 + shave, 0, clipLp.rightMargin / 2 + shave, 0);
 
 		normalRows = new LinearLayout(ctx);
 		normalRows.setOrientation(VERTICAL);
 		LinearLayout transport = row(ctx);
-		speed = button(transport, "1x", v -> actions.onSpeed(), false);
+		iconButton(transport, R.drawable.ic_replay_filter, "Events", v -> actions.onFilter(), false);
 		button(transport, "|\u25C0\u25C0", v -> actions.onSkip(-1), false);
 		button(transport, "\u25C0|", v -> actions.onStep(-1), false);
 		playPause = button(transport, "\u25B6", v -> actions.onPlayPause(), false);
 		button(transport, "|\u25B6", v -> actions.onStep(1), false);
 		button(transport, "\u25B6\u25B6|", v -> actions.onSkip(1), false);
-		iconButton(transport, R.drawable.ic_replay_filter, "Events", v -> actions.onFilter(), false);
+		speed = button(transport, "1x", v -> actions.onSpeed(), false);
 		for (int i = 0; i < transport.getChildCount(); i++)
 		{
 			View b = transport.getChildAt(i);
@@ -182,11 +200,11 @@ public final class ReplayControlsView extends LinearLayout
 
 		// Widths follow each button's longest label, so short ones don't hog the row.
 		LinearLayout modes = row(ctx);
+		rangeButton = fit(button(modes, "Range", v -> setRange(!rangeOn, rangeBar.lo(), rangeBar.hi()), false));
 		stepUnit = fit(button(modes, "Step: turn", v -> actions.onStepUnit(), false), "Step: input");
 		skipUnit = fit(button(modes, "Skip: 10 turns", v -> actions.onSkipUnit(), false),
 				"Skip: 100 turns", "Skip: 1000 turns", "Skip: event", "Skip: level");
-		clockMode = fit(button(modes, "As played", v -> actions.onClockMode(), false), "Turn time");
-		rangeButton = fit(button(modes, "Range", v -> setRange(!rangeOn, rangeBar.lo(), rangeBar.hi()), false));
+		clockMode = fit(button(modes, "Turn time", v -> actions.onClockMode(), false), "As played");
 		normalRows.addView(modes);
 
 		LinearLayout screens = row(ctx);
@@ -340,6 +358,17 @@ public final class ReplayControlsView extends LinearLayout
 		rangeBar.setEnabled(!on);
 		clip.setEnabled(!on);
 		clip.setAlpha(on ? 0.35f : 1f);
+		trim.setEnabled(!on);
+		trim.setAlpha(on ? 0.35f : 1f);
+	}
+
+	/** Level trim: the range bar spans only positions from..to. Call setRange after. */
+	public void setTrim(boolean on, int fromPos, int toPos)
+	{
+		trimFirst = on ? timeline.unitOfPos(fromPos) : 0;
+		trimLast = on ? timeline.unitOfPos(toPos) : -1;
+		trim.setImageTintList(on ? ColorStateList.valueOf(
+				ContextCompat.getColor(getContext(), R.color.crawl_accent)) : null);
 	}
 
 	/** Range on: the scrubber shows only units lo..hi of the whole game. Call after setData. */
@@ -347,7 +376,7 @@ public final class ReplayControlsView extends LinearLayout
 	{
 		rangeOn = on;
 		rangeButton.setActivated(on);
-		rangeBar.setRange(timeline.units(), lo, hi < 0 ? timeline.units() - 1 : hi);
+		rangeBar.setRange(timeline.units(), trimFirst, trimLast, lo, hi < 0 ? timeline.units() - 1 : hi);
 		rangeRow.setVisibility(on ? VISIBLE : GONE);
 		((LayoutParams) timeline.getLayoutParams()).topMargin = on ? 0 : dp(TIMELINE_ALONE_DP);
 		timeline.requestLayout();

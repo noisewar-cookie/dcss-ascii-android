@@ -192,10 +192,15 @@ public final class TimelineBar extends SeekBar
 		return lo;
 	}
 
+	/** Unit of a position on the whole timeline. */
+	public int unitOfPos(int pos)
+	{
+		return unitOf[Math.max(0, Math.min(unitOf.length - 1, pos))];
+	}
+
 	public int progressOf(int pos)
 	{
-		int unit = unitOf[Math.max(0, Math.min(unitOf.length - 1, pos))];
-		return Math.max(0, Math.min(winHi - winLo, unit - winLo));
+		return Math.max(0, Math.min(winHi - winLo, unitOfPos(pos) - winLo));
 	}
 
 	/** Nearest ticked position after (dir > 0) or before pos, or -1. */

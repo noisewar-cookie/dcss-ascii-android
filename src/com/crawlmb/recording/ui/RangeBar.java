@@ -7,8 +7,10 @@ import android.graphics.Path;
 import android.graphics.Rect;
 import android.os.Build;
 import android.util.TypedValue;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 
 import androidx.core.content.ContextCompat;
 
@@ -19,8 +21,9 @@ import java.util.Collections;
 /**
  * Range picker over the whole timeline: a line with a caret at each end of
  * the selected span, labelled with its turn unless at that end of the game.
- * Drag a caret to move that end, drag the span to pan it.
- * Values are TimelineBar units (inclusive).
+ * Drag a caret to move that end, drag the span to pan it, long-press to reset
+ * both to the ends. The line covers units first..last (a level trim) of the
+ * whole game's units. Values are TimelineBar units (inclusive).
  */
 public final class RangeBar extends View
 {
@@ -46,9 +49,25 @@ public final class RangeBar extends View
 	private Listener listener;
 	private Labeler labeler;
 	private int units = 1;
+	private int first, last;
 	private int lo, hi;
+	private int minSpan = -1; // -1: ~2% of the line
+	private boolean labelEnds;
 	private int drag = NONE;
 	private float grabOffset;
+	private float downX;
+	private boolean moved;
+	private final int touchSlop;
+	private final Runnable resetToEnds = () ->
+	{
+		drag = NONE;
+		performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+		lo = first;
+		hi = last;
+		invalidate();
+		if (listener != null)
+			listener.onRangeChanged(lo, hi);
+	};
 
 	public RangeBar(Context ctx)
 	{
@@ -58,6 +77,7 @@ public final class RangeBar extends View
 		text.setColor(spanColour);
 		text.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 11,
 				ctx.getResources().getDisplayMetrics()));
+		touchSlop = ViewConfiguration.get(ctx).getScaledTouchSlop();
 	}
 
 	@Override
@@ -73,11 +93,19 @@ public final class RangeBar extends View
 
 	public void setLabeler(Labeler l) { labeler = l; }
 
-	public void setRange(int units, int lo, int hi)
+	public void setMinSpan(int units) { minSpan = units; }
+
+	/** Label carets at the ends of the whole range too. */
+	public void setLabelEnds(boolean on) { labelEnds = on; }
+
+	/** Carets are clamped into first..last; last < 0 means the final unit. */
+	public void setRange(int units, int first, int last, int lo, int hi)
 	{
 		this.units = Math.max(1, units);
-		this.hi = Math.max(0, Math.min(hi, this.units - 1));
-		this.lo = Math.max(0, Math.min(lo, this.hi));
+		this.last = last < 0 ? this.units - 1 : Math.max(0, Math.min(last, this.units - 1));
+		this.first = Math.max(0, Math.min(first, this.last));
+		this.hi = Math.max(this.first, Math.min(hi, this.last));
+		this.lo = Math.max(this.first, Math.min(lo, this.hi));
 		invalidate();
 	}
 
@@ -87,14 +115,14 @@ public final class RangeBar extends View
 	private float x(int unit)
 	{
 		int w = getWidth() - getPaddingLeft() - getPaddingRight();
-		return getPaddingLeft() + w * (units <= 1 ? 0f : unit / (float) (units - 1));
+		return getPaddingLeft() + w * (last <= first ? 0f : (unit - first) / (float) (last - first));
 	}
 
 	private int unitAt(float x)
 	{
 		int w = Math.max(1, getWidth() - getPaddingLeft() - getPaddingRight());
-		int u = Math.round((x - getPaddingLeft()) / w * (units - 1));
-		return Math.max(0, Math.min(units - 1, u));
+		int u = first + Math.round((x - getPaddingLeft()) / w * (last - first));
+		return Math.max(first, Math.min(last, u));
 	}
 
 	@Override
@@ -103,7 +131,7 @@ public final class RangeBar extends View
 		float y = dp(LINE_DP);
 		paint.setStrokeWidth(dp(2));
 		paint.setColor(lineColour);
-		c.drawLine(x(0), y, x(units - 1), y, paint);
+		c.drawLine(x(first), y, x(last), y, paint);
 		paint.setStrokeWidth(dp(4));
 		paint.setColor(spanColour);
 		c.drawLine(x(lo), y, Math.max(x(hi), x(lo) + 2), y, paint);
@@ -117,8 +145,10 @@ public final class RangeBar extends View
 	{
 		if (labeler == null)
 			return;
-		String a = lo > 0 ? labeler.label(lo) : null;
-		String b = hi < units - 1 ? labeler.label(hi) : null;
+		String a = labelEnds || lo > 0 ? labeler.label(lo) : null;
+		String b = labelEnds || hi < units - 1 ? labeler.label(hi) : null;
+		if (lo == hi)
+			b = null;
 		float wa = a == null ? 0 : text.measureText(a), wb = b == null ? 0 : text.measureText(b);
 		float la = x(lo) - wa / 2, lb = x(hi) - wb / 2, gap = dp(8);
 		if (a != null && b != null && la + wa + gap > lb)
@@ -155,6 +185,7 @@ public final class RangeBar extends View
 		case MotionEvent.ACTION_DOWN:
 			float dLo = Math.abs(ex - x(lo)), dHi = Math.abs(ex - x(hi));
 			int grab = dp(20);
+			drag = NONE;
 			if (Math.min(dLo, dHi) <= grab)
 				// Equal distance (collapsed span): pick by side so both ends stay reachable.
 				drag = dLo < dHi || dLo == dHi && ex < x(lo) ? LO : HI;
@@ -163,31 +194,41 @@ public final class RangeBar extends View
 				drag = PAN;
 				grabOffset = ex - x(lo);
 			}
-			else
-				return false;
+			downX = ex;
+			moved = false;
+			postDelayed(resetToEnds, 2L * ViewConfiguration.getLongPressTimeout());
 			getParent().requestDisallowInterceptTouchEvent(true);
 			return true;
 		case MotionEvent.ACTION_MOVE:
+			// Hold still until the slop is crossed, so a long-press doesn't nudge a caret.
+			if (!moved)
+			{
+				if (Math.abs(ex - downX) < touchSlop)
+					return true;
+				moved = true;
+				removeCallbacks(resetToEnds);
+			}
 			int span = hi - lo;
-			// Keep the active timeline at least ~2% of the game wide.
-			int min = Math.max(1, units / 50);
+			// Keep the active timeline at least ~2% of the line wide.
+			int min = minSpan >= 0 ? minSpan : Math.max(1, (last - first) / 50);
 			if (drag == LO)
-				lo = Math.max(0, Math.min(unitAt(ex), hi - min));
+				lo = Math.max(first, Math.min(unitAt(ex), hi - min));
 			else if (drag == HI)
-				hi = Math.min(units - 1, Math.max(unitAt(ex), lo + min));
+				hi = Math.min(last, Math.max(unitAt(ex), lo + min));
 			else if (drag == PAN)
 			{
-				lo = Math.max(0, Math.min(unitAt(ex - grabOffset), units - 1 - span));
+				lo = Math.max(first, Math.min(unitAt(ex - grabOffset), last - span));
 				hi = lo + span;
 			}
 			else
-				return false;
+				return true;
 			invalidate();
 			if (listener != null)
 				listener.onRangeChanged(lo, hi);
 			return true;
 		case MotionEvent.ACTION_UP:
 		case MotionEvent.ACTION_CANCEL:
+			removeCallbacks(resetToEnds);
 			drag = NONE;
 			return true;
 		default:

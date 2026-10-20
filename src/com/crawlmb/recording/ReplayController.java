@@ -35,6 +35,7 @@ public final class ReplayController
 	private int pos;
 	private boolean playing;
 	private int renderedPos = -1;
+	private int playLo = 0, playHi = Integer.MAX_VALUE;
 
 	public ReplayController(RecordingReader reader, boolean includeAbandoned,
 			int chunkCacheSize, RenderTarget target)
@@ -64,9 +65,18 @@ public final class ReplayController
 		seekInternal(pos);
 	}
 
+	/** Playback stops on reaching either edge (the scrubber's window). */
+	public void setPlayBounds(int lo, int hi)
+	{
+		playLo = lo;
+		playHi = hi;
+	}
+
+	private int edge() { return clock.direction() > 0 ? playHi : playLo; }
+
 	public void play()
 	{
-		if (clock.atEnd(timeline, pos))
+		if (clock.atEnd(timeline, pos) || pos == edge())
 			return;
 		playing = true;
 		clock.reset();
@@ -97,7 +107,11 @@ public final class ReplayController
 		if (!playing)
 			return;
 		int p = clock.advance(timeline, pos, wallMs);
-		if (clock.atEnd(timeline, p))
+		// Only when crossing in, so a playhead already outside the window still plays.
+		int e = edge();
+		if (clock.direction() > 0 ? pos < e && p >= e : pos > e && p <= e)
+			p = e;
+		if (clock.atEnd(timeline, p) || p == e)
 			playing = false;
 		seekInternal(p);
 	}

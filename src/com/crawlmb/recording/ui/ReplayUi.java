@@ -3,6 +3,7 @@ package com.crawlmb.recording.ui;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.drawable.InsetDrawable;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,6 +13,7 @@ import android.text.style.ForegroundColorSpan;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 
@@ -39,6 +41,7 @@ import com.crawlmb.view.TerminalRenderer;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -118,6 +121,10 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	private int lastNotifiedPos = -1;
 	private boolean rangeOn;
 	private int rangeLo, rangeHi = -1;
+	// Level trim: the range bar covers only positions trimFrom..trimTo.
+	private boolean trimOn;
+	private int trimFrom, trimTo;
+	private int trimXlLo, trimXlHi; // 0 = never trimmed
 	// Shown in red in place of the status line until clearGapNote.
 	private String gapNote;
 	private final Runnable clearGapNote = this::clearGapNote;
@@ -158,6 +165,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 					}
 				});
 		this.driver = new ReplayDriver(controller);
+		controller.setClockMode(ReplayClock.Mode.TURN_TIME);
 		this.recLayout = new ReplayLayout(controller.layoutAt(0), host::relayout);
 	}
 
@@ -195,6 +203,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		layout.addView(controls, lp);
 		controls.timeline().setData(controller.timeline(), controller.resolver());
 		controls.timeline().setTickTypesShown(ticksShown);
+		controls.setTrim(trimOn, trimFrom, trimTo);
 		controls.setRange(rangeOn, rangeLo, rangeHi);
 		CrawlKeyboardWrapper kb = new CrawlKeyboardWrapper(ctx, new KeyListener()
 		{
@@ -460,6 +469,140 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		rangeOn = on;
 		rangeLo = lo;
 		rangeHi = hi;
+		if (controls != null)
+		{
+			int[] w = controls.windowPositions();
+			controller.setPlayBounds(w[0], w[1]);
+		}
+		// Keep the playhead inside the new window, as video editors do. Not
+		// mid-rebuild (drawnPos -1): the renderer can't draw yet.
+		if (!on || !started || drawnPos < 0 || controls == null)
+			return;
+		int[] w = controls.windowPositions();
+		int p = controller.position();
+		int to = Math.max(w[0], Math.min(w[1], p));
+		if (to != p)
+		{
+			controller.seek(to);
+			refreshBrowsingForNewPosition();
+		}
+	}
+
+	@Override
+	public void onLevelTrim()
+	{
+		if (controls == null)
+			return;
+		if (trimOn)
+		{
+			trimOn = false;
+			controls.setTrim(false, 0, 0);
+			controls.setRange(rangeOn, rangeLo, rangeHi);
+			return;
+		}
+		final List<RecordingReader.SnapshotRow> rows = controller.resolver().rows();
+		int minXl = 0, maxXl = 0;
+		for (RecordingReader.SnapshotRow row : rows)
+			if (row.xl > 0)
+			{
+				if (minXl == 0)
+					minXl = row.xl;
+				maxXl = Math.max(maxXl, row.xl);
+			}
+		if (maxXl <= minXl)
+		{
+			host.toast("This recording covers only one experience level.");
+			return;
+		}
+		final int base = minXl, top = maxXl;
+		float density = ctx.getResources().getDisplayMetrics().density;
+		final RangeBar bar = new RangeBar(ctx);
+		bar.setMinSpan(0);
+		bar.setLabelEnds(true);
+		bar.setLabeler(u -> String.valueOf(base + u));
+		// Last trim's levels, so re-enabling doesn't start over.
+		int lo = trimXlLo > 0 ? trimXlLo - base : 0;
+		int hi = trimXlHi > 0 ? trimXlHi - base : maxXl - base;
+		bar.setRange(maxXl - base + 1, 0, -1, lo, hi);
+		// Room for the carets' half-width and their touch slop at both ends.
+		int inset = Math.round(20 * density);
+		bar.setPadding(inset, 0, inset, 0);
+		LinearLayout box = new LinearLayout(ctx);
+		int pad = Math.round(24 * density);
+		box.setPadding(pad - inset, pad / 2, pad - inset, 0);
+		box.addView(bar, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+				Math.round(30 * density)));
+		final AlertDialog dlg = new AlertDialog.Builder(ctx)
+				.setTitle("Trim to levels")
+				.setMessage(trimLabel(rows, base + bar.lo(), base + bar.hi()))
+				.setView(box)
+				.setNegativeButton("Cancel", null)
+				.setPositiveButton("Trim", (d, x) -> applyLevelTrim(rows, base + bar.lo(), base + bar.hi()))
+				.setNeutralButton("Reset", null)
+				.show();
+		if (dlg.getWindow() != null)
+		{
+			// The theme's background insets 16dp per side; thin it so the slider gets the width.
+			if (dlg.getWindow().getDecorView().getBackground() instanceof InsetDrawable)
+				dlg.getWindow().setBackgroundDrawable(new InsetDrawable(((InsetDrawable)
+						dlg.getWindow().getDecorView().getBackground()).getDrawable(),
+						Math.round(4 * density)));
+			dlg.getWindow().setLayout(controls.getWidth(), WindowManager.LayoutParams.WRAP_CONTENT);
+		}
+		bar.setListener((l, h) -> dlg.setMessage(trimLabel(rows, base + l, base + h)));
+		// Set after show() so tapping it doesn't dismiss the dialog.
+		dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v ->
+		{
+			bar.setRange(top - base + 1, 0, -1, 0, top - base);
+			dlg.setMessage(trimLabel(rows, base, top));
+		});
+	}
+
+	private String trimLabel(List<RecordingReader.SnapshotRow> rows, int a, int b)
+	{
+		String xl = a == b ? "XL " + a : "XL " + a + " – " + b;
+		ReplayTimeline tl = controller.timeline();
+		int[] span = levelSpan(rows, a, b);
+		return span == null ? xl : xl + "\n" + spanLabel(tl.turn(span[0]), tl.turn(span[1]));
+	}
+
+	/** Positions from reaching XL a until just before passing b, or null. */
+	private int[] levelSpan(List<RecordingReader.SnapshotRow> rows, int a, int b)
+	{
+		ReplayTimeline tl = controller.timeline();
+		if (tl.size() == 0)
+			return null;
+		int from = -1, to = tl.size() - 1, xl = 0;
+		for (RecordingReader.SnapshotRow row : rows)
+		{
+			if (row.xl <= xl)
+				continue;
+			int p = Math.max(0, tl.posOfFrame(row.frame));
+			// The starting XL keeps the menus before it.
+			if (from < 0 && row.xl >= a)
+				from = xl == 0 ? 0 : p;
+			xl = row.xl;
+			if (xl > b)
+			{
+				to = p - 1;
+				break;
+			}
+		}
+		return from < 0 ? null : new int[] { from, Math.max(from, to) };
+	}
+
+	private void applyLevelTrim(List<RecordingReader.SnapshotRow> rows, int a, int b)
+	{
+		int[] span = levelSpan(rows, a, b);
+		if (controls == null || span == null)
+			return;
+		trimOn = true;
+		trimXlLo = a;
+		trimXlHi = b;
+		trimFrom = span[0];
+		trimTo = span[1];
+		controls.setTrim(true, trimFrom, trimTo);
+		controls.setRange(rangeOn, 0, -1);
 	}
 
 	@Override
