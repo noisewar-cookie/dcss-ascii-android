@@ -1,0 +1,7 @@
+Release 28 (0.34.1)
+
+New Features:
+• Replay timelines can now scale by inputs (in addition to turn time).
+
+Bug Fixes:
+• Many bug fixes for replays inc. exports, foldable devices, timeline events, and backwards compatibility.
