@@ -21,7 +21,8 @@ import java.util.Map;
  *   GAME_END closes the recording: the "You die" frame is the last one, the
  *   morgue/hiscore screens after it are outside the character's life.
  *   Leaving a game without GAME_END (save & quit) closes the recording on the
- *   first out-of-game frame.
+ *   first out-of-game frame. Backstops: a turn lower than the last one closes
+ *   it (another game), and an ended game's file is never reopened.
  */
 public final class GameRecorder
 {
@@ -68,6 +69,8 @@ public final class GameRecorder
 	private int lastFrame = -1;
 	private int lastTurn = -1;
 	private GameIdentity identity;
+	// Key of the last game that ended; its file never takes more frames.
+	private String endedKey;
 	private boolean awaitKeySnapshot;
 	private int turnLimit;
 	private boolean includeUi = true;
@@ -199,6 +202,8 @@ public final class GameRecorder
 			return;
 		long real = clock.nowMs();
 
+		if (state == State.RECORDING && turn >= 0 && turn < lastTurn)
+			closeRecording();
 		if (turn >= 0 && state == State.IDLE)
 			openRecording(turn, aut);
 		else if (turn < 0 && state == State.RECORDING)
@@ -308,6 +313,8 @@ public final class GameRecorder
 		{
 			return; // TODO: log; a bad snapshot must never crash the game
 		}
+		if (state == State.RECORDING && p.turn < lastTurn)
+			closeRecording();
 		if (state == State.IDLE)
 		{
 			openRecording(p.turn, (int) p.aut);
@@ -413,6 +420,7 @@ public final class GameRecorder
 			s.writeEvent(frame, turn, EventDeriver.GAME_END, r);
 			s.commit();
 		});
+		endedKey = identity.key();
 		closeRecording();
 		return true;
 	}
@@ -461,6 +469,8 @@ public final class GameRecorder
 		{
 			return;
 		}
+		if (id.key().equals(endedKey))
+			return;
 		RecordingSink.OpenResult r;
 		try
 		{
@@ -469,6 +479,8 @@ public final class GameRecorder
 		}
 		catch (Exception e)
 		{
+			if (e.getCause() instanceof RecordingSink.GameEndedException)
+				endedKey = id.key();
 			return; // stays IDLE; retried on the next in-game frame
 		}
 		identity = id;
@@ -537,6 +549,7 @@ public final class GameRecorder
 		identity = null;
 		nextFrame = 0;
 		lastFrame = -1;
+		lastTurn = -1;
 	}
 
 	// Frame/side-channel timestamp: frozen while a skipped popup is up.

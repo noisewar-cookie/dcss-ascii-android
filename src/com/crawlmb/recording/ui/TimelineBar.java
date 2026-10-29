@@ -23,8 +23,9 @@ import java.util.Set;
  * turns that weren't recorded, and ticks for new floors (gray), temporary
  * portals (blue), level ups (green), HP under 10% (light red), first sight of
  * a unique (red) and Zot's malevolent forces (purple). Progress is in bar
- * units, not positions (gaps add units before their post-gap position), and
- * relative to the visible window (Range): convert with posAt()/progressOf().
+ * units, not positions (one per frame, or an equal share per keypress with
+ * input scale; gaps add units before their post-gap position), and relative
+ * to the visible window (Range): convert with posAt()/progressOf().
  */
 public final class TimelineBar extends SeekBar
 {
@@ -43,6 +44,7 @@ public final class TimelineBar extends SeekBar
 			"Unique sighted", "Zot's malevolence" };
 	// A game recorded from turn 5000 would otherwise be almost all red.
 	private static final float MAX_GAP_SHARE = 0.5f;
+	private static final int MAX_INPUT_UNITS = 1 << 20;
 
 	private int[] bandStart = new int[0];
 	private int[] bandColour = new int[0];
@@ -56,6 +58,7 @@ public final class TimelineBar extends SeekBar
 	private int winLo, winHi; // visible units, inclusive
 	private boolean shortTicks; // Range on: ticks stay inside the band so the range bar above fits
 	private ReplayTimeline tl;
+	private boolean inputScale;
 	private final Paint paint = new Paint();
 
 	private static final int[] BRANCH_PALETTE = { 0xFF3A3A3A, 0xFF2E4A2E, 0xFF4A3A22, 0xFF22384A,
@@ -130,6 +133,19 @@ public final class TimelineBar extends SeekBar
 
 	static int tickColour(int type) { return TICK_COLOURS[type]; }
 
+	/** Rescales the whole bar; callers reapply trim and range afterwards. */
+	public void setInputScale(boolean on)
+	{
+		inputScale = on;
+		if (tl == null)
+			return;
+		buildUnits(tl, Math.max(1, tl.size()));
+		winLo = 0;
+		winHi = units - 1;
+		setMax(winHi);
+		invalidate();
+	}
+
 	public int units() { return units; }
 
 	/** Show only units lo..hi (inclusive); the thumb pins to an edge outside it. */
@@ -178,7 +194,7 @@ public final class TimelineBar extends SeekBar
 		return tl == null ? -1 : tl.turn(posOfUnit(unit));
 	}
 
-	private int posOfUnit(int unit)
+	int posOfUnit(int unit)
 	{
 		int lo = 0, hi = unitOf.length - 1;
 		while (lo < hi)
@@ -234,15 +250,17 @@ public final class TimelineBar extends SeekBar
 				text.add(e.label);
 			}
 		}
-		// Size gaps by the recorded frames-per-turn: as wide as they'd have been.
+		int[] base = baseUnits(tl, size);
+		int baseTotal = base[size - 1] + 1;
+		// Size gaps by the recorded units-per-turn: as wide as they'd have been.
 		long recordedTurns = 0, totalMissed = 0;
 		for (int p = 1; p < tl.size(); p++)
 			if (!pos.contains(p))
 				recordedTurns += Math.max(0, tl.turn(p) - Math.max(0, tl.turn(p - 1)));
 		for (int m : missed)
 			totalMissed += m;
-		double perTurn = (double) size / Math.max(1, recordedTurns);
-		double cap = size * MAX_GAP_SHARE / (1 - MAX_GAP_SHARE);
+		double perTurn = (double) baseTotal / Math.max(1, recordedTurns);
+		double cap = baseTotal * MAX_GAP_SHARE / (1 - MAX_GAP_SHARE);
 		if (totalMissed * perTurn > cap)
 			perTurn = cap / totalMissed;
 		gapPos = new int[pos.size()];
@@ -259,9 +277,45 @@ public final class TimelineBar extends SeekBar
 		{
 			while (g < gapPos.length && gapPos[g] == p)
 				extra += gapUnits[g++];
-			unitOf[p] = p + extra;
+			unitOf[p] = base[p] + extra;
 		}
 		units = unitOf[size - 1] + 1;
+	}
+
+	// Input scale: each keypress gets equal width, its frames spread across
+	// it so an autoexplore stays scrubbable.
+	private int[] baseUnits(ReplayTimeline tl, int size)
+	{
+		int[] base = new int[size];
+		if (!inputScale || tl.size() == 0)
+		{
+			for (int p = 0; p < size; p++)
+				base[p] = p;
+			return base;
+		}
+		int groups = tl.inputCount(size - 1) + 1, widest = 0;
+		for (int p = 0, start = 0; p < size; p++)
+			if (endsInput(tl, p))
+			{
+				widest = Math.max(widest, p - start + 1);
+				start = p + 1;
+			}
+		int s = Math.max(1, Math.min(widest, MAX_INPUT_UNITS / groups));
+		for (int p = 0, start = 0, k = 0; p < size; p++)
+			if (endsInput(tl, p))
+			{
+				int n = p - start + 1;
+				for (int i = 0; i < n; i++)
+					base[start + i] = (int) ((long) k * s + (long) i * s / n);
+				k++;
+				start = p + 1;
+			}
+		return base;
+	}
+
+	private static boolean endsInput(ReplayTimeline tl, int p)
+	{
+		return p == tl.size() - 1 || tl.inputCount(p) != (p > 0 ? tl.inputCount(p - 1) : 0);
 	}
 
 	// Older recordings logged LOW_HP under a third; the label is "HP cur/max".

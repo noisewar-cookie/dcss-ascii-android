@@ -27,9 +27,22 @@ public final class ReplayTimeline
 	public ReplayTimeline(RecordingReader.FrameIndex fi, List<RecordingReader.EventRow> allEvents,
 			boolean includeAbandoned)
 	{
+		// Older builds kept recording past the death; nothing after it is this game.
+		int end = Integer.MAX_VALUE;
+		for (RecordingReader.EventRow e : allEvents)
+			if (EventDeriver.GAME_END.equals(e.type))
+				end = Math.min(end, e.frame);
+		// Their "You die" screen is the first frame after it, flagged post-game.
+		for (int i = 0; i < fi.size(); i++)
+			if (fi.frame[i] > end)
+			{
+				if ((fi.flags[i] & RecFormat.FRAME_POST_GAME) != 0)
+					end = fi.frame[i];
+				break;
+			}
 		int n = 0;
 		for (int i = 0; i < fi.size(); i++)
-			if (includeAbandoned || !fi.abandoned[i])
+			if ((includeAbandoned || !fi.abandoned[i]) && fi.frame[i] <= end)
 				n++;
 		frame = new int[n];
 		tMs = new long[n];
@@ -40,7 +53,7 @@ public final class ReplayTimeline
 		int k = 0;
 		for (int i = 0; i < fi.size(); i++)
 		{
-			if (!includeAbandoned && fi.abandoned[i])
+			if (!includeAbandoned && fi.abandoned[i] || fi.frame[i] > end)
 				continue;
 			frame[k] = fi.frame[i];
 			tMs[k] = fi.tMs[i];
@@ -50,6 +63,12 @@ public final class ReplayTimeline
 			chunkId[k] = fi.chunkId[i];
 			k++;
 		}
+		// That screen was sent out of game (turn -1); new files send it in game.
+		if (n > 1 && turn[n - 1] < 0 && (flags[n - 1] & RecFormat.FRAME_POST_GAME) != 0)
+		{
+			turn[n - 1] = turn[n - 2];
+			aut[n - 1] = aut[n - 2];
+		}
 		inputsUpTo = new int[n];
 		for (int i = 0, c = 0; i < n; i++)
 		{
@@ -57,20 +76,39 @@ public final class ReplayTimeline
 				c++;
 			inputsUpTo[i] = c;
 		}
-		events = new ArrayList<>();
+		List<RecordingReader.EventRow> kept = new ArrayList<>();
 		List<Integer> pos = new ArrayList<>();
 		for (RecordingReader.EventRow e : allEvents)
 		{
 			int p = posOfFrame(e.frame);
 			if (p >= 0 && frame[p] == e.frame)
 			{
-				events.add(e);
-				pos.add(p);
+				kept.add(e);
+				pos.add(shownAt(p, e.turn));
 			}
 		}
-		eventPos = new int[pos.size()];
-		for (int i = 0; i < eventPos.length; i++)
-			eventPos[i] = pos.get(i);
+		// Shifts can reorder neighbours; nextEvent walks positions in order.
+		Integer[] order = new Integer[kept.size()];
+		for (int i = 0; i < order.length; i++)
+			order[i] = i;
+		Arrays.sort(order, (a, b) -> Integer.compare(pos.get(a), pos.get(b)));
+		events = new ArrayList<>();
+		eventPos = new int[order.length];
+		for (int i = 0; i < order.length; i++)
+		{
+			events.add(kept.get(order[i]));
+			eventPos[i] = pos.get(order[i]);
+		}
+	}
+
+	// Events attach to the frame on screen when they're derived, which still
+	// shows the turn before the change; move them to the frame that shows it.
+	private int shownAt(int p, int eventTurn)
+	{
+		for (int q = p; q < frame.length; q++)
+			if (turn[q] >= eventTurn)
+				return q;
+		return p;
 	}
 
 	public int size() { return frame.length; }

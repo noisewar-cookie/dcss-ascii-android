@@ -64,6 +64,41 @@ public class FixtureRecordingsTest
 		}
 	}
 
+	/** A finished game's replay ends on its final message (death, escape), in game. */
+	@Test
+	public void finishedGamesEndOnTheirLastMessage() throws Exception
+	{
+		int finished = 0;
+		for (File f : fixtures())
+		{
+			MemoryRecordingStore s = load(f);
+			if (!s.meta.containsKey("end_reason"))
+				continue;
+			finished++;
+			final ScreenState[] shown = new ScreenState[1];
+			ReplayController rc = new ReplayController(s, false, 4, new ReplayController.RenderTarget()
+			{
+				@Override public void render(ScreenState st, int pos) { shown[0] = st; }
+				@Override public void onPositionChanged(int pos, boolean playing) {}
+			});
+			int last = rc.timeline().size() - 1;
+			rc.seek(last);
+			assertTrue(f.getName() + ": last frame is out of game", rc.timeline().turn(last) >= 0);
+			List<RecordingReader.MessageRow> m = s.messagesUpTo(rc.timeline().frame(last), 1);
+			assertFalse(f.getName() + ": no messages", m.isEmpty());
+			String want = flat(m.get(0).text.replaceAll("<[^<>]*>", ""));
+			assertTrue(f.getName() + ": last frame doesn't show \"" + want + "\"",
+					flat(new String(shown[0].chars)).contains(want));
+		}
+		assertTrue("add a fixture of a finished game", finished > 0);
+	}
+
+	// Rows joined, so a message wrapped over lines still matches.
+	private static String flat(String s)
+	{
+		return s.replaceAll("\\s+", " ").trim();
+	}
+
 	private static void replay(MemoryRecordingStore s)
 	{
 		assertTrue(ImportValidator.validateMeta(s.meta).error, ImportValidator.validateMeta(s.meta).ok);

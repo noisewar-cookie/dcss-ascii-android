@@ -250,6 +250,18 @@ public class GameActivity extends Activity
 							if (portraitRouter != null)
 								portraitRouter.replayAllFromShadow();
 						}
+
+						@Override
+						public void reserveControls(boolean reserve)
+						{
+							applyKbHalfReserve(reserve ? kbReserveHeight : 0);
+						}
+
+						@Override
+						public boolean unfolded()
+						{
+							return unfoldedActive;
+						}
 					}, store, chunks);
 		}
 		catch (RuntimeException e)
@@ -543,6 +555,10 @@ public class GameActivity extends Activity
 	// each half to its own height (the keyboard-side half is shortened).
 	private View unfoldedMapHalf = null;
 	private View unfoldedPanelHalf = null;
+	// The half reserveKeyboardHalf shortened and by how much (replay export
+	// releases it while the controls are hidden).
+	private View kbReservedHalf = null;
+	private int kbReserveHeight = 0;
 	// Consecutive frames cancelled by the layout-settle gate (see onCreate).
 	private int settleSkips = 0;
 	private static final int MAX_SETTLE_SKIPS = 3;
@@ -729,17 +745,9 @@ public class GameActivity extends Activity
 					return;
 				WindowVto.of(keyboardView)
 						.removeOnGlobalLayoutListener(this);
-				ViewGroup.MarginLayoutParams lp =
-						(ViewGroup.MarginLayoutParams) half.getLayoutParams();
-				if (lp.bottomMargin != kbHeight)
-				{
-					lp.bottomMargin = kbHeight;
-					half.setLayoutParams(lp);
-				}
-				// Confined menus on the keyboard-side half must clear the
-				// keyboard too (the panel is full height here).
-				if (portraitRouter != null)
-					portraitRouter.setUnfoldedMenuKbReserve(kbHeight);
+				kbReservedHalf = half;
+				kbReserveHeight = kbHeight;
+				applyKbHalfReserve(kbHeight);
 				// Shorten the keyboard-side half's 9-grid so its rows divide the
 				// content above the keyboard (index 0 = left, 1 = right half).
 				if (portraitDirectionalView instanceof DirectionalTouchView)
@@ -747,6 +755,23 @@ public class GameActivity extends Activity
 							.setFoldHalfReserve(kbHalfLeft ? 0 : 1, kbHeight);
 			}
 		});
+	}
+
+	private void applyKbHalfReserve(int height) {
+		View half = kbReservedHalf;
+		if (half == null)
+			return;
+		ViewGroup.MarginLayoutParams lp =
+				(ViewGroup.MarginLayoutParams) half.getLayoutParams();
+		if (lp.bottomMargin != height)
+		{
+			lp.bottomMargin = height;
+			half.setLayoutParams(lp);
+		}
+		// Confined menus on the keyboard-side half must clear the
+		// keyboard too (the panel is full height here).
+		if (portraitRouter != null)
+			portraitRouter.setUnfoldedMenuKbReserve(height);
 	}
 
 	private static boolean sameSplit(FoldStateController.Posture a,
@@ -2125,6 +2150,8 @@ public class GameActivity extends Activity
 		term = null;
 		unfoldedMapHalf = null;
 		unfoldedPanelHalf = null;
+		kbReservedHalf = null;
+		kbReserveHeight = 0;
 		FontConfig fontConfig = FontConfig.load(getAssets());
 		portraitFontConfig = fontConfig;
 
@@ -3362,7 +3389,11 @@ public class GameActivity extends Activity
 
 		unfoldedRoot.addView(leftContent, new LinearLayout.LayoutParams(
 				0, LayoutParams.MATCH_PARENT, leftWeight));
-		unfoldedRoot.addView(new View(this), new LinearLayout.LayoutParams(
+		// INVISIBLE: still spaces the halves, but replay export's content crop
+		// (ViewCapture.contentTop) skips it.
+		View gapView = new View(this);
+		gapView.setVisibility(View.INVISIBLE);
+		unfoldedRoot.addView(gapView, new LinearLayout.LayoutParams(
 				gap, LayoutParams.MATCH_PARENT));
 		unfoldedRoot.addView(rightContent, new LinearLayout.LayoutParams(
 				0, LayoutParams.MATCH_PARENT, rightWeight));

@@ -56,6 +56,7 @@ public final class ReplayGifEncoder
 			ReplayClock clock = new ReplayClock();
 			clock.setMode(mode);
 
+			frames.start(from);
 			int w = frames.width(), h = frames.height();
 			frames.setOutputSize(w, h);
 

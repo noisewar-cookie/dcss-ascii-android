@@ -31,9 +31,19 @@ public interface RecordingSink
 		}
 	}
 
+	/** open() of a file whose game already ended: one character's life per file. */
+	final class GameEndedException extends IllegalStateException
+	{
+		public GameEndedException()
+		{
+			super("recording's game has ended");
+		}
+	}
+
 	/**
 	 * Create the file for this game or reopen it for appending. A new file
 	 * embeds docDict (may be null); a reopened one keeps its own.
+	 * @throws GameEndedException if the file holds a finished game
 	 */
 	OpenResult open(GameIdentity id, String appVersion, int[] layout, byte[] docDict);
 

@@ -81,7 +81,15 @@ public final class RecWriterThread
 		{
 			closeSinkQuietly();
 			sink = factory.create(id);
-			return sink.open(id, appVersion, layout, docDict);
+			try
+			{
+				return sink.open(id, appVersion, layout, docDict);
+			}
+			catch (RuntimeException e)
+			{
+				closeSinkQuietly(); // a refused file (e.g. game ended) stays untouched
+				throw e;
+			}
 		}, timeoutMs);
 	}
 

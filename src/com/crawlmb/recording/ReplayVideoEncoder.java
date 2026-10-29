@@ -39,6 +39,8 @@ public final class ReplayVideoEncoder
 	/** Screen images by timeline position, all one size. Encoder thread. */
 	public interface Frames
 	{
+		/** Settle on the first position; width() and height() are measured there. */
+		void start(int pos) throws IOException;
 		int width();
 		int height();
 		/** Size of the bitmaps frame() returns; the screen is scaled to fit. */
@@ -106,6 +108,7 @@ public final class ReplayVideoEncoder
 			if (to < from)
 				throw new IOException("nothing to clip");
 			ChunkCache cache = new ChunkCache(store, 2);
+			frames.start(from);
 			enc = new Encoder(out, frames.width(), frames.height());
 			frames.setOutputSize(enc.width, enc.height);
 			ReplayClock clock = new ReplayClock();

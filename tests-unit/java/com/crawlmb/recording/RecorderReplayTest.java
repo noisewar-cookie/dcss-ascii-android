@@ -410,6 +410,71 @@ public class RecorderReplayTest
 	}
 
 	@Test
+	public void endedGameIsNeverReopened()
+	{
+		Harness h = new Harness();
+		h.frame(0, 0);
+		for (int t = 1; t <= 3; t++)
+			h.turn(t, "D:1", 20, mapDelta("D:1", 3 + t));
+		h.rec.onGameEnd(1, "Killed".getBytes(StandardCharsets.UTF_8),
+				"morgue.txt".getBytes(StandardCharsets.UTF_8));
+		h.w.drain();
+		MemoryRecordingStore s = h.w.store;
+		int recorded = s.frames.size();
+		// Same identity still reporting in-game turns: no reopen, this process or a new one.
+		h.frame(4, 40);
+		h.snapshot("CP", 4, 40, "D:1", 20, mapKey("D:1"));
+		GameRecorder fresh = new GameRecorder(h.w.writer, h.nat, h.clock, "test",
+				TestSupport.ROWS, TestSupport.COLS);
+		fresh.setEnabled(true);
+		fresh.onFrame(h.scr.c.clone(), h.scr.fg.clone(), h.scr.bg.clone(), 4, 40, false);
+		h.w.drain();
+		assertFalse(h.rec.isRecording());
+		assertFalse(fresh.isRecording());
+		assertEquals(recorded, s.frames.size());
+	}
+
+	@Test
+	public void turnRegressionClosesRecording()
+	{
+		Harness h = new Harness();
+		h.frame(0, 0);
+		for (int t = 1; t <= 5; t++)
+			h.turn(t, "D:1", 20, mapDelta("D:1", 3 + t));
+		h.w.drain();
+		assertTrue(h.rec.isRecording());
+		h.nat.name = "Next";
+		h.frame(0, 0); // another game's first frame, no out-of-game frame between
+		h.w.drain();
+		assertTrue(h.rec.isRecording());
+		assertEquals(2, h.w.store.sessions.size()); // closed, then a fresh open
+	}
+
+	@Test
+	public void timelineEndsAtGameEnd()
+	{
+		int n = 6;
+		RecordingReader.FrameIndex fi = new RecordingReader.FrameIndex(
+				new int[] { 0, 1, 2, 3, 4, 5 }, new long[n], new int[] { 1, 2, 3, -1, -3, 0 },
+				new int[n], new int[n], new int[n], new boolean[n]);
+		List<RecordingReader.EventRow> ev = new ArrayList<>();
+		ev.add(new RecordingReader.EventRow(2, 3, EventDeriver.GAME_END, "Killed"));
+		ev.add(new RecordingReader.EventRow(5, 0, EventDeriver.LEVEL, "Entered D:1"));
+		ReplayTimeline tl = new ReplayTimeline(fi, ev, false);
+		assertEquals(3, tl.size());
+		assertEquals(1, tl.events().size());
+
+		// Older files: the "You die" screen follows the event, flagged post-game.
+		int pg = RecFormat.FRAME_POST_GAME;
+		fi = new RecordingReader.FrameIndex(new int[] { 0, 1, 2, 3, 4, 5 }, new long[n],
+				new int[] { 1, 2, 3, -1, -3, 0 }, new int[n], new int[] { 0, 0, 0, pg, pg, pg },
+				new int[n], new boolean[n]);
+		tl = new ReplayTimeline(fi, ev, false);
+		assertEquals(4, tl.size());
+		assertEquals(3, tl.turn(3)); // labelled with the final turn, not -1
+	}
+
+	@Test
 	public void skippedUiScreensTakeNoTime()
 	{
 		Harness h = new Harness();
@@ -428,5 +493,24 @@ public class RecorderReplayTest
 		assertEquals(3, f.size());
 		// Only the 100 ms before the popup opened counts, not the 10 s on it.
 		assertEquals(f.get(1).tMs + 100, f.get(2).tMs);
+	}
+
+	@Test
+	public void eventTicksLandOnTheFrameShowingTheirTurn()
+	{
+		int[] turns = { 10, 10, 13, 13, 14 };
+		int n = turns.length;
+		RecordingReader.FrameIndex fi = new RecordingReader.FrameIndex(new int[] { 0, 1, 2, 3, 4 },
+				new long[n], turns, new int[n], new int[n], new int[n], new boolean[n]);
+		List<RecordingReader.EventRow> ev = new ArrayList<>();
+		ev.add(new RecordingReader.EventRow(1, 13, EventDeriver.LEVEL, "Entered D:2"));
+		ev.add(new RecordingReader.EventRow(1, 10, EventDeriver.SAVE, "Saved"));
+		ev.add(new RecordingReader.EventRow(4, 20, EventDeriver.XL, "past the end"));
+		ReplayTimeline tl = new ReplayTimeline(fi, ev, false);
+		assertEquals(EventDeriver.SAVE, tl.events().get(0).type);
+		assertEquals(1, tl.eventPosition(0));
+		assertEquals(2, tl.eventPosition(1)); // first frame at turn 13, not the turn-10 one
+		assertEquals(4, tl.eventPosition(2)); // nothing later: stays put
+		assertEquals(2, tl.nextEvent(1, 1, null));
 	}
 }

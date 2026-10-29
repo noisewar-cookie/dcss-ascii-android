@@ -96,6 +96,16 @@ public final class RecordingExporter
 			db.beginTransaction();
 			try
 			{
+				// Older builds kept recording past the death into the next game.
+				// Their "You die" screen is the first frame after it, flagged post-game.
+				String end = "(SELECT MIN(frame) FROM events WHERE type = '" + EventDeriver.GAME_END
+						+ "')";
+				String next = "(SELECT frame, flags FROM frames WHERE frame > " + end
+						+ " ORDER BY frame LIMIT 1)";
+				String afterEnd = " WHERE frame > IFNULL((SELECT frame FROM " + next + " WHERE flags & "
+						+ RecFormat.FRAME_POST_GAME + " != 0), " + end + ")";
+				for (String t : new String[] { "frames", "snapshots", "messages", "inputs", "events" })
+					db.execSQL("DELETE FROM " + t + afterEnd);
 				if (!o.includeAbandoned)
 				{
 					String inAb = " WHERE EXISTS (SELECT 1 FROM abandoned a WHERE %1$s >= a.from_frame"
@@ -105,8 +115,6 @@ public final class RecordingExporter
 					db.execSQL("DELETE FROM messages" + String.format(inAb, "messages.frame"));
 					db.execSQL("DELETE FROM inputs" + String.format(inAb, "inputs.frame"));
 					db.execSQL("DELETE FROM events" + String.format(inAb, "events.frame"));
-					db.execSQL("DELETE FROM frame_chunks WHERE NOT EXISTS"
-							+ " (SELECT 1 FROM frames f WHERE f.chunk_id = frame_chunks.id)");
 					db.execSQL("DELETE FROM abandoned");
 				}
 				if (!o.includeKeystrokes)
@@ -114,6 +122,8 @@ public final class RecordingExporter
 				if (!o.includeCharCreation)
 					db.execSQL("DELETE FROM frames WHERE turn < 0 AND frame <"
 							+ " (SELECT IFNULL(MIN(frame), 0) FROM frames WHERE turn >= 0)");
+				db.execSQL("DELETE FROM frame_chunks WHERE NOT EXISTS"
+						+ " (SELECT 1 FROM frames f WHERE f.chunk_id = frame_chunks.id)");
 				Map<String, String> meta = readMeta(db);
 				if (!o.includeSeed && meta.get("identity") != null)
 					putMeta(db, "identity",

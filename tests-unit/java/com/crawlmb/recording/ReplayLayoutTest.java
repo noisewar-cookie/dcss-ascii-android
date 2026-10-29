@@ -80,6 +80,21 @@ public class ReplayLayoutTest
 	}
 
 	@Test
+	public void heldChangeWaitsForRelease()
+	{
+		Counter c = new Counter();
+		ReplayLayout l = new ReplayLayout(WRAP, c);
+		l.hold(true);
+		assertFalse(l.accept(COMPACT));
+		assertTrue(l.accept(WRAP));
+		assertEquals(0, c.n);
+		assertArrayEquals(WRAP, l.applied());
+		l.hold(false);
+		assertFalse(l.accept(COMPACT));
+		assertEquals(1, c.n);
+	}
+
+	@Test
 	public void eachFieldTriggersRebuild()
 	{
 		int[] fields = { RecFormat.LAYOUT_MSG_WRAP_COLS, RecFormat.LAYOUT_MSG_ROWS,

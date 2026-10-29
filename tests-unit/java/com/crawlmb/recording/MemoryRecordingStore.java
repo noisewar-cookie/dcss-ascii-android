@@ -62,6 +62,8 @@ public final class MemoryRecordingStore implements RecordingSink, RecordingReade
 		closed = false;
 		if (opened)
 		{
+			if (meta.containsKey("end_reason"))
+				throw new GameEndedException();
 			int next = frames.isEmpty() ? 0 : frames.get(frames.size() - 1).frame + 1;
 			int lastTurn = -1;
 			for (Frame f : frames)

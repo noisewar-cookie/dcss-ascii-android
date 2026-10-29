@@ -10,6 +10,7 @@ import android.os.Looper;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
+import android.view.Choreographer;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -70,6 +71,10 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		void relayout();
 		/** Repaint every cell of the current screen into the views. */
 		void repaint();
+		/** Hold (or release) the unfolded half shortened for the controls. */
+		void reserveControls(boolean reserve);
+		/** Unfolded: the panel halves centre in whatever height they get. */
+		boolean unfolded();
 	}
 
 	public interface ClipDestination
@@ -90,8 +95,8 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 
 	private enum SkipUnit { TURNS_10, TURNS_100, TURNS_1000, EVENT, LEVEL }
 
-	private static final ReplayTimeline.Unit[] STEP_UNITS = { ReplayTimeline.Unit.TURN,
-			ReplayTimeline.Unit.INPUT };
+	private static final ReplayTimeline.Unit[] STEP_UNITS = { ReplayTimeline.Unit.INPUT,
+			ReplayTimeline.Unit.TURN };
 
 	private final Context ctx;
 	private final Host host;
@@ -201,6 +206,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 			lp.addRule(alignLeft ? RelativeLayout.ALIGN_PARENT_LEFT
 					: RelativeLayout.ALIGN_PARENT_RIGHT);
 		layout.addView(controls, lp);
+		controls.timeline().setInputScale(inputScale());
 		controls.timeline().setData(controller.timeline(), controller.resolver());
 		controls.timeline().setTickTypesShown(ticksShown);
 		controls.setTrim(trimOn, trimFrom, trimTo);
@@ -403,6 +409,21 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	{
 		stepIdx = (stepIdx + 1) % STEP_UNITS.length;
 		updateLabels();
+		if (controls == null)
+			return;
+		// The bar is scaled by the step unit; keep the range on the same frames.
+		TimelineBar bar = controls.timeline();
+		int lo = bar.posOfUnit(rangeLo), hi = rangeHi < 0 ? -1 : bar.posOfUnit(rangeHi);
+		bar.setInputScale(inputScale());
+		rangeLo = bar.unitOfPos(lo);
+		rangeHi = hi < 0 ? -1 : bar.unitOfPos(hi);
+		controls.setTrim(trimOn, trimFrom, trimTo);
+		controls.setRange(rangeOn, rangeLo, rangeHi);
+	}
+
+	private boolean inputScale()
+	{
+		return STEP_UNITS[stepIdx] == ReplayTimeline.Unit.INPUT;
 	}
 
 	@Override
@@ -448,6 +469,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	public void onScrubStart()
 	{
 		wasPlayingBeforeScrub = controller.isPlaying();
+		recLayout.hold(true);
 		driver.pause();
 	}
 
@@ -707,10 +729,58 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	{
 		driver.pause();
 		leaveBrowsing();
+		View panel = host.gamePanel();
+		if (panel == null || panel.getWidth() == 0)
+		{
+			done.done(false, "the screen isn't ready");
+			return;
+		}
+		// Single-screen the controls only go INVISIBLE: freeing their height
+		// re-runs the auto-fit mid-export. Unfolded, their half is released so
+		// the panels re-centre, and the capture size waits out that relayout.
+		final View shown = controls;
+		if (shown == null)
+		{
+			startExport(title, info, job, done, null);
+			return;
+		}
+		shown.setVisibility(host.unfolded() ? View.GONE : View.INVISIBLE);
+		host.reserveControls(false);
+		afterLayout(0, () ->
+		{
+			// Replay released or rebuilt meanwhile: nothing to export from.
+			if (controls == shown)
+				startExport(title, info, job, done, shown);
+			else
+				done.done(false, "the screen isn't ready");
+		});
+	}
+
+	// A view that keeps requesting layout can't stall the export.
+	private void afterLayout(final int frames, final Runnable r)
+	{
+		Choreographer.getInstance().postFrameCallback(t ->
+		{
+			View panel = host.gamePanel();
+			if (frames < 2 || panel != null && panel.isLayoutRequested() && frames < 10)
+				afterLayout(frames + 1, r);
+			else
+				r.run();
+		});
+	}
+
+	private void startExport(String title, String info, final ExportJob job,
+			final ExportDone done, final View shown)
+	{
 		final Activity act = (Activity) ctx;
 		View panel = host.gamePanel();
 		if (panel == null || panel.getWidth() == 0)
 		{
+			if (shown != null)
+			{
+				shown.setVisibility(View.VISIBLE);
+				host.reserveControls(true);
+			}
 			done.done(false, "the screen isn't ready");
 			return;
 		}
@@ -789,6 +859,11 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 					return;
 				exportCancel = null;
 				exportDialog = null;
+				if (shown != null && shown == controls)
+				{
+					shown.setVisibility(View.VISIBLE);
+					host.reserveControls(true);
+				}
 				act.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 				dlg.dismiss();
 				boolean ok = !cancel.get() && err == null;
@@ -800,6 +875,10 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	@Override
 	public void onScrubEnd()
 	{
+		recLayout.hold(false);
+		// A frame held back for its layout rebuilds now.
+		if (drawnPos < 0)
+			controller.refresh();
 		if (wasPlayingBeforeScrub)
 			driver.play();
 	}

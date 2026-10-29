@@ -153,6 +153,8 @@ public final class SqliteRecordingStore implements RecordingSink, RecordingReade
 		String existing = metaValue("identity");
 		if (existing != null)
 		{
+			if (metaValue("end_reason") != null)
+				throw new GameEndedException();
 			long next = longQuery("SELECT IFNULL(MAX(frame), -1) + 1 FROM frames");
 			long lastTurn = longQuery("SELECT IFNULL(MAX(turn), -1) FROM frames WHERE turn >= 0");
 			// A crash can commit rows for frames whose chunk was never written;

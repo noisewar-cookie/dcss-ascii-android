@@ -12,6 +12,7 @@ public final class ReplayLayout
 	private final Runnable rebuild;
 	private int[] applied;
 	private boolean pending;
+	private boolean held;
 
 	public ReplayLayout(int[] initial, Runnable rebuild)
 	{
@@ -25,6 +26,15 @@ public final class ReplayLayout
 		return applied;
 	}
 
+	/**
+	 * While held (a scrub drag), a layout change only holds frames back: the
+	 * rebuild replaces the controls, which cancels the drag.
+	 */
+	public void hold(boolean on)
+	{
+		held = on;
+	}
+
 	/** True if a frame with this layout can be drawn on the current views. */
 	public boolean accept(int[] frame)
 	{
@@ -32,6 +42,8 @@ public final class ReplayLayout
 			return false;
 		if (!known(frame) || (applied != null && sameViews(applied, frame)))
 			return true;
+		if (held)
+			return false;
 		applied = frame.clone();
 		pending = true;
 		rebuild.run();

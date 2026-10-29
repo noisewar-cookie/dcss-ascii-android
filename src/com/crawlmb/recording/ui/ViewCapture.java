@@ -7,6 +7,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Choreographer;
 import android.view.View;
+import android.view.ViewGroup;
 
 import com.crawlmb.recording.ReplayVideoEncoder;
 
@@ -20,7 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Export frames drawn from the replay's own views, so videos and GIFs match
  * the screen: the encoder thread asks for a position, the UI thread seeks
  * there, waits for the views to settle and draws the game panel (minus its
- * inset padding) into one reused bitmap.
+ * inset padding and the unused bands around its content) into one reused
+ * bitmap.
  */
 final class ViewCapture implements ReplayVideoEncoder.Frames
 {
@@ -41,7 +43,7 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 	private final Source src;
 	private final AtomicBoolean cancel;
 	private final Handler main = new Handler(Looper.getMainLooper());
-	private final int width, height;
+	private int width, height;
 	private Bitmap bitmap;
 	private Canvas canvas;
 	// Panel size + padding at the last frame; insets settling mid-export resize it.
@@ -52,9 +54,15 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 	{
 		this.src = src;
 		this.cancel = cancel;
-		width = contentWidth(panel);
-		height = contentHeight(panel);
 		geometry = geometry(panel);
+	}
+
+	// Measured on the first frame, not the watcher's: a layout change on the
+	// seek (recorded layout, HUD rows) would rescale everything after frame 0.
+	@Override
+	public void start(int pos) throws IOException
+	{
+		show(pos);
 	}
 
 	@Override
@@ -77,7 +85,13 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 	}
 
 	@Override
-	public Bitmap frame(final int pos) throws IOException
+	public Bitmap frame(int pos) throws IOException
+	{
+		show(pos);
+		return bitmap;
+	}
+
+	private void show(final int pos) throws IOException
 	{
 		final CountDownLatch done = new CountDownLatch(1);
 		main.post(() ->
@@ -97,7 +111,6 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 		{
 			throw new IOException("interrupted");
 		}
-		return bitmap;
 	}
 
 	// Handler hops drain what the render posted (mode switches, HUD rows,
@@ -129,13 +142,21 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 			Choreographer.getInstance().postFrameCallback(t -> settle(pos, 2, waits, done));
 			return;
 		}
-		draw(panel);
+		if (bitmap == null)
+		{
+			width = contentWidth(panel);
+			height = contentBottom(panel) - contentTop(panel);
+		}
+		else
+			draw(panel);
 		done.countDown();
 	}
 
 	private void draw(View panel)
 	{
-		int pw = contentWidth(panel), ph = contentHeight(panel);
+		int pw = contentWidth(panel), ph = height;
+		// Menus fill from the top; clamp so a frame never reads past the panel.
+		int top = Math.max(0, Math.min(contentTop(panel), contentHeight(panel) - ph));
 		int w = bitmap.getWidth(), h = bitmap.getHeight();
 		float s = Math.min((float) w / pw, (float) h / ph);
 		canvas.drawColor(Color.BLACK);
@@ -143,7 +164,7 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 		canvas.translate((w - pw * s) / 2, (h - ph * s) / 2);
 		canvas.scale(s, s);
 		canvas.clipRect(0, 0, pw, ph);
-		canvas.translate(-panel.getPaddingLeft(), -panel.getPaddingTop());
+		canvas.translate(-panel.getPaddingLeft(), -panel.getPaddingTop() - top);
 		panel.draw(canvas);
 		canvas.restore();
 	}
@@ -151,6 +172,57 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 	private static int contentWidth(View v)
 	{
 		return v.getWidth() - v.getPaddingLeft() - v.getPaddingRight();
+	}
+
+	// The split stack is bottom-pinned (unfolded, its halves centre), so with
+	// the replay controls hidden the extra height is empty space above the
+	// topmost visible leaf view.
+	private static int contentTop(View panel)
+	{
+		int top = leafTop(panel);
+		return top == Integer.MAX_VALUE ? 0 : Math.max(0, top - panel.getPaddingTop());
+	}
+
+	// MAX_VALUE when nothing visible: a visible group whose children are all
+	// hidden (e.g. the unused quick-controls column) must not pin the crop at 0.
+	private static int leafTop(View v)
+	{
+		if (!(v instanceof ViewGroup))
+			return 0;
+		ViewGroup g = (ViewGroup) v;
+		int top = Integer.MAX_VALUE;
+		for (int i = 0; i < g.getChildCount(); i++)
+		{
+			View c = g.getChildAt(i);
+			int t = c.getVisibility() == View.VISIBLE ? leafTop(c) : Integer.MAX_VALUE;
+			if (t != Integer.MAX_VALUE)
+				top = Math.min(top, c.getTop() + t);
+		}
+		return top;
+	}
+
+	// Unfolded, the halves centre, leaving a matching empty band below too.
+	private static int contentBottom(View panel)
+	{
+		int bottom = leafBottom(panel);
+		return bottom == Integer.MIN_VALUE ? contentHeight(panel)
+				: Math.min(contentHeight(panel), bottom - panel.getPaddingTop());
+	}
+
+	private static int leafBottom(View v)
+	{
+		if (!(v instanceof ViewGroup))
+			return v.getHeight();
+		ViewGroup g = (ViewGroup) v;
+		int bottom = Integer.MIN_VALUE;
+		for (int i = 0; i < g.getChildCount(); i++)
+		{
+			View c = g.getChildAt(i);
+			int b = c.getVisibility() == View.VISIBLE ? leafBottom(c) : Integer.MIN_VALUE;
+			if (b != Integer.MIN_VALUE)
+				bottom = Math.max(bottom, c.getTop() + b);
+		}
+		return bottom;
 	}
 
 	private static int geometry(View v)
