@@ -1,0 +1,4 @@
+Release 29 (0.34.1)
+
+Hot Fix:
+• Replay controls panel now correct height while playing.
