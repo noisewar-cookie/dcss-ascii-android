@@ -612,9 +612,9 @@ public class GameActivity extends Activity
 		pendingNewOptionsModal = Preferences.getSeenNewOptionsVersion()
 				< Preferences.NEW_OPTIONS_MODAL_VERSION;
 
-		// Release notes: once per install/update, keyed on versionCode.
+		// Release notes: once per install, then per bumped release.
 		pendingReleaseNotesModal = Preferences.getSeenReleaseNotesVersion()
-				< getAppVersionCode();
+				< Preferences.RELEASE_NOTES_MODAL_VERSION;
 	}
 
 	@Override
@@ -1225,7 +1225,7 @@ public class GameActivity extends Activity
 							if (releaseNotesModalActive) {
 								releaseNotesModalActive = false;
 								Preferences.setSeenReleaseNotesVersion(
-										getAppVersionCode());
+										Preferences.RELEASE_NOTES_MODAL_VERSION);
 								pendingReleaseNotesModal = false;
 								if (pendingNewOptionsModal)
 									showNewOptionsModal();
@@ -1414,7 +1414,7 @@ public class GameActivity extends Activity
 		String notes = readAssetText("docs/latest_release.txt");
 		if (notes == null || notes.trim().isEmpty()) {
 			// No modal to dismiss, so mark seen here; chain new-options.
-			Preferences.setSeenReleaseNotesVersion(getAppVersionCode());
+			Preferences.setSeenReleaseNotesVersion(Preferences.RELEASE_NOTES_MODAL_VERSION);
 			pendingReleaseNotesModal = false;
 			if (pendingNewOptionsModal)
 				showNewOptionsModal();

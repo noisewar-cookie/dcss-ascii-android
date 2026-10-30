@@ -72,7 +72,8 @@ final public class Preferences
 	// numbering. Kept only as the migration source for the new key below.
 	public static final String KEY_SEENPREFSOPTIONSVERSION = "crawl.seenprefsoptionsversion";
 	public static final String KEY_SEENNEWOPTIONSVERSION = "crawl.seennewoptionsversion";
-	// Highest app versionCode whose release notes the user has already seen.
+	// Highest RELEASE_NOTES_MODAL_VERSION the user has already seen (older
+	// builds stored their versionCode, which compares the same way).
 	public static final String KEY_SEENRELEASENOTESVERSION = "crawl.seenreleasenotesversion";
 
 	// versionCode (as in build.gradle) of the last release that added new
@@ -82,6 +83,9 @@ final public class Preferences
 	// options; leave it for silent patches. The dcssascii_release_prep skill
 	// prompts to update it.
 	public static final int NEW_OPTIONS_MODAL_VERSION = 27;
+	// versionCode of the last release whose notes get the one-time "what's new"
+	// modal; setup.sh bundles that changelog. Leave it for hotfixes.
+	public static final int RELEASE_NOTES_MODAL_VERSION = 28;
 	// Final value of the legacy counter (= the v22 options set). Anyone who
 	// saw that had seen v22's options, so migration maps it to versionCode 22.
 	private static final int LEGACY_OPTIONS_VERSION_MAX = 4;

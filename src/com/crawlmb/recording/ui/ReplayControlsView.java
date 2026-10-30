@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -88,6 +89,7 @@ public final class ReplayControlsView extends LinearLayout
 	private static final int TIMELINE_ALONE_DP = 12;
 	private final Paint border = new Paint();
 	private static final int CLIP_DP = 40;
+	private static final int ROW_DP = 32;
 	private final Button playPause;
 	private ObjectAnimator playPulse;
 	private final Button speed;
@@ -104,7 +106,7 @@ public final class ReplayControlsView extends LinearLayout
 		setBackgroundColor(ContextCompat.getColor(ctx, R.color.crawl_surface));
 		setId(View.generateViewId());
 		int pad = dp(4);
-		setPadding(pad, pad, pad, pad);
+		setPadding(pad, pad / 2, pad, pad / 2);
 		border.setColor(ContextCompat.getColor(ctx, R.color.crawl_border));
 		setWillNotDraw(false);
 
@@ -183,12 +185,12 @@ public final class ReplayControlsView extends LinearLayout
 		normalRows.setOrientation(VERTICAL);
 		LinearLayout transport = row(ctx);
 		iconButton(transport, R.drawable.ic_replay_filter, "Events", v -> actions.onFilter(), false);
-		button(transport, "|\u25C0\u25C0", v -> actions.onSkip(-1), false);
-		button(transport, "\u25C0|", v -> actions.onStep(-1), false);
-		playPause = button(transport, "\u25B6", v -> actions.onPlayPause(), false);
-		button(transport, "|\u25B6", v -> actions.onStep(1), false);
-		button(transport, "\u25B6\u25B6|", v -> actions.onSkip(1), false);
-		speed = button(transport, "1x", v -> actions.onSpeed(), false);
+		addButton(transport, new GlyphButton(ctx), "|\u25C0\u25C0", v -> actions.onSkip(-1), false);
+		addButton(transport, new GlyphButton(ctx), "\u25C0|", v -> actions.onStep(-1), false);
+		playPause = addButton(transport, new GlyphButton(ctx), "\u25B6", v -> actions.onPlayPause(), false);
+		addButton(transport, new GlyphButton(ctx), "|\u25B6", v -> actions.onStep(1), false);
+		addButton(transport, new GlyphButton(ctx), "\u25B6\u25B6|", v -> actions.onSkip(1), false);
+		speed = addButton(transport, new GlyphButton(ctx), "1x", v -> actions.onSpeed(), false);
 		for (int i = 0; i < transport.getChildCount(); i++)
 		{
 			View b = transport.getChildAt(i);
@@ -214,7 +216,7 @@ public final class ReplayControlsView extends LinearLayout
 		fit(button(screens, "Abilities", v -> actions.onScreen(ReplayScreens.Kind.ABILITIES), true));
 		fit(button(screens, "Skills", v -> actions.onScreen(ReplayScreens.Kind.TRAINING), true));
 		iconButton(screens, R.drawable.ic_replay_examine, "Examine", v -> actions.onExamine(), true)
-				.setLayoutParams(new LayoutParams(0, dp(40), dp(CLIP_DP)));
+				.setLayoutParams(new LayoutParams(0, dp(ROW_DP), dp(CLIP_DP)));
 		for (int i = 0; i < screens.getChildCount(); i++)
 			screens.getChildAt(i).setBackgroundResource(flat());
 		normalRows.addView(screens);
@@ -235,9 +237,9 @@ public final class ReplayControlsView extends LinearLayout
 	}
 
 	/**
-	 * One height for every mode (controls, examine, keyboard): status plus the
-	 * taller of the timeline+rows and the Crawl keyboard, so the terminal above
-	 * never resizes.
+	 * One height for every mode (controls, examine, keyboard): the taller of
+	 * status+timeline+rows and the Crawl keyboard (status hides while browsing),
+	 * so the terminal above never resizes.
 	 */
 	@Override
 	protected void onMeasure(int widthSpec, int heightSpec)
@@ -247,14 +249,14 @@ public final class ReplayControlsView extends LinearLayout
 		int any = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
 		status.measure(exactW, any);
 		// Range bar height is always reserved so toggling it doesn't resize either.
-		int body = dp(TIMELINE_BOX_DP) + 3 * dp(40);
+		int body = status.getMeasuredHeight() + dp(TIMELINE_BOX_DP) + 3 * dp(ROW_DP);
 		if (keyboardHost.getChildCount() > 0)
 		{
 			View kb = keyboardHost.getChildAt(0);
 			kb.measure(exactW, any);
 			body = Math.max(body, kb.getMeasuredHeight());
 		}
-		int h = getPaddingTop() + getPaddingBottom() + status.getMeasuredHeight() + body;
+		int h = getPaddingTop() + getPaddingBottom() + body;
 		super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY));
 	}
 
@@ -278,6 +280,7 @@ public final class ReplayControlsView extends LinearLayout
 	public void setBrowseMode(boolean on)
 	{
 		keyboardHost.setVisibility(on ? VISIBLE : GONE);
+		status.setVisibility(on ? GONE : VISIBLE);
 		timelineBox.setVisibility(on ? GONE : VISIBLE);
 		normalRows.setVisibility(on || examining ? GONE : VISIBLE);
 		examinePad.setVisibility(!on && examining ? VISIBLE : GONE);
@@ -409,7 +412,12 @@ public final class ReplayControlsView extends LinearLayout
 
 	private Button button(LinearLayout row, String label, OnClickListener l, boolean pausedOnlyButton)
 	{
-		Button b = new Button(getContext());
+		return addButton(row, new Button(getContext()), label, l, pausedOnlyButton);
+	}
+
+	private Button addButton(LinearLayout row, Button b, String label, OnClickListener l,
+			boolean pausedOnlyButton)
+	{
 		b.setText(label);
 		b.setAllCaps(false);
 		b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
@@ -418,7 +426,7 @@ public final class ReplayControlsView extends LinearLayout
 		b.setPadding(dp(2), 0, dp(2), 0);
 		b.setSingleLine(true);
 		b.setOnClickListener(l);
-		row.addView(b, new LayoutParams(0, dp(40), 1f));
+		row.addView(b, new LayoutParams(0, dp(ROW_DP), 1f));
 		if (pausedOnlyButton)
 			pausedOnly.add(b);
 		return b;
@@ -432,10 +440,30 @@ public final class ReplayControlsView extends LinearLayout
 		b.setPadding(0, 0, 0, 0);
 		b.setContentDescription(desc);
 		b.setOnClickListener(l);
-		row.addView(b, new LayoutParams(0, dp(40), 1f));
+		row.addView(b, new LayoutParams(0, dp(ROW_DP), 1f));
 		if (pausedOnlyButton)
 			pausedOnly.add(b);
 		return b;
+	}
+
+	/** Centres its text by the ink: the font box sets |, ◀ and ▶ at different heights. */
+	private static final class GlyphButton extends Button
+	{
+		private final Rect ink = new Rect();
+
+		GlyphButton(Context ctx) { super(ctx); }
+
+		@Override
+		protected void onDraw(Canvas c)
+		{
+			String s = getText().toString();
+			Paint p = getPaint();
+			p.setColor(getCurrentTextColor());
+			p.getTextBounds(s, 0, s.length(), ink);
+			// Single-line TextView scrolls its canvas; undo that offset.
+			c.drawText(s, getScrollX() + (getWidth() - ink.width()) / 2f - ink.left,
+					getScrollY() + (getHeight() - ink.height()) / 2f - ink.top, p);
+		}
 	}
 
 	/** Touch highlight with no button shape. */
