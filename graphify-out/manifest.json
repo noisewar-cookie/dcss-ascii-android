@@ -10,9 +10,9 @@
     "semantic_hash": "b3d371731563593fa300de210cd9f5e4"
   },
   "build.gradle": {
-    "mtime": 1793347218.6552248,
-    "ast_hash": "c162f73eb7db373fb3b65b557919e975",
-    "semantic_hash": "c162f73eb7db373fb3b65b557919e975"
+    "mtime": 1793684802.385836,
+    "ast_hash": "5aeb37f97f1e78d0f8ce7dc6032fb00b",
+    "semantic_hash": "5aeb37f97f1e78d0f8ce7dc6032fb00b"
   },
   "gradlew": {
     "mtime": 1776494228.7899022,
@@ -95,9 +95,9 @@
     "semantic_hash": "daff9d197d7d2ea7c55b2ac9cf419622"
   },
   "src/com/crawlmb/Preferences.java": {
-    "mtime": 1793263870.4332366,
-    "ast_hash": "a0da4e0ffaee1f315e3a6d7b06729078",
-    "semantic_hash": "a0da4e0ffaee1f315e3a6d7b06729078"
+    "mtime": 1793684778.6828299,
+    "ast_hash": "882113c89eab71fdf9ec70d4b26fdd77",
+    "semantic_hash": "882113c89eab71fdf9ec70d4b26fdd77"
   },
   "src/com/crawlmb/TouchDirectionRepeatPreference.java": {
     "mtime": 1783818906.831584,
@@ -215,14 +215,14 @@
     "semantic_hash": "ed212c173d4c3e7af645672e8c4f1edb"
   },
   "src/com/crawlmb/view/RegionRouter.java": {
-    "mtime": 1792448700.7492201,
-    "ast_hash": "a4edc347963c194d9841dfe902ff370e",
-    "semantic_hash": "a4edc347963c194d9841dfe902ff370e"
+    "mtime": 1793682063.7350094,
+    "ast_hash": "21558f4968e27b78c65338904b6e8986",
+    "semantic_hash": "21558f4968e27b78c65338904b6e8986"
   },
   "src/com/crawlmb/view/RegionTermView.java": {
-    "mtime": 1793233933.2328403,
-    "ast_hash": "e8fda76c86ecf3bc597e26f6ae07b528",
-    "semantic_hash": "e8fda76c86ecf3bc597e26f6ae07b528"
+    "mtime": 1793681789.1639712,
+    "ast_hash": "01a6c1cd29001343056846b0c1b0b302",
+    "semantic_hash": "01a6c1cd29001343056846b0c1b0b302"
   },
   "src/com/crawlmb/view/RepositionController.java": {
     "mtime": 1791331978.3490272,
@@ -650,9 +650,9 @@
     "semantic_hash": "9ad4fae20d94630f3240ae9faff54059"
   },
   "src/com/crawlmb/recording/ui/ReplayControlsView.java": {
-    "mtime": 1793345907.6594508,
-    "ast_hash": "28a27966ff0715b41fe7ad99adecf722",
-    "semantic_hash": "28a27966ff0715b41fe7ad99adecf722"
+    "mtime": 1793681593.0236804,
+    "ast_hash": "68592f9e0bc3d25cf014ec1d1f3b88eb",
+    "semantic_hash": "68592f9e0bc3d25cf014ec1d1f3b88eb"
   },
   "src/com/crawlmb/recording/ui/ReplayDirectionPad.java": {
     "mtime": 1791862179.4401586,
@@ -665,9 +665,9 @@
     "semantic_hash": "0e57098f39a1de468ded19ccd680e011"
   },
   "src/com/crawlmb/recording/ui/ReplayUi.java": {
-    "mtime": 1793233933.2308252,
-    "ast_hash": "a9b8a8ce4572dedc340eb90af646e8c5",
-    "semantic_hash": "a9b8a8ce4572dedc340eb90af646e8c5"
+    "mtime": 1793679218.2126017,
+    "ast_hash": "1d9792798a7e9d029432fb831667ac8b",
+    "semantic_hash": "1d9792798a7e9d029432fb831667ac8b"
   },
   "src/com/crawlmb/recording/ui/TimelineBar.java": {
     "mtime": 1793233933.2303233,
@@ -675,9 +675,9 @@
     "semantic_hash": "08f2be21366744be29bad171f069b925"
   },
   "src/com/crawlmb/recording/ui/ViewCapture.java": {
-    "mtime": 1793230225.3797276,
-    "ast_hash": "6440b6f00c3c392124d98a2ba820fd8e",
-    "semantic_hash": "6440b6f00c3c392124d98a2ba820fd8e"
+    "mtime": 1793679218.1543002,
+    "ast_hash": "0224db22bf1a60d7560006d7e24165b0",
+    "semantic_hash": "0224db22bf1a60d7560006d7e24165b0"
   },
   "tests-unit/java/com/crawlmb/recording/ExamineAndReadOnlyTest.java": {
     "mtime": 1791933688.9142194,
