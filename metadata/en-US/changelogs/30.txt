@@ -1,0 +1,7 @@
+Release 30 (0.34.1)
+
+New Features:
+• Improved rendering performance on lower end devices.
+
+Bug Fixes:
+• Replay controls no longer compress UI panels.
