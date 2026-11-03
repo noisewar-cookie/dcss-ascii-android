@@ -64,6 +64,8 @@ public class RegionTermView extends View
 	Canvas canvas;
 	Paint fore;
 	Paint back;
+	// drawCellLocked's glyph buffer (avoids a String per cell). renderLock.
+	private final char[] glyph = new char[1];
 
 	// Mirror of every drawn cell (pre-rowColShift). Replayed into a fresh
 	// bitmap on font-scale/region-rebind so content survives without a DCSS
@@ -78,6 +80,11 @@ public class RegionTermView extends View
 	private final Object renderLock = new Object();
 	// While true, drawPoint updates the mirror only (see endBatch). renderLock.
 	private boolean batching = false;
+	// Render inputs at the last endBatch; null after clear/beginBatch. renderLock.
+	private Object[] batchSignature = null;
+	// CrawlPerf: drawPoint cells, excluding mirror repaints. renderLock.
+	private int paintCount = 0;
+	private boolean inMirrorRepaint = false;
 
 	public int canvas_width = 0;
 	public int canvas_height = 0;
@@ -237,6 +244,87 @@ public class RegionTermView extends View
 	@Deprecated
 	public int getEndCol() { return endCol; }
 	public int getEndRow() { return endRow; }
+	public int getStartRow() { return startRow; }
+
+	public int takePaintCount()
+	{
+		synchronized (renderLock)
+		{
+			int n = paintCount;
+			paintCount = 0;
+			return n;
+		}
+	}
+
+	// CrawlRedrawCheck: pixel copy for the replay compare. Debug only.
+	public int[] debugBitmapPixels()
+	{
+		synchronized (renderLock)
+		{
+			if (bitmap == null)
+				return null;
+			int w = bitmap.getWidth();
+			int h = bitmap.getHeight();
+			int[] px = new int[w * h];
+			bitmap.getPixels(px, 0, w, 0, 0, w, h);
+			return px;
+		}
+	}
+
+	// CrawlRedrawCheck: cells whose pixels differ from `before`. Debug only.
+	public String debugDiffCells(int[] before)
+	{
+		int[] now = debugBitmapPixels();
+		synchronized (renderLock)
+		{
+			if (before == null || now == null || before.length != now.length
+					|| char_width <= 0 || char_height <= 0)
+				return "size";
+			int w = bitmap.getWidth();
+			java.util.TreeSet<String> cells = new java.util.TreeSet<>();
+			for (int i = 0; i < now.length && cells.size() < 12; i++)
+				if (now[i] != before[i])
+				{
+					int lr = (i / w) / char_height;
+					int lc = (i % w) / char_width;
+					cells.add("r" + (lr + startRow) + "c" + lc
+							+ "='" + (lr < mirrorRows && lc < mirrorCols
+							? cellChar[lr][lc] : '?') + "'");
+				}
+			return cells + " bmp" + w + "x" + bitmap.getHeight() + " canvas"
+					+ canvas_width + "x" + canvas_height + " mirror" + mirrorRows
+					+ "x" + mirrorCols + " cell" + char_width + "x" + char_height;
+		}
+	}
+
+	// Bitmap/int[] compare by identity, so a recreate counts as a change.
+	private Object[] renderSignatureLocked()
+	{
+		return new Object[] { bitmap, rowColShift, fore.getTypeface(),
+				startRow, endRow, startCol, endCol, font_text_size,
+				char_width, char_height, fontScaleX };
+	}
+
+	// True when no clear, recreate, rebind or font change since endBatch.
+	public boolean bitmapMatchesLastBatch()
+	{
+		synchronized (renderLock)
+		{
+			return batchSignature != null
+					&& java.util.Arrays.equals(batchSignature,
+							renderSignatureLocked());
+		}
+	}
+
+	// CrawlRedrawCorrupt: bad glyph in the bitmap only; a replay must fix it.
+	public void debugCorruptCell()
+	{
+		synchronized (renderLock)
+		{
+			if (canvas != null)
+				drawCellLocked(0, 0, '#', Color.MAGENTA, Color.BLUE, false);
+		}
+	}
 
 	public int getRegionRows() { return regionRows; }
 
@@ -1248,6 +1336,8 @@ public class RegionTermView extends View
 
 		if (canvas == null)
 			return;
+		if (!inMirrorRepaint)
+			paintCount++;
 
 		float x = localC * char_width;
 		float y = localR * char_height;
@@ -1259,7 +1349,8 @@ public class RegionTermView extends View
 		if (ch != ' ')
 		{
 			fore.setColor(fcolor);
-			canvas.drawText(ch + "", x, y + char_height - fore.descent(), fore);
+			glyph[0] = ch;
+			canvas.drawText(glyph, 0, 1, x, y + char_height - fore.descent(), fore);
 		}
 
 		if (ch != ' ' && ch != 0)
@@ -1273,10 +1364,14 @@ public class RegionTermView extends View
 
 	// Replay the mirror into the current bitmap after a recreate.
 	// Caller must hold renderLock.
-	private void repaintAllFromMirrorLocked()
+	private void repaintAllFromMirrorLocked(String src)
 	{
 		if (cellChar == null || canvas == null)
 			return;
+		final boolean perf = Log.isLoggable(RegionRouter.PERF_TAG, Log.DEBUG);
+		final long t0 = perf ? System.nanoTime() : 0;
+		int painted = 0;
+		inMirrorRepaint = true;
 		for (int r = 0; r < mirrorRows; r++)
 		{
 			char[] row = cellChar[r];
@@ -1288,8 +1383,15 @@ public class RegionTermView extends View
 				if (ch == 0)
 					continue;
 				drawCellLocked(r, c, ch, fgRow[c], bgRow[c], false);
+				painted++;
 			}
 		}
+		inMirrorRepaint = false;
+		if (perf)
+			Log.d(RegionRouter.PERF_TAG, String.format(java.util.Locale.US,
+					"mirrorRepaint(%s) %.2fms painted=%d %dx%d rows%d-%d shown=%b",
+					src, (System.nanoTime() - t0) / 1e6, painted, mirrorRows,
+					mirrorCols, startRow, endRow, isShown()));
 	}
 
 	public boolean onGameStart()
@@ -1489,66 +1591,68 @@ public class RegionTermView extends View
 		// next to them (a slightly larger margin on the bar side is expected).
 		int usableWidth = Math.max(1, width - leftReservePx - rightReservePx);
 
-		autoSizeFontByWidth(usableWidth);
-		computeCanvasSize();
-
-		// Height self-fit for tall-aspect screens (Galaxy Fold class):
-		// shrink font until canvas fits the AT_MOST ceiling. Skip when
-		// vscroll (overflow is intentional) or anchorToContent (reported
-		// height tracks content, not bitmap).
-		int heightMode = MeasureSpec.getMode(heightMeasureSpec);
-		int heightLimit = MeasureSpec.getSize(heightMeasureSpec);
-		// Reserve the fixed bottom gap so the font is fit to leave room for it.
-		if (heightSelfFit && !verticalScrollEnabled && !anchorToContent
-				&& heightMode == MeasureSpec.AT_MOST && heightLimit > 0
-				&& regionRows > 0
-				&& canvas_height + bottomGapPx() > heightLimit)
+		// Locked: the font fit below transiently changes fore/char metrics, and
+		// a drawPoint/endBatch from the game thread mid-fit paints wrong cells.
+		synchronized (renderLock)
 		{
-			while (font_text_size > MIN_FONT_SIZE
+			autoSizeFontByWidth(usableWidth);
+			computeCanvasSize();
+
+			// Height self-fit for tall-aspect screens (Galaxy Fold class):
+			// shrink font until canvas fits the AT_MOST ceiling. Skip when
+			// vscroll (overflow is intentional) or anchorToContent (reported
+			// height tracks content, not bitmap).
+			int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+			int heightLimit = MeasureSpec.getSize(heightMeasureSpec);
+			// Reserve the fixed bottom gap so the font is fit to leave room for it.
+			if (heightSelfFit && !verticalScrollEnabled && !anchorToContent
+					&& heightMode == MeasureSpec.AT_MOST && heightLimit > 0
+					&& regionRows > 0
 					&& canvas_height + bottomGapPx() > heightLimit)
 			{
-				setFontSize(font_text_size - 1, false);
-				computeCanvasSize();
-			}
-		}
-
-		// vfit=fill: after width-fit, grow the font until it fills the panel
-		// height (left/right columns then crop, clipped in onDraw). Skipped for
-		// scrollable/content-anchored panels that manage their own height.
-		if (vfitFill && !verticalScrollEnabled && !anchorToContent
-				&& heightMode == MeasureSpec.AT_MOST && heightLimit > 0
-				&& regionRows > 0 && canvas_height + bottomGapPx() < heightLimit)
-		{
-			while (font_text_size < MAX_FONT_SIZE)
-			{
-				setFontSize(font_text_size + 1, false);
-				computeCanvasSize();
-				if (canvas_height + bottomGapPx() > heightLimit)
+				while (font_text_size > MIN_FONT_SIZE
+						&& canvas_height + bottomGapPx() > heightLimit)
 				{
 					setFontSize(font_text_size - 1, false);
 					computeCanvasSize();
-					break;
 				}
 			}
-		}
 
-		if (centerHorizontally)
-		{
-			int contentWidth = centerContentCols > 0
-					? centerContentCols * char_width
-					: canvas_width;
-			drawOffsetX = leftReservePx + (usableWidth - contentWidth) / 2;
-		}
-		else
-		{
-			drawOffsetX = leftReservePx;
-		}
-		drawOffsetX += offsetCols * char_width;
+			// vfit=fill: after width-fit, grow the font until it fills the panel
+			// height (left/right columns then crop, clipped in onDraw). Skipped for
+			// scrollable/content-anchored panels that manage their own height.
+			if (vfitFill && !verticalScrollEnabled && !anchorToContent
+					&& heightMode == MeasureSpec.AT_MOST && heightLimit > 0
+					&& regionRows > 0 && canvas_height + bottomGapPx() < heightLimit)
+			{
+				while (font_text_size < MAX_FONT_SIZE)
+				{
+					setFontSize(font_text_size + 1, false);
+					computeCanvasSize();
+					if (canvas_height + bottomGapPx() > heightLimit)
+					{
+						setFontSize(font_text_size - 1, false);
+						computeCanvasSize();
+						break;
+					}
+				}
+			}
 
-		// Recreate the bitmap on canvas-size change and replay the mirror
-		// into it. Locked so concurrent drawPoint never sees a torn pair.
-		synchronized (renderLock)
-		{
+			if (centerHorizontally)
+			{
+				int contentWidth = centerContentCols > 0
+						? centerContentCols * char_width
+						: canvas_width;
+				drawOffsetX = leftReservePx + (usableWidth - contentWidth) / 2;
+			}
+			else
+			{
+				drawOffsetX = leftReservePx;
+			}
+			drawOffsetX += offsetCols * char_width;
+
+			// Recreate the bitmap on canvas-size change and replay the mirror
+			// into it.
 			ensureMirrorSizedLocked();
 			if (canvas_width > 0 && canvas_height > 0
 					&& (bitmap == null
@@ -1560,7 +1664,7 @@ public class RegionTermView extends View
 				Canvas newCanvas = new Canvas(newBitmap);
 				bitmap = newBitmap;
 				canvas = newCanvas;
-				repaintAllFromMirrorLocked();
+				repaintAllFromMirrorLocked("onMeasure");
 			}
 		}
 
@@ -1642,6 +1746,7 @@ public class RegionTermView extends View
 		synchronized (renderLock)
 		{
 			batching = true;
+			batchSignature = null;
 		}
 	}
 
@@ -1662,16 +1767,21 @@ public class RegionTermView extends View
 			maxContentRow = -1;
 			maxContentCol = -1;
 			canvas = newCanvas;
-			repaintAllFromMirrorLocked();
+			repaintAllFromMirrorLocked("endBatch");
 			bitmap = newBitmap; // publish last: atomic ref write for onDraw
+			batchSignature = renderSignatureLocked();
 		}
 		postInvalidate();
 	}
 
 	public void clear()
 	{
+		if (Log.isLoggable(RegionRouter.PERF_TAG, Log.DEBUG))
+			Log.d(RegionRouter.PERF_TAG, "clear rows" + startRow + "-" + endRow
+					+ " shown=" + isShown());
 		synchronized (renderLock)
 		{
+			batchSignature = null;
 			maxContentRow = -1;
 			maxContentCol = -1;
 			if (cellChar != null)

@@ -5,6 +5,7 @@ import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -98,6 +99,15 @@ public class RegionRouter implements TerminalRenderer
 
 	private static final int TERMINAL_ROWS = TerminalRenderer.FRAME_ROWS;
 	public static final int TERMINAL_COLS = TerminalRenderer.FRAME_COLS;
+
+	// Debug log tags, off unless `adb shell setprop log.tag.<tag> DEBUG`.
+	static final String PERF_TAG = "CrawlPerf";
+	private static final String REDRAW_CHECK_TAG = "CrawlRedrawCheck";
+	private static final String REDRAW_CORRUPT_TAG = "CrawlRedrawCorrupt";
+	// splitBatchSeq: transition that last double-buffered the gameplay panels.
+	// display_lock.
+	private int transitionSeq = 0;
+	private int splitBatchSeq = -1;
 
 	// Gameplay anchor: any HUD caption present at terminal col 37 in the HUD
 	// rows. We OR over multiple labels because draw_border() (which prints
@@ -710,11 +720,18 @@ public class RegionRouter implements TerminalRenderer
 	// Set by onFrame on any transition; routeCell then skips this storm's
 	// fullView paint. Without it a menu->menu hop that keeps fullView visible
 	// but rescales it (spell/ability list 1.75 -> describe 1.60) flashes the
-	// new content at the old scale for one vsync before applyMode rescales,
-	// and a fresh (VISIBLE) fullView after rebuildViews flashes the raw
-	// 80-col gameplay frame before applyMode hides it. applyMode clears +
-	// replays fullView whenever it next becomes visible.
+	// new content at the old scale for one vsync before applyMode rescales.
+	// Gameplay frames are skipped by routeCell's mode gate.
+	// applyMode clears + replays fullView whenever it next becomes visible.
 	private volatile boolean skipFullViewThisStorm = false;
+
+	// Transition into ITEMS/HELP/SKILLS: applyMode clears and replays that
+	// surface, so this storm's paint into it is wasted.
+	private volatile boolean skipMenuSurfaceThisStorm = false;
+
+	// Outside gameplay the panels are hidden, and the transition back
+	// repaints them whole before they're shown. display_lock.
+	private boolean skipHiddenGameplaySplits = false;
 
 	// Anchor for the single-column fold of the skills menu. Recomputed on
 	// each transition INTO MenuType.SKILLS by scanning terminalShadow for
@@ -1658,8 +1675,8 @@ public class RegionRouter implements TerminalRenderer
 
 		// Apply scale/scroll config BEFORE visibility changes. When
 		// fullView transitions INVISIBLE→VISIBLE, its bitmap may hold
-		// content drawn at a stale font scale (gameplay-era storms wrote
-		// into it even while invisible). Applying the scale first lets
+		// content drawn at a stale font scale (from the last menu it
+		// showed). Applying the scale first lets
 		// setFontScaleMultiplier → requestLayout → onMeasure recreate
 		// the bitmap at the correct scale in the same layout pass that
 		// makes the view visible, avoiding a one-frame flash of
@@ -1692,10 +1709,9 @@ public class RegionRouter implements TerminalRenderer
 				// Wipe fullView on every menuType change, matching how
 				// skillsView / itemsView clear below. Two independent staleness
 				// sources need this:
-				//   1. INVISIBLE→VISIBLE: drawPoint forwards to fullView
-				//      unconditionally, so gameplay map/HUD/msg chars
-				//      accumulate in the mirror while fullView is INVISIBLE
-				//      (popup natural width < 80 doesn't overwrite them).
+				//   1. INVISIBLE→VISIBLE: routeCell skips fullView in gameplay
+				//      and on transitions, so its mirror holds an older
+				//      screen's chars.
 				//   2. VISIBLE→VISIBLE menu hops with matching scale (e.g.
 				//      HISCORES→MAINMENU, both 1.6): no bitmap recreate fires,
 				//      so repaintAllFromMirrorLocked never runs and pixels the
@@ -1941,6 +1957,22 @@ public class RegionRouter implements TerminalRenderer
 			public void onGlobalLayout()
 			{
 				WindowVto.of(target).removeOnGlobalLayoutListener(this);
+				// Skip the ~95ms pixel-identical replay when the transition's
+				// endBatch already left every gameplay panel exact.
+				if (target == splitContainer)
+				{
+					synchronized (NativeWrapper.display_lock)
+					{
+						String reason = splitReplayNeededReason();
+						if (Log.isLoggable(REDRAW_CHECK_TAG, Log.DEBUG))
+						{
+							verifySplitReplay(reason);
+							return;
+						}
+						if (reason == null)
+							return;
+					}
+				}
 				// Prefer the Java-side replay from terminalShadow: it hits
 				// the same views via drawPoint but skips ~3840 JNI round
 				// trips per transition (C++ refreshTerminal → per-cell
@@ -2260,8 +2292,10 @@ public class RegionRouter implements TerminalRenderer
 		// On the transition frame fullView is still visible (applyMode hides
 		// it a vsync later); without this gate a pending draw traversal
 		// flashes the raw frame in release builds. Shadow replay repaints
-		// fullView when it next becomes visible, so nothing is missed.
-		if (fullView != null && !menuTypeHidesFullView(currentMenuType)
+		// fullView when it next becomes visible, so nothing is missed. Same
+		// for every gameplay frame: fullView is hidden there.
+		if (fullView != null && currentMode != LayoutMode.GAMEPLAY
+				&& !menuTypeHidesFullView(currentMenuType)
 				&& !skipFullViewThisStorm)
 			forwardToFullView(r, c, ch, fcolor, bcolor, extendedErase);
 		// Skip splitRegions during a gameplay->menu transition frame: the
@@ -2278,9 +2312,14 @@ public class RegionRouter implements TerminalRenderer
 				if (region.ownerMenuType != null
 						&& region.ownerMenuType != currentMenuType)
 					continue;
+				if (region.ownerMenuType == null && skipHiddenGameplaySplits)
+					continue;
 				region.drawPoint(r, c, ch, fcolor, bcolor, extendedErase);
 			}
 		}
+
+		if (skipMenuSurfaceThisStorm)
+			return;
 
 		if (skillsView != null && currentMenuType == MenuType.SKILLS)
 			forwardToSkillsView(r, c, ch, fcolor, bcolor, extendedErase);
@@ -2803,6 +2842,8 @@ public class RegionRouter implements TerminalRenderer
 
 	private void replayItemsFromShadow()
 	{
+		if (skipMenuSurfaceThisStorm)
+			return;
 		itemsView.clear();
 		for (int r = 0; r < TERMINAL_ROWS; r++)
 			for (int c = 0; c < TERMINAL_COLS; c++)
@@ -3071,8 +3112,14 @@ public class RegionRouter implements TerminalRenderer
 	// never repaired (steady-state routing is diff-only).
 	public void replayAllFromShadow()
 	{
+		final boolean perf = Log.isLoggable(PERF_TAG, Log.DEBUG);
+		final long t0 = perf ? System.nanoTime() : 0;
+		String perfCheck = "";
 		synchronized (NativeWrapper.display_lock)
 		{
+			// Frozen: the reposition editor shows the panels in any mode.
+			skipHiddenGameplaySplits = currentMode != LayoutMode.GAMEPLAY
+					&& !repositionFrozen;
 			for (int r = 0; r < TERMINAL_ROWS; r++)
 				for (int c = 0; c < TERMINAL_COLS; c++)
 				{
@@ -3082,7 +3129,14 @@ public class RegionRouter implements TerminalRenderer
 					drawPoint(r, c, ch, terminalFg[r][c],
 							terminalBg[r][c], false);
 				}
+			skipHiddenGameplaySplits = false;
+			if (perf)
+				perfCheck = takePaintCounts();
 		}
+		if (perf)
+			Log.d(PERF_TAG, String.format(java.util.Locale.US,
+					"replayAllFromShadow %.2fms (incl. lock wait) paints:%s",
+					(System.nanoTime() - t0) / 1e6, perfCheck));
 		if (fullView != null)
 			fullView.postInvalidate();
 		if (skillsView != null)
@@ -3091,6 +3145,85 @@ public class RegionRouter implements TerminalRenderer
 			itemsView.postInvalidate();
 		for (RegionTermView region : splitRegions)
 			region.postInvalidate();
+	}
+
+	// CrawlPerf: drawPoint paints per view since the last call.
+	private String takePaintCounts()
+	{
+		StringBuilder sb = new StringBuilder();
+		appendPaints(sb, "full", fullView);
+		appendPaints(sb, "skills", skillsView);
+		appendPaints(sb, "items", itemsView);
+		for (RegionTermView region : splitRegions)
+			appendPaints(sb, "split" + region.getStartRow() + "-"
+					+ region.getEndRow(), region);
+		return sb.toString();
+	}
+
+	private static void appendPaints(StringBuilder sb, String name,
+			RegionTermView v)
+	{
+		if (v == null)
+			return;
+		int n = v.takePaintCount();
+		if (n == 0)
+			return;
+		sb.append(' ').append(name).append('=').append(n);
+		if (!v.isShown())
+			sb.append("(hidden)");
+	}
+
+	// Null when a replay would change no gameplay-panel pixels (no transition
+	// or render change since endBatch), else why. Caller holds display_lock.
+	private String splitReplayNeededReason()
+	{
+		if (currentMode != LayoutMode.GAMEPLAY)
+			return "mode";
+		if (splitBatchSeq != transitionSeq)
+			return "seq";
+		for (RegionTermView region : splitRegions)
+			if (region.ownerMenuType == null && !region.bitmapMatchesLastBatch())
+				return "changed:split" + region.getStartRow() + "-"
+						+ region.getEndRow();
+		return null;
+	}
+
+	// CrawlRedrawCheck: replay anyway; a DIFF after a skip is a gate bug.
+	// Caller holds display_lock.
+	private void verifySplitReplay(String reason)
+	{
+		boolean corrupt = reason == null
+				&& Log.isLoggable(REDRAW_CORRUPT_TAG, Log.DEBUG);
+		if (corrupt)
+			for (RegionTermView region : splitRegions)
+				if (region.ownerMenuType == null)
+					region.debugCorruptCell();
+		int[][] beforePx = new int[splitRegions.size()][];
+		for (int i = 0; i < beforePx.length; i++)
+			beforePx[i] = splitRegions.get(i).debugBitmapPixels();
+		replayAllFromShadow();
+		StringBuilder sb = new StringBuilder();
+		boolean anyDiff = false;
+		for (int i = 0; i < beforePx.length; i++)
+		{
+			RegionTermView region = splitRegions.get(i);
+			if (region.ownerMenuType != null)
+				continue;
+			boolean same = java.util.Arrays.equals(beforePx[i],
+					region.debugBitmapPixels());
+			anyDiff |= !same;
+			sb.append(" split").append(region.getStartRow()).append('-')
+					.append(region.getEndRow()).append(same ? ":same" : ":DIFF");
+			if (!same && reason == null && !corrupt)
+				sb.append(region.debugDiffCells(beforePx[i]));
+		}
+		String verdict = reason != null ? "replay(" + reason + ")"
+				: corrupt ? (anyDiff ? "corruptControl OK" : "corruptControl MISSED")
+				: (anyDiff ? "SKIP UNSAFE" : "skip OK");
+		if (reason == null && anyDiff != corrupt)
+			Log.w(REDRAW_CHECK_TAG, verdict + sb);
+		else
+			Log.d(REDRAW_CHECK_TAG, verdict + sb);
 	}
 
 	private void forwardToFullView(int r, int c, char ch, int fcolor,
@@ -3337,6 +3470,9 @@ public class RegionRouter implements TerminalRenderer
 	@Override
 	public void onFrame(char[] chars, int[] fg, int[] bg)
 	{
+		final boolean perf = Log.isLoggable(PERF_TAG, Log.DEBUG);
+		final long t0 = perf ? System.nanoTime() : 0;
+		int changedCount = 0;
 		// 1. Diff into the shadow; frameChanged marks cells needing repaint.
 		for (int r = 0; r < TERMINAL_ROWS; r++)
 		{
@@ -3352,6 +3488,7 @@ public class RegionRouter implements TerminalRenderer
 				frameChanged[r][c] = changed;
 				if (changed)
 				{
+					changedCount++;
 					terminalShadow[r][c] = ch;
 					terminalFg[r][c] = f;
 					terminalBg[r][c] = b;
@@ -3370,12 +3507,15 @@ public class RegionRouter implements TerminalRenderer
 		// INTO gameplay clears and repaints them.
 		skipSplitRegionsThisStorm = wasGameplay
 				&& currentMode != LayoutMode.GAMEPLAY;
-		// Same guard for fullView on any transition (see field): it's either
-		// about to hide (-> GAMEPLAY) or applyMode's fullVisible branch clears
-		// + replays it. Off while frozen, where applyMode is deferred.
+		// Same guard for fullView on any transition (see field): applyMode's
+		// fullVisible branch clears + replays it. Off while frozen, where
+		// applyMode is deferred.
 		skipFullViewThisStorm = transition
 				&& fullView != null
 				&& !menuTypeHidesFullView(currentMenuType)
+				&& !repositionFrozen;
+		// Frozen: the reposition editor shows the panels in any mode.
+		skipHiddenGameplaySplits = currentMode != LayoutMode.GAMEPLAY
 				&& !repositionFrozen;
 
 		// 3. Route under the NEW state. On a transition, replay the whole
@@ -3396,6 +3536,7 @@ public class RegionRouter implements TerminalRenderer
 			}
 		skipSplitRegionsThisStorm = false;
 		skipFullViewThisStorm = false;
+		skipHiddenGameplaySplits = false;
 
 		// Publish the double-buffered transition repaint (no-op unless beginBatch
 		// ran): the routing pass above refreshed each gameplay panel's mirror.
@@ -3417,8 +3558,14 @@ public class RegionRouter implements TerminalRenderer
 		// HELP — e.g. shops after a batch purchase shrinks the list).
 		if (itemsView != null && itemsFooterStartRow >= 0)
 			replayItemsFromShadow();
+		skipMenuSurfaceThisStorm = false;
 
 		invalidateAllViews();
+		if (perf)
+			Log.d(PERF_TAG, String.format(java.util.Locale.US,
+					"onFrame %.2fms changed=%d transition=%b mode=%s/%s paints:%s",
+					(System.nanoTime() - t0) / 1e6, changedCount, transition,
+					currentMode, currentMenuType, takePaintCounts()));
 
 		// This frame is the post-applyMode repaint of the reload destination:
 		// its cells refilled the bitmap above, so the overlay can now be
@@ -3451,6 +3598,7 @@ public class RegionRouter implements TerminalRenderer
 				|| detectedType != currentMenuType;
 		if (transition)
 		{
+			transitionSeq++;
 			// menu -> gameplay: double-buffer each gameplay panel's repaint
 			// (beginBatch now, endBatch after onFrame's routing pass) so onDraw
 			// shows no half-painted map when applyMode reveals it a vsync later
@@ -3466,12 +3614,20 @@ public class RegionRouter implements TerminalRenderer
 					else
 						region.clear();
 				}
+				splitBatchSeq = transitionSeq;
 			}
 
 			currentMode = detected;
 			currentMenuType = detectedType;
 			if (detected == LayoutMode.GAMEPLAY)
 				gameplayEverDetected = true;
+			// Before the anchor recomputes below, whose fold-change replays
+			// would otherwise repaint the about-to-be-cleared itemsView.
+			skipMenuSurfaceThisStorm = !repositionFrozen
+					&& menuTypeHidesFullView(detectedType)
+					&& (detectedType == MenuType.SKILLS
+						|| detectedType == MenuType.ITEMS
+						|| detectedType == MenuType.HELP);
 
 			// Recompute the fold anchor as we enter the skills menu so this
 			// frame's routing pass can remap. Done here (not inside the
