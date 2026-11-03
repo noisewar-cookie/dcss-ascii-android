@@ -90,6 +90,7 @@ public final class ReplayControlsView extends LinearLayout
 	private final Paint border = new Paint();
 	private static final int CLIP_DP = 40;
 	private static final int ROW_DP = 32;
+	private final LinearLayout screens;
 	private final Button playPause;
 	private ObjectAnimator playPulse;
 	private final Button speed;
@@ -106,16 +107,18 @@ public final class ReplayControlsView extends LinearLayout
 		setBackgroundColor(ContextCompat.getColor(ctx, R.color.crawl_surface));
 		setId(View.generateViewId());
 		int pad = dp(4);
-		setPadding(pad, pad / 2, pad, pad / 2);
+		setPadding(pad, 0, pad, 0);
 		border.setColor(ContextCompat.getColor(ctx, R.color.crawl_border));
 		setWillNotDraw(false);
 
 		status = new TextView(ctx);
 		status.setTypeface(Typeface.MONOSPACE);
 		status.setTextColor(ContextCompat.getColor(ctx, R.color.crawl_text));
-		status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+		// dp, not sp, like the keys: font scale mustn't grow the controls past the keyboard.
+		status.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
 		status.setSingleLine(false);
 		status.setLines(2); // fixed: a 1-line status would resize the terminal
+		status.setIncludeFontPadding(false);
 		status.setGravity(Gravity.CENTER);
 		addView(status, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
@@ -196,7 +199,7 @@ public final class ReplayControlsView extends LinearLayout
 			View b = transport.getChildAt(i);
 			b.setBackgroundResource(R.drawable.btn_replay_transport);
 			if (b instanceof Button)
-				((Button) b).setTextSize(TypedValue.COMPLEX_UNIT_SP, b == playPause ? 24 : 18);
+				((Button) b).setTextSize(TypedValue.COMPLEX_UNIT_DIP, b == playPause ? 24 : 18);
 		}
 		normalRows.addView(transport);
 
@@ -209,7 +212,7 @@ public final class ReplayControlsView extends LinearLayout
 		clockMode = fit(button(modes, "Turn time", v -> actions.onClockMode(), false), "As played");
 		normalRows.addView(modes);
 
-		LinearLayout screens = row(ctx);
+		screens = row(ctx);
 		fit(button(screens, "@", v -> actions.onScreen(ReplayScreens.Kind.CHARACTER), true));
 		fit(button(screens, "Items", v -> actions.onScreen(ReplayScreens.Kind.INVENTORY), true));
 		fit(button(screens, "Spells", v -> actions.onScreen(ReplayScreens.Kind.SPELLS), true));
@@ -218,8 +221,12 @@ public final class ReplayControlsView extends LinearLayout
 		iconButton(screens, R.drawable.ic_replay_examine, "Examine", v -> actions.onExamine(), true)
 				.setLayoutParams(new LayoutParams(0, dp(ROW_DP), dp(CLIP_DP)));
 		for (int i = 0; i < screens.getChildCount(); i++)
-			screens.getChildAt(i).setBackgroundResource(flat());
-		normalRows.addView(screens);
+		{
+			View b = screens.getChildAt(i);
+			b.setBackgroundResource(flat());
+			b.getLayoutParams().height = LayoutParams.MATCH_PARENT;
+		}
+		normalRows.addView(screens, new LayoutParams(LayoutParams.MATCH_PARENT, dp(ROW_DP)));
 		normalRows.setGravity(Gravity.CENTER_VERTICAL);
 		addView(normalRows, new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f));
 
@@ -237,9 +244,8 @@ public final class ReplayControlsView extends LinearLayout
 	}
 
 	/**
-	 * One height for every mode (controls, examine, keyboard): the taller of
-	 * status+timeline+rows and the Crawl keyboard (status hides while browsing),
-	 * so the terminal above never resizes.
+	 * One height for every mode (controls, examine, keyboard): the Crawl
+	 * keyboard's, as in game, so the terminal above never resizes.
 	 */
 	@Override
 	protected void onMeasure(int widthSpec, int heightSpec)
@@ -249,15 +255,19 @@ public final class ReplayControlsView extends LinearLayout
 		int any = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
 		status.measure(exactW, any);
 		// Range bar height is always reserved so toggling it doesn't resize either.
-		int body = status.getMeasuredHeight() + dp(TIMELINE_BOX_DP) + 3 * dp(ROW_DP);
+		int fixed = status.getMeasuredHeight() + dp(TIMELINE_BOX_DP) + 2 * dp(ROW_DP);
+		int h = fixed + dp(ROW_DP);
 		if (keyboardHost.getChildCount() > 0)
 		{
 			View kb = keyboardHost.getChildAt(0);
 			kb.measure(exactW, any);
-			body = Math.max(body, kb.getMeasuredHeight());
+			h = kb.getMeasuredHeight();
 		}
-		int h = getPaddingTop() + getPaddingBottom() + body;
-		super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY));
+		// Never taller than the keyboard (that rescales the terminal): the screens row gives way.
+		screens.getLayoutParams().height = Math.max(0, Math.min(dp(ROW_DP), h - fixed));
+		// GameActivity pads the bottom with the nav-bar inset, as it does the keyboard.
+		int total = h + getPaddingTop() + getPaddingBottom();
+		super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(total, MeasureSpec.EXACTLY));
 	}
 
 	@Override
@@ -420,7 +430,7 @@ public final class ReplayControlsView extends LinearLayout
 	{
 		b.setText(label);
 		b.setAllCaps(false);
-		b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+		b.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
 		b.setMinWidth(0);
 		b.setMinimumWidth(0);
 		b.setPadding(dp(2), 0, dp(2), 0);

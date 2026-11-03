@@ -3507,9 +3507,8 @@ public class RegionRouter implements TerminalRenderer
 		// INTO gameplay clears and repaints them.
 		skipSplitRegionsThisStorm = wasGameplay
 				&& currentMode != LayoutMode.GAMEPLAY;
-		// Same guard for fullView on any transition (see field): applyMode's
-		// fullVisible branch clears + replays it. Off while frozen, where
-		// applyMode is deferred.
+		// Same guard for fullView on any transition (see field). Off while
+		// frozen, where applyMode is deferred.
 		skipFullViewThisStorm = transition
 				&& fullView != null
 				&& !menuTypeHidesFullView(currentMenuType)

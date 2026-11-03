@@ -811,7 +811,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 			{
 				host.repaint();
 			}
-		}, panel, cancel);
+		}, panel, cancel, !host.unfolded());
 		final ProgressBar bar = new ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal);
 		bar.setMax(1000);
 		int pad = Math.round(24 * ctx.getResources().getDisplayMetrics().density);

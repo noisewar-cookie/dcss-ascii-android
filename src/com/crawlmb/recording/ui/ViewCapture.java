@@ -21,8 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Export frames drawn from the replay's own views, so videos and GIFs match
  * the screen: the encoder thread asks for a position, the UI thread seeks
  * there, waits for the views to settle and draws the game panel (minus its
- * inset padding and the unused bands around its content) into one reused
- * bitmap.
+ * inset padding; unfolded, also the empty bands around its content) into one
+ * reused bitmap.
  */
 final class ViewCapture implements ReplayVideoEncoder.Frames
 {
@@ -42,6 +42,8 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 
 	private final Source src;
 	private final AtomicBoolean cancel;
+	// Single-screen: the whole panel above the controls, so every frame matches the screen.
+	private final boolean fullPanel;
 	private final Handler main = new Handler(Looper.getMainLooper());
 	private int width, height;
 	private Bitmap bitmap;
@@ -50,10 +52,11 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 	private int geometry;
 
 	/** UI thread, once the panel is laid out. */
-	ViewCapture(Source src, View panel, AtomicBoolean cancel)
+	ViewCapture(Source src, View panel, AtomicBoolean cancel, boolean fullPanel)
 	{
 		this.src = src;
 		this.cancel = cancel;
+		this.fullPanel = fullPanel;
 		geometry = geometry(panel);
 	}
 
@@ -145,7 +148,8 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 		if (bitmap == null)
 		{
 			width = contentWidth(panel);
-			height = contentBottom(panel) - contentTop(panel);
+			height = fullPanel ? contentHeight(panel)
+					: contentBottom(panel) - contentTop(panel);
 		}
 		else
 			draw(panel);
@@ -156,7 +160,8 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 	{
 		int pw = contentWidth(panel), ph = height;
 		// Menus fill from the top; clamp so a frame never reads past the panel.
-		int top = Math.max(0, Math.min(contentTop(panel), contentHeight(panel) - ph));
+		int top = fullPanel ? 0
+				: Math.max(0, Math.min(contentTop(panel), contentHeight(panel) - ph));
 		int w = bitmap.getWidth(), h = bitmap.getHeight();
 		float s = Math.min((float) w / pw, (float) h / ph);
 		canvas.drawColor(Color.BLACK);
@@ -174,9 +179,8 @@ final class ViewCapture implements ReplayVideoEncoder.Frames
 		return v.getWidth() - v.getPaddingLeft() - v.getPaddingRight();
 	}
 
-	// The split stack is bottom-pinned (unfolded, its halves centre), so with
-	// the replay controls hidden the extra height is empty space above the
-	// topmost visible leaf view.
+	// Unfolded, the halves centre, so the extra height is empty space above
+	// the topmost visible leaf view.
 	private static int contentTop(View panel)
 	{
 		int top = leafTop(panel);
