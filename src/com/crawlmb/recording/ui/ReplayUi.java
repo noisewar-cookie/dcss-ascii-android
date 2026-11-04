@@ -67,6 +67,8 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 		void pickClipDestination(String fileName, String mime, ClipDestination dst);
 		/** Copy a finished clip to the picked file, then delete it. */
 		void saveClip(File clip, Uri dst, String what);
+		/** Delete the picked file if it's still empty (export cancelled or failed). */
+		void discardClip(Uri dst);
 		/** Rebuild the views from layout(); the recording switched layouts. */
 		void relayout();
 		/** Repaint every cell of the current screen into the views. */
@@ -694,6 +696,7 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 					if (!ok)
 					{
 						out.delete();
+						host.discardClip(dst);
 						host.toast(err == null ? what + " cancelled"
 								: what + " export failed: " + err);
 					}

@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.view.Gravity;
 import android.view.View;
@@ -548,12 +549,18 @@ public class RecordingsActivity extends ListActivity
 		}
 	}
 
-	static void deleteDocument(Context ctx, Uri doc)
+	static void deleteIfEmpty(Context ctx, Uri doc)
 	{
 		if (doc == null)
 			return;
 		try
 		{
+			try (ParcelFileDescriptor fd = ctx.getContentResolver().openFileDescriptor(doc, "r"))
+			{
+				// Unknown size (-1) counts as non-empty: never delete a file with content.
+				if (fd == null || fd.getStatSize() != 0)
+					return;
+			}
 			DocumentsContract.deleteDocument(ctx.getContentResolver(), doc);
 		}
 		catch (Exception e)

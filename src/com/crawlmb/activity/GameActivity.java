@@ -234,6 +234,12 @@ public class GameActivity extends Activity
 						}
 
 						@Override
+						public void discardClip(Uri dst)
+						{
+							RecordingsActivity.deleteIfEmpty(GameActivity.this, dst);
+						}
+
+						@Override
 						public void relayout()
 						{
 							View root = findViewById(android.R.id.content);
@@ -364,7 +370,7 @@ public class GameActivity extends Activity
 		{
 			for (File v : done)
 				v.delete();
-			RecordingsActivity.deleteDocument(this, doc); // the picker made it empty
+			RecordingsActivity.deleteIfEmpty(this, doc); // the picker made it empty
 			if (grant != null)
 				RecordingsActivity.releaseGrant(this, grant);
 			if (error.isEmpty())
@@ -3182,23 +3188,32 @@ public class GameActivity extends Activity
 											? mlistView : msgView;
 									int secondaryRows = msgPriority
 											? mlistVisibleRows : msgVisibleRows;
+									float primaryBase = msgPriority
+											? fontConfig.portraitMsgFontScale
+											: fontConfig.portraitHudFontScale;
+									float secondaryBase = msgPriority
+											? fontConfig.portraitHudFontScale
+											: fontConfig.portraitMsgFontScale;
 									// Reserve the secondary at min font so it keeps
 									// all rows; primary fits the rest.
 									int secondaryReserve = panelRowsHeight(
 											secondary, secondaryRows, MIN_FONT_SCALE);
 									int primaryH = fitPanelRows(primary, primaryRows,
+											primaryBase,
 											freeForCustom - secondaryReserve,
 											MIN_FONT_SCALE, MIN_SCALE_DELTA);
 									fitPanelRows(secondary, secondaryRows,
-											freeForCustom - primaryH,
+											secondaryBase, freeForCustom - primaryH,
 											MIN_FONT_SCALE, MIN_SCALE_DELTA);
 								}
 								else if (msgRowsCustom)
 									fitPanelRows(msgView, msgVisibleRows,
+											fontConfig.portraitMsgFontScale,
 											freeForCustom, MIN_FONT_SCALE,
 											MIN_SCALE_DELTA);
 								else
 									fitPanelRows(mlistView, mlistVisibleRows,
+											fontConfig.portraitHudFontScale,
 											freeForCustom, MIN_FONT_SCALE,
 											MIN_SCALE_DELTA);
 								return;
@@ -3228,26 +3243,19 @@ public class GameActivity extends Activity
 		return router;
 	}
 
-	// Shrink (never grow) `view`'s font so `targetRows` fit `budgetPx`. Returns
-	// the resulting height so a caller can chain the next panel's budget off it
-	// this pass (the new measured height only lands next layout).
+	// Derived from `baseScale` (not the current font) so a transient squeeze regrows.
+	// Returns the height at the chosen font; the measured height lands next layout.
 	private static int fitPanelRows(RegionTermView view, int targetRows,
-			int budgetPx, float minScale, float minDelta)
+			float baseScale, int budgetPx, float minScale, float minDelta)
 	{
-		int rows = Math.min(view.getRegionRows(), targetRows);
-		int rowH = view.getContentRowHeight();
-		int wantH = rows * rowH;
+		int baseH = panelRowsHeight(view, targetRows, baseScale);
 		float cur = view.getFontScaleMultiplier();
-		if (wantH <= 0 || cur <= 0)
+		if (baseH <= 0 || cur <= 0)
 			return Math.max(0, view.getMeasuredHeight());
-		// Already fits, or at the shrink floor: keep the current font.
-		if (wantH <= budgetPx || cur <= minScale)
-			return wantH;
-		float nScale = Math.max(minScale, cur * (float) budgetPx / wantH);
-		if (cur - nScale < minDelta)
-			return wantH;
-		view.setFontScaleMultiplier(nScale);
-		return Math.round(wantH * (nScale / cur));
+		float nScale = fitHalfScale(baseScale, baseH, budgetPx, minScale);
+		if (Math.abs(cur - nScale) >= minDelta)
+			view.setFontScaleMultiplier(nScale);
+		return Math.round(baseH * (nScale / baseScale));
 	}
 
 	// Height `view` needs for `rows` at font `scale`, from its current per-row
