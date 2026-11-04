@@ -20,6 +20,7 @@
  *   "v":1, "seq":N, "kind":"CP"|"TE"|"END",
  *   "turn":N, "aut":N, "level":"D:3", "branch":"D", "depth":3,
  *   "player":{hp,hpmax,mp,mpmax,xl,xp,str,int,dex,ac,ev,sh,gold,god,piety},
+ *       + optional runes:["slimy",...] (enum order), orb:1
  *   "pos":{x,y},                           // player grid position
  *   "view":{cx,cy,hx,hy,vx,vy,tx,ty,sx,sy} // crawl_view geometry for examine:
  *       screen(1-based) = grid - (cx,cy) + (hx,hy) + (1,1) + (vx,vy) - (tx,ty)
@@ -391,6 +392,24 @@ void build_player(ostringstream &o)
     jkv(o, "gold", you.gold);
     jkv(o, "god", god_name(you.religion));
     jkv(o, "piety", you.religion == GOD_NO_GOD ? 0 : you.piety());
+    // Bitset only, so Java derives pickup order from snapshot diffs.
+    if (runes_in_pack() > 0)
+    {
+        o << ",\"runes\":[";
+        bool first = true;
+        for (int r = 0; r < NUM_RUNE_TYPES; ++r)
+        {
+            if (!you.runes[r])
+                continue;
+            if (!first)
+                o << ',';
+            jstr(o, rune_type_name(r));
+            first = false;
+        }
+        o << ']';
+    }
+    if (player_has_orb())
+        jkv(o, "orb", 1);
     o << '}';
 }
 

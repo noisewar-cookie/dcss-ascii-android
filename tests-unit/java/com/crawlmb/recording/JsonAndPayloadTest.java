@@ -77,4 +77,25 @@ public class JsonAndPayloadTest
 		assertEquals("___Bob_the__ber_18446744073709551615_0.34.1_2.dcrec", id.fileName(2));
 		assertEquals("18446744073709551615", id.seed);
 	}
+
+	@Test
+	public void derivesRuneAndOrbPickups()
+	{
+		EventDeriver d = new EventDeriver();
+		d.derive(runeSnap(""));
+		List<EventDeriver.Event> e = d.derive(runeSnap(",\"runes\":[\"slimy\"]"));
+		assertEquals(1, e.size());
+		assertEquals(EventDeriver.RUNE, e.get(0).type);
+		assertEquals("slimy", EventDeriver.runeName(e.get(0).label));
+		e = d.derive(runeSnap(",\"runes\":[\"slimy\"],\"orb\":1"));
+		assertEquals(1, e.size());
+		assertEquals("Orb", EventDeriver.runeName(e.get(0).label));
+	}
+
+	private static SnapshotPayload runeSnap(String player)
+	{
+		String doc = TestSupport.doc("CP", 1, 10, "D:1", 7, 20, 3, null)
+				.replace("\"god\":\"No God\"}", "\"god\":\"No God\"" + player + "}");
+		return SnapshotPayload.parse(TestSupport.payload(doc, new String[0][]));
+	}
 }

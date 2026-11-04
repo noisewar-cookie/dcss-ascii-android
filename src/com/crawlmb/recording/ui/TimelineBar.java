@@ -37,11 +37,12 @@ public final class TimelineBar extends SeekBar
 			"Bazaar", "Trove", "Lab"));
 	// Draw order = priority: later entries paint over earlier ones.
 	private static final String[] TICK_TYPES = { EventDeriver.LOW_HP, EventDeriver.LEVEL,
-			PORTAL, EventDeriver.XL, EventDeriver.UNIQUE, EventDeriver.MALEVOLENCE };
+			PORTAL, EventDeriver.XL, EventDeriver.UNIQUE, EventDeriver.MALEVOLENCE,
+			EventDeriver.RUNE };
 	private static final int[] TICK_COLOURS = { 0xFFFF6464, 0xFF909090, 0xFF4080FF, 0xFF40D040,
-			0xFFFF2020, 0xFFB050FF };
+			0xFFFF2020, 0xFFB050FF, 0xFFFFD040 };
 	static final String[] TICK_LABELS = { "HP under 10%", "New floor", "Portals", "Level up",
-			"Unique sighted", "Zot's malevolence" };
+			"Unique sighted", "Zot's malevolence", "Rune or Orb" };
 	// A game recorded from turn 5000 would otherwise be almost all red.
 	private static final float MAX_GAP_SHARE = 0.5f;
 	private static final int MAX_INPUT_UNITS = 1 << 20;

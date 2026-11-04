@@ -3,21 +3,31 @@ package com.crawlmb.recording.ui;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.res.ColorStateList;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.InsetDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
+import android.util.TypedValue;
 import android.view.Choreographer;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.RelativeLayout;
 
+import androidx.core.content.ContextCompat;
+
+import com.crawlmb.R;
 import com.crawlmb.keyboard.CrawlKeyboardWrapper;
 import com.crawlmb.keylistener.KeyListener;
 import com.crawlmb.recording.ExamineCursor;
@@ -41,6 +51,7 @@ import com.crawlmb.view.TerminalRenderer;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -128,10 +139,11 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 	private int lastNotifiedPos = -1;
 	private boolean rangeOn;
 	private int rangeLo, rangeHi = -1;
-	// Level trim: the range bar covers only positions trimFrom..trimTo.
+	// Level/rune trim: the range bar covers only positions trimFrom..trimTo.
 	private boolean trimOn;
 	private int trimFrom, trimTo;
-	private int trimXlLo, trimXlHi; // 0 = never trimmed
+	private boolean trimByRunes;
+	private int trimLo, trimHi = -1; // last applied units; -1 = never trimmed
 	// Shown in red in place of the status line until clearGapNote.
 	private String gapNote;
 	private final Runnable clearGapNote = this::clearGapNote;
@@ -524,44 +536,38 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 			controls.setRange(rangeOn, rangeLo, rangeHi);
 			return;
 		}
-		final List<RecordingReader.SnapshotRow> rows = controller.resolver().rows();
-		int minXl = 0, maxXl = 0;
-		for (RecordingReader.SnapshotRow row : rows)
-			if (row.xl > 0)
-			{
-				if (minXl == 0)
-					minXl = row.xl;
-				maxXl = Math.max(maxXl, row.xl);
-			}
-		if (maxXl <= minXl)
-		{
-			host.toast("This recording covers only one experience level.");
-			return;
-		}
-		final int base = minXl, top = maxXl;
+		final TrimUnits[] modes = { levelUnits(controller.resolver().rows()), runeUnits() };
+		final int[] mode = { trimByRunes ? 1 : 0 };
 		float density = ctx.getResources().getDisplayMetrics().density;
 		final RangeBar bar = new RangeBar(ctx);
 		bar.setMinSpan(0);
 		bar.setLabelEnds(true);
-		bar.setLabeler(u -> String.valueOf(base + u));
-		// Last trim's levels, so re-enabling doesn't start over.
-		int lo = trimXlLo > 0 ? trimXlLo - base : 0;
-		int hi = trimXlHi > 0 ? trimXlHi - base : maxXl - base;
-		bar.setRange(maxXl - base + 1, 0, -1, lo, hi);
+		bar.setLabeler(u -> u < modes[mode[0]].names.size() ? modes[mode[0]].names.get(u) : "");
 		// Room for the carets' half-width and their touch slop at both ends.
 		int inset = Math.round(20 * density);
 		bar.setPadding(inset, 0, inset, 0);
+		final RadioGroup group = new RadioGroup(ctx);
+		group.setOrientation(RadioGroup.HORIZONTAL);
+		final RadioButton levels = trimRadio("Levels"), runes = trimRadio("Runes");
+		RadioGroup.LayoutParams gap = new RadioGroup.LayoutParams(
+				RadioGroup.LayoutParams.WRAP_CONTENT, RadioGroup.LayoutParams.WRAP_CONTENT);
+		gap.rightMargin = Math.round(16 * density);
+		group.addView(levels, gap);
+		group.addView(runes);
+		group.check(mode[0] == 1 ? runes.getId() : levels.getId());
 		LinearLayout box = new LinearLayout(ctx);
+		box.setOrientation(LinearLayout.VERTICAL);
 		int pad = Math.round(24 * density);
-		box.setPadding(pad - inset, pad / 2, pad - inset, 0);
+		box.setPadding(pad - inset, 0, pad - inset, 0);
 		box.addView(bar, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
 				Math.round(30 * density)));
+		// Placeholders: the title and message views only exist if set before show().
 		final AlertDialog dlg = new AlertDialog.Builder(ctx)
-				.setTitle("Trim to levels")
-				.setMessage(trimLabel(rows, base + bar.lo(), base + bar.hi()))
+				.setTitle(" ")
+				.setMessage(" ")
 				.setView(box)
 				.setNegativeButton("Cancel", null)
-				.setPositiveButton("Trim", (d, x) -> applyLevelTrim(rows, base + bar.lo(), base + bar.hi()))
+				.setPositiveButton("Trim", (d, x) -> applyTrim(modes[mode[0]], mode[0] == 1, bar.lo(), bar.hi()))
 				.setNeutralButton("Reset", null)
 				.show();
 		if (dlg.getWindow() != null)
@@ -573,56 +579,155 @@ public final class ReplayUi implements ReplayControlsView.Actions, ReplayScreens
 						Math.round(4 * density)));
 			dlg.getWindow().setLayout(controls.getWidth(), WindowManager.LayoutParams.WRAP_CONTENT);
 		}
-		bar.setListener((l, h) -> dlg.setMessage(trimLabel(rows, base + l, base + h)));
+		placeTrimRadios(dlg, box, group);
+		// Reopen on the last trim, so re-enabling doesn't start over.
+		showTrimMode(dlg, bar, modes[mode[0]], mode[0] == 1, trimHi >= 0 ? trimLo : 0, trimHi);
+		bar.setListener((l, h) -> dlg.setMessage(trimLabel(modes[mode[0]], mode[0] == 1, l, h)));
+		group.setOnCheckedChangeListener((g, id) ->
+		{
+			mode[0] = id == runes.getId() ? 1 : 0;
+			boolean last = trimHi >= 0 && trimByRunes == (mode[0] == 1);
+			showTrimMode(dlg, bar, modes[mode[0]], mode[0] == 1, last ? trimLo : 0, last ? trimHi : -1);
+		});
 		// Set after show() so tapping it doesn't dismiss the dialog.
 		dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v ->
+				showTrimMode(dlg, bar, modes[mode[0]], mode[0] == 1, 0, -1));
+	}
+
+	/** Radios at the title row's right end; above the slider if the title isn't found. */
+	private void placeTrimRadios(AlertDialog dlg, LinearLayout box, RadioGroup group)
+	{
+		int id = ctx.getResources().getIdentifier("alertTitle", "id", "android");
+		View title = id == 0 ? null : dlg.findViewById(id);
+		if (title == null || !(title.getParent() instanceof LinearLayout))
 		{
-			bar.setRange(top - base + 1, 0, -1, 0, top - base);
-			dlg.setMessage(trimLabel(rows, base, top));
-		});
+			box.addView(group, 0);
+			return;
+		}
+		title.setLayoutParams(new LinearLayout.LayoutParams(0,
+				LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+		((LinearLayout) title.getParent()).addView(group);
 	}
 
-	private String trimLabel(List<RecordingReader.SnapshotRow> rows, int a, int b)
+	private RadioButton trimRadio(String label)
 	{
-		String xl = a == b ? "XL " + a : "XL " + a + " – " + b;
-		ReplayTimeline tl = controller.timeline();
-		int[] span = levelSpan(rows, a, b);
-		return span == null ? xl : xl + "\n" + spanLabel(tl.turn(span[0]), tl.turn(span[1]));
+		RadioButton b = new RadioButton(ctx);
+		b.setId(View.generateViewId());
+		b.setText(label);
+		b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+		b.setMinHeight(0);
+		b.setMinimumHeight(0);
+		int on = ContextCompat.getColor(ctx, R.color.crawl_accent);
+		int off = ContextCompat.getColor(ctx, R.color.crawl_border);
+		b.setButtonTintList(new ColorStateList(new int[][] {
+				{ android.R.attr.state_checked }, {} }, new int[] { on, off }));
+		Drawable d = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? b.getButtonDrawable() : null;
+		if (d != null)
+		{
+			int s = Math.round(20 * ctx.getResources().getDisplayMetrics().density);
+			LayerDrawable small = new LayerDrawable(new Drawable[] { d });
+			small.setLayerSize(0, s, s);
+			b.setButtonDrawable(small);
+		}
+		return b;
 	}
 
-	/** Positions from reaching XL a until just before passing b, or null. */
-	private int[] levelSpan(List<RecordingReader.SnapshotRow> rows, int a, int b)
+	/** Trim stops: each unit's name and first position; a range ends before the next unit. */
+	private static final class TrimUnits
 	{
+		final List<String> names = new ArrayList<>();
+		final List<Integer> start = new ArrayList<>();
+
+		void add(String name, int pos)
+		{
+			names.add(name);
+			start.add(pos);
+		}
+	}
+
+	/** XLs from the first recorded one, each starting where the running max reaches it. */
+	private TrimUnits levelUnits(List<RecordingReader.SnapshotRow> rows)
+	{
+		TrimUnits u = new TrimUnits();
 		ReplayTimeline tl = controller.timeline();
-		if (tl.size() == 0)
-			return null;
-		int from = -1, to = tl.size() - 1, xl = 0;
+		int xl = 0;
 		for (RecordingReader.SnapshotRow row : rows)
 		{
 			if (row.xl <= xl)
 				continue;
 			int p = Math.max(0, tl.posOfFrame(row.frame));
 			// The starting XL keeps the menus before it.
-			if (from < 0 && row.xl >= a)
-				from = xl == 0 ? 0 : p;
+			if (xl == 0)
+				u.add(String.valueOf(row.xl), 0);
+			else
+				for (int l = xl + 1; l <= row.xl; l++)
+					u.add(String.valueOf(l), p);
 			xl = row.xl;
-			if (xl > b)
-			{
-				to = p - 1;
-				break;
-			}
 		}
-		return from < 0 ? null : new int[] { from, Math.max(from, to) };
+		return u;
 	}
 
-	private void applyLevelTrim(List<RecordingReader.SnapshotRow> rows, int a, int b)
+	/** Start, then each rune (and the Orb) in pickup order. */
+	private TrimUnits runeUnits()
 	{
-		int[] span = levelSpan(rows, a, b);
+		TrimUnits u = new TrimUnits();
+		u.add("Start", 0);
+		ReplayTimeline tl = controller.timeline();
+		for (int i = 0; i < tl.events().size(); i++)
+		{
+			RecordingReader.EventRow e = tl.events().get(i);
+			if (EventDeriver.RUNE.equals(e.type))
+				u.add(EventDeriver.runeName(e.label), Math.max(0, tl.eventPosition(i)));
+		}
+		return u;
+	}
+
+	/** Under two units nothing can change: the slider and buttons grey out. */
+	private void showTrimMode(AlertDialog dlg, RangeBar bar, TrimUnits u, boolean runes, int lo, int hi)
+	{
+		int n = u.names.size();
+		boolean usable = n >= 2;
+		// Two units minimum so a greyed bar still draws its whole line.
+		bar.setRange(Math.max(2, n), 0, -1, lo, !usable ? 1 : hi < 0 ? n - 1 : hi);
+		bar.setEnabled(usable);
+		bar.setAlpha(usable ? 1f : 0.35f);
+		dlg.setTitle(runes ? "Trim to runes" : "Trim to levels");
+		dlg.setMessage(trimLabel(u, runes, bar.lo(), bar.hi()));
+		dlg.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(usable);
+		dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(usable);
+	}
+
+	private String trimLabel(TrimUnits u, boolean runes, int a, int b)
+	{
+		if (u.names.size() < 2)
+			return runes ? "No rune pickups recorded." : "This recording covers only one experience level.";
+		String pre = runes ? "" : "XL ";
+		String sel = pre + u.names.get(a) + (a == b ? "" : " – " + u.names.get(b));
+		ReplayTimeline tl = controller.timeline();
+		int[] span = trimSpan(u, a, b);
+		return span == null ? sel : sel + "\n" + spanLabel(tl.turn(span[0]), tl.turn(span[1]));
+	}
+
+	/** Positions from unit a's start until just before unit b+1's, or null. */
+	private int[] trimSpan(TrimUnits u, int a, int b)
+	{
+		int size = controller.timeline().size();
+		if (size == 0 || u.names.size() < 2)
+			return null;
+		int from = u.start.get(a);
+		int to = b + 1 < u.start.size() ? u.start.get(b + 1) - 1 : size - 1;
+		return new int[] { from, Math.max(from, to) };
+	}
+
+	private void applyTrim(TrimUnits u, boolean runes, int a, int b)
+	{
+		int[] span = trimSpan(u, a, b);
 		if (controls == null || span == null)
 			return;
 		trimOn = true;
-		trimXlLo = a;
-		trimXlHi = b;
+		trimByRunes = runes;
+		trimLo = a;
+		trimHi = b;
 		trimFrom = span[0];
 		trimTo = span[1];
 		controls.setTrim(true, trimFrom, trimTo);

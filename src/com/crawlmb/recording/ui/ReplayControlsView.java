@@ -136,7 +136,7 @@ public final class ReplayControlsView extends LinearLayout
 		// leaving that strip to the range bar's caret.
 		int shave = dp((CLIP_DP - 20) / 2);
 		trim.setPadding(shave, 0, 0, 0);
-		trim.setContentDescription("Trim to a range of experience levels");
+		trim.setContentDescription("Trim to a range of experience levels or runes");
 		trim.setOnClickListener(v -> actions.onLevelTrim());
 		LayoutParams trimLp = new LayoutParams(dp(CLIP_DP) - shave, dp(RANGE_DP));
 		rangeRow.addView(trim, trimLp);

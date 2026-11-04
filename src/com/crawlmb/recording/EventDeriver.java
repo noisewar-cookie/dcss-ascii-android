@@ -2,6 +2,7 @@ package com.crawlmb.recording;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,6 +22,9 @@ public final class EventDeriver
 	public static final String LOW_HP = "low_hp";
 	public static final String BIG_HIT = "big_hit";
 	public static final String GAME_END = "game_end";
+	// Labels "Got the <name> rune" / ORB_LABEL; see runeName.
+	public static final String RUNE = "rune";
+	private static final String ORB_LABEL = "Got the Orb of Zot";
 	// Zot's "A malevolent force fills ..." (shaft, alarm/mark, teleport trap).
 	public static final String MALEVOLENCE = "malevolence";
 	// Lifecycle events are written by GameRecorder directly:
@@ -75,6 +79,12 @@ public final class EventDeriver
 			int lost = prev.hp - cur.hp;
 			if (cur.hpMax > 0 && lost * 4 > cur.hpMax)
 				out.add(new Event(BIG_HIT, "Lost " + lost + " HP"));
+			Set<String> had = runes(prev);
+			for (String r : runes(cur))
+				if (!had.contains(r))
+					out.add(new Event(RUNE, "Got the " + r + " rune"));
+			if (orb(cur) && !orb(prev))
+				out.add(new Event(RUNE, ORB_LABEL));
 		}
 
 		// Monsters: first sighting of each name while visible.
@@ -123,6 +133,32 @@ public final class EventDeriver
 		prevInventory = inv;
 		prev = cur;
 		return out;
+	}
+
+	private static Set<String> runes(SnapshotPayload s)
+	{
+		Set<String> out = new LinkedHashSet<>();
+		List<Object> l = MiniJson.getArray(MiniJson.getObject(s.doc, "player"), "runes");
+		if (l != null)
+			for (Object o : l)
+				if (o instanceof String)
+					out.add((String) o);
+		return out;
+	}
+
+	private static boolean orb(SnapshotPayload s)
+	{
+		return MiniJson.getLong(MiniJson.getObject(s.doc, "player"), "orb", 0) != 0;
+	}
+
+	/** Short name of a RUNE event ("slimy", "Orb"), or its label if unrecognised. */
+	public static String runeName(String label)
+	{
+		if (ORB_LABEL.equals(label))
+			return "Orb";
+		if (label != null && label.startsWith("Got the ") && label.endsWith(" rune"))
+			return label.substring("Got the ".length(), label.length() - " rune".length());
+		return label;
 	}
 
 	private static String god(SnapshotPayload s)
