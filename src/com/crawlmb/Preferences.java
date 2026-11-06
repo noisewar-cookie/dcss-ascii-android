@@ -85,7 +85,7 @@ final public class Preferences
 	public static final int NEW_OPTIONS_MODAL_VERSION = 27;
 	// versionCode of the last release whose notes get the one-time "what's new"
 	// modal; setup.sh bundles that changelog. Leave it for hotfixes.
-	public static final int RELEASE_NOTES_MODAL_VERSION = 30;
+	public static final int RELEASE_NOTES_MODAL_VERSION = 31;
 	// Final value of the legacy counter (= the v22 options set). Anyone who
 	// saw that had seen v22's options, so migration maps it to versionCode 22.
 	private static final int LEGACY_OPTIONS_VERSION_MAX = 4;

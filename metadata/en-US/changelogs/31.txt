@@ -1,0 +1,7 @@
+Release 31 (0.34.1)
+
+New Features:
+• Replays can now trim by runes collected.
+
+Bug Fixes:
+• Message panel scaling fixes for replay exports.
